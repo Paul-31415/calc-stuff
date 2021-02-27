@@ -1,0 +1,15 @@
+#include    "ti83plus.inc"
+.db         $BB,$6D
+	ld b,8
+    ex de,hl
+mulAHLCloop:
+	 add hl,hl
+	 rl c
+     rlca
+	 jr nc,mulAHLCloopNCA
+	  add hl,de
+      jr nc,mulAHLCloopNCA
+       inc c
+mulAHLCloopNCA:
+    djnz mulAHLCloop
+	ret

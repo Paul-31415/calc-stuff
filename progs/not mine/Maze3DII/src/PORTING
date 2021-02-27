@@ -1,0 +1,16 @@
+
+You are welcome to port this code to other systems.
+Systems that maze3DII could probably be ported to:
+TI-82
+TI-83
+TI-83+se
+TI-84
+
+Assumptions in the code that may break when porting:
+
+* Time-delay code in Mach3DFlip assumes a 6MHz processor and an LCD driver with certain minimum delay between commands.
+
+* gBuf is assumed to be divisible by 64
+
+* Certain TI-83+ system functions are called to reserve and free memory
+

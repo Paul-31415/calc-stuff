@@ -1,0 +1,20 @@
+FastCircle for TI-83 Plus
+
+Description:
+   Draws a circle to the main screen buffer.
+
+Inputs:
+   D    Abscissa of the center of the circle.
+   E    Ordinate of the center of the circle.
+   C    Radius
+
+Destroys:
+   AF BC DE HL
+
+Notes:
+   If the location of the center is outside of the screen, or the
+   radius is greater than 128, the results will be unpredictable.
+   See CIRCDEMO.Z80 for an example application (nostub)
+
+Credits:
+   Hans Törnqvist - Brought my attention to a faster algorithm.

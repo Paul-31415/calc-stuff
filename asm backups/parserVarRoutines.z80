@@ -1,0 +1,1008 @@
+;#include    "ti83plus.inc"
+;#define     progStart   $9D95
+
+
+;Varibles, how the heck am I gonna do them?
+;I could take the first 7 chars of the name and look up appv p_______ and look up the suffix in that var
+;but findsym is sooo slow
+
+;rst 10h finding ans on a calc with only this program takes 6432/6464 tstates
+;finding a when a-h were initialized in order:  6784/6816
+;finding b:										~160 tstates longer
+;finding c:										~192 tstates longer
+;moral: findsym takes a while
+#define _CreateTempString $4324
+spaceName:
+.db 0,0,0,0,0,0,0,0,0
+
+mem:
+.dw 0
+
+;mem: [vat][vars]--[free]--[stack]
+
+#define vars $8200
+ ;relative points to the first byte of vars (so vars+0 = first var)
+free: ;(free+mem) is first byte of free data
+.dw 4
+
+
+varPrep:
+	call delGlobalVars
+    ;get all free space
+    b_call(_MemChk)
+    b_call(_EnoughMem)
+    b_call(_MemChk)
+    
+    ;take it (almost) all
+    
+    dec h
+    
+    b_call(_CreateTempString)
+    push de
+    ld de,spaceName
+    ld hl,OP4
+    ld bc,9
+    ldir ;save the name in case of ptr change
+    pop hl
+    
+    ld (mem),hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld (hl),0
+    inc hl
+    ld (hl),0
+    dec hl
+    dec hl
+    dec hl
+    add hl,de
+    
+    ex de,hl
+    ld hl,0
+    add hl,sp
+    ;copy (most of) stack over
+    ;ld bc,1 ;at this point, only the ret address is on the stack
+    dec de
+    ldi
+    ldi
+    dec de
+    dec de
+    ex de,hl
+    ld sp,hl
+    
+    
+    
+    
+    ret
+    
+    
+
+;my own findsym
+findName_List: ;finds name (hl) in name array (de) ;names not allowed to be more than 252 chars long
+	;name array is [number of names:2][names...]
+    ;where [names...] is composed of [length:1][string name...][type:1][ val:2]
+    ;name is [length:1][string name...]
+    ;where length is len(string name)+3 ;so you can just add length to get next entry for this code
+    
+    
+    ;name len has to match table entry len
+    
+    ;if found
+    ;rets de as val and a as type and hl as symbol table entry
+    ;f: nz,c
+    ;else
+    ;rets z, nc 
+    ;hl to just before end
+    
+    
+    
+    ex de,hl ;put table in hl
+	ld b,(hl)
+    inc hl
+    ld a,(hl) ;len(arr) into (mem) b
+    ld (_findName_List_len_h+1),a
+    or b
+    ;check for empty name array
+    ;if empty, ret not found with hl
+    ;hl is already just before end so we just ret z,nc
+    ret z
+    
+    push de ;store name for now
+    
+    ex de,hl ;put name len in mem
+    ld a,(hl)
+    ld (_findName_List_len_loop_cpE+1),a
+;    inc hl ;for 2 byte name lengths
+;    ld a,(hl)
+;    ld (_findName_List_len_loop_cpD+1),a
+    ex de,hl 
+    ld d,0 ;delete for 2 byte name lengths
+_findName_List_len_loop:
+    inc hl
+    
+    ld e,(hl) ;len of entry in de
+;    inc hl ;for 2 byte name lengths
+;    ld d,(hl)
+    
+    ld a,e
+_findName_List_len_loop_cpE:
+    cp 0 
+    jr nz,_findName_List_len_loop_lenTestFail
+;    ld a,d ;for 2 byte name lengths
+;_findName_List_len_loop_cpD:
+;    cp 0 
+;    jr nz,_findName_List_len_loop_lenTestFail
+    ;len is correct
+    ;de is len
+    
+    ;b is important, save it
+    ld a,b
+    ld (_findName_List_Nameloop_Fail_saveB+1),a
+    
+    pop bc
+    push bc ;get copy of pointer to name into bc
+     ;make bc point to start-1, hl points to start-1
+_findName_List_NameLoop:
+	  inc hl
+      inc bc
+      dec e ;this is to keep length correct ;for 2 byte names change to dec de
+      ld a,(bc)
+      cp (hl) ;should be z
+      jr nz,_findName_List_Nameloop_Fail
+     
+      ;when de reaches 3 or less, return
+;      ld a,d ;for 2 byte name lengths
+;      or a
+;     jp nz,_findName_List_NameLoop
+      ld a,e
+	  cp 4
+    jp nc,_findName_List_NameLoop
+    ;success!
+    inc hl;, now hl points to ptr at end of string
+    pop de ;discard
+    
+    or 1 ;set nz
+    
+    ld a,(hl)
+    inc hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    dec hl
+    dec hl
+    ;make de is pointer, hl is symbol table ptr
+    scf ;ret c,nz
+    ret
+    
+_findName_List_Nameloop_Fail:
+_findName_List_Nameloop_Fail_saveB:
+	ld b,1
+_findName_List_len_loop_lenTestFail:   
+	add hl,de ;add name len to table pointer
+
+	djnz _findName_List_len_loop
+_findName_List_len_h:
+	ld a,0
+    or a
+    pop de
+    ret z ;ret z, nc if not found ;hl to just before end
+    push de
+    dec a
+    ld (_findName_List_len_h+1),a
+    jp _findName_List_len_loop ;no need to set b to anything above 0, it'll go to 255
+
+
+
+delGlobalVars: ;clears the hashtable and fixes ptrs
+	ld hl,ramCode
+    ld de,ramCode+1
+    ld (hl),0
+    ld bc,255
+    ldir
+ 
+    ld hl,4
+    ld (free),hl
+    ld (vars),hl
+    ret
+
+
+;now for global vars, I'll use a 128 entry hashtable in ramCode
+HashName: ;returns hash of name at (hl) in a, destroys hl,b
+	;name is formatted same as before:
+	;name is [length:1][string name...]
+    ;where length is len(string name)+2
+
+	ld b,(hl)
+    dec b
+    dec b
+    ld a,b ;first term is len, this improves the hash for variable-like names
+_HashName_loop:
+	inc hl
+	xor (hl)
+    rlca
+	djnz _HashName_loop
+    ret
+    
+
+
+FindGlobal: ;finds the global var with name at hl, 
+	;rets:
+    ;IF FOUND: 
+    ;hl pointing to symbol table entry (at ptr) 
+    ;de is data, a is type (data can be a pointer to the data depending on type)
+    ;bc pointing to hashtable entry
+    ;flags: c & nz,
+    ;
+    ;Not Found: 
+    ;hl pointing to HashTable Entry
+    ;DE pointing to end of Symbol Table
+    ;flags: nc $ nz
+    ;
+    ;no hash table entry:
+    ;hl pointing to HashTable entry
+    ;flags: nc $ z
+	
+
+	;start by hashing name
+    push hl
+    call HashName
+    ;a is name hashed
+    
+	;since hashtable is at  ramCode 0x8100, it's byte alligned
+    
+    add a,a;mul by 2 and mod 128
+    ld l,a
+    ld h,$81
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    dec hl
+    
+    
+    pop bc
+    
+    
+    ;does this bucket have contents
+    ld e,a
+    or d
+    ret z  
+    
+    ;check if specific var in the table
+    
+    ;save hl
+    push hl
+    
+    
+    ;make ptr relative
+    ld hl,(mem)
+    add hl,de
+    ex de,hl
+    
+    ;put name in hl
+    ld l,c
+    ld h,b
+    
+	call findName_List ;finds name (hl) in name array (de)
+	;rets c if found
+    jr c,_FindGlobal_found
+	
+    ;not found
+    inc hl ;make hl point to end of ste
+    pop de
+    ex de,hl ; de:ste, hl:hte
+    
+    ;ret nc and nz
+    or 1
+	ret
+
+
+_FindGlobal_found:
+	;nz and c
+    pop bc; table entry
+	ret
+
+
+
+;global nonprimitive vars work like this
+;type includes rel ptr bit
+;rel ptr is from start of vars (makes it so I never have to update it when inserting names :)
+
+
+
+
+
+allocGName: ;allocates a name in the global namespace
+	;hl - name
+
+    ld e,(hl)
+    ld d,0
+    push hl ;save name
+     push de ;save name size
+    
+    
+      call hashName
+      add a,a
+    
+      ld l,a
+      ld h,$81
+      ld e,(hl)
+      inc hl
+      ld d,(hl)	;get rel ptr
+    
+    
+      ;does it exist? i.e. is it different from the next addr
+      inc hl
+      ld a,e
+      xor (hl)
+      ld b,a
+      inc hl
+      ld a,d
+      xor (hl)
+      or b
+      dec hl
+      dec hl
+      dec hl
+      push hl ;save hash entry ptr
+    
+    
+       ;a is 0 if we need to add new nametable
+    
+    
+       ;derel it
+       ld hl,(mem)
+       add hl,de
+    
+       ; inc num of names in list iff list exists
+    
+       or a
+       jr z,_allocName_skipIncNames
+       ld e,(hl)
+       inc hl
+       ld d,(hl)
+       inc de
+       ld (hl),d
+       dec hl
+       ld (hl),e
+_allocName_skipIncNames:
+       ;get to the end of the nameTable
+       
+       ;get next hash entry
+      pop hl
+      inc hl
+      inc hl
+      push hl ;save for when we adjust them all
+       ld e,(hl)
+       inc hl
+       ld d,(hl)
+    
+       ld hl,(mem)	;derel it
+       add hl,de
+    
+       ;hl now points to after end of intended namelist
+    
+    
+       ;insert mem
+      pop de
+     pop bc ;this is what we are after, the length of the name
+     push bc
+      push de
+    
+       inc bc ;include len byte in length
+     
+       ;if a ≠ 0, b += 2
+       or a
+       jr nz,_allocName_NoAddDimTerm
+       inc bc
+       inc bc
+_allocName_NoAddDimTerm:
+       ;insert bc bytes before hl
+       ld d,h
+       ld e,l
+       add hl,bc
+       ex de,hl ;exchange source for dest, make dest (de) the higher one (correct)
+    
+       ;how much do we need to copy?, we need to copy all the way to [free]
+       push de
+        push hl
+    
+         ld hl,(mem)
+         ld de,(free)
+         add hl,de ;hl is dereled free
+    
+         ex de,hl
+         add hl,bc ;de is derel free, hl is new free
+         ld (free),hl
+         ex de,hl ;hl is derel free
+         ;we need to copy (going downwards) free - insert
+    
+        pop de
+        ;ok now de is insert
+        or a
+        sbc hl,de ;hl is qty
+      
+        ex de,hl
+        add hl,de
+        ;adjust hl (insert) to be from top
+        ex (sp),hl
+        add hl,de
+        ;adjust dest to be from top
+        ex de,hl ;put dest in de
+        ld b,h ;put qty in bc
+        ld c,l
+       pop hl ;put (insert) in hl
+    
+       lddr
+       ;mem inserted
+    
+       ;now we copy to the place
+    
+       ;hl points to one below where we need to cp to
+       inc hl
+       ;if a = 0, we need to make the len term
+       or a
+       jr nz,_allocName_NoNewDimTerm
+       ld (hl),1
+       inc hl
+       ld (hl),a
+       inc hl
+_allocName_NoNewDimTerm:
+       ex de,hl ;set as dest
+    
+      pop hl ;this is hash entry
+     pop bc ;this is name len
+     inc bc ;include len byte
+     ex (sp),hl ;get name into hl, putting hash entry onto stack
+     push bc ;amount to copy
+    
+      ldir
+      
+    
+     pop bc
+     
+     jr nz,_allocName_NoaddSize
+     inc bc
+     inc bc
+_allocName_NoaddSize: ;now bc is how much mem was inserted
+    
+	 ;Not Done!, fix hashtable pointers!
+     ;stack has
+    pop hl ;first hash table ptr to add bc to
+_allocName_hash_fix_loop:
+    ld a,(hl)
+    add a,c
+    ld (hl),a
+    inc hl
+    ld a,(hl)
+    adc a,b
+    ld (hl),a
+    inc hl
+    
+    
+    ;check if hl is >= $8202
+    ld a,h
+    cp $82
+    jp c,_allocName_hash_fix_loop
+    ld a,l
+    cp $02
+    jp c,_allocName_hash_fix_loop
+    
+    ;finally, done, de is ptr to after newly inserted name
+    ret
+    
+    
+allocGVarData:
+	;allocates hl bytes of data at the end of the global var heap, adjusts free
+    
+    ;returns hl pointing to beginning of newly allocated data
+    
+    ex de,hl
+    ld hl,(free)
+    push hl
+    add hl,de
+    ld (free),hl
+    pop hl
+    ret
+    
+
+allocGVar: ;allocates a global var
+	;input:
+    ; hl - size (0 for primitives)
+    ; de - ptr to name (with type set)
+    
+    ;if type allocated is a t_relative, it will set val to the start (low) of the newly allocated stack data
+    
+    ;outputs: name added to table, (LVAT+4) is start of dat (if exists)
+    ;
+    
+    
+    push de ;save for later
+    
+    ld a,l
+    or h ;check if size
+    call nz,allocGVarData
+    ;hl pts to start now
+    pop de
+    push hl
+    call allocGName
+    
+    pop hl
+    dec de
+    dec de
+    dec de
+    ld a,(de)
+    and t_relative
+    cp t_relative
+    scf ;carry is correct
+    ret nz
+    ;adjust pointer
+    
+    inc de
+    ld bc,(vars)
+    or a
+    sbc hl,bc ;make it relative
+    ex de,hl
+    ld (hl),e
+    inc hl
+    ld (hl),d
+    
+    scf
+    ret
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+
+    
+    
+    
+    
+
+
+; local vars will be on the stack
+;
+; stack: [parse junk][rel ptr to past][local vars][lvat][prev ptr to lvat][past...
+;
+;
+;
+;
+;
+;
+
+findLocalVar:
+	;todo, make climb able
+
+
+findLocalVar_noClimb: ;finds a var on the highest level of locality
+			  ;INPUT:
+              ; hl - pointer to name
+			  ;RETURNS:
+              ;if found: c,nz
+              ; hl - ste
+              ; de - data
+              ; a - type
+              ;if not found: nc,nz
+              ; hl - top of symbol table (in stack)
+              ;if there is no local layer: nc,z
+              
+    ld de,(LVAT)
+    ld a,d
+    or e
+    ret z
+    
+    push hl ;save name for a bit
+    
+    ex de,hl
+    inc hl
+    inc hl
+    ld e,(hl) ;get rel ptr to start of symbol table
+    inc hl
+    ld d,(hl)
+    dec hl
+    add hl,de
+    ex de,hl
+    
+    pop hl
+    
+    call findName_List
+    ret c ;return if found
+    ;not found
+    or 1 ;set nz,nc
+    ret
+              
+              
+allocStackData:
+	;inserts free space into the stack
+    ;bc is amount of data
+    ;hl is last byte of data's loc
+    
+    ;[ret][stuff...][more stuff...]...
+    ;			   ^hl
+    ;to [ret][stuff...][free space][more stuff...]...
+    
+    ex de,hl ;put loc in de
+    
+    ld hl,0
+    add hl,sp ;sp in hl
+    ;subtract amount (alloc amount bytes on top of stack) 
+    or a
+    sbc hl,bc
+    ld sp,hl
+
+    ;hl is new sp
+    ;bc is amount
+    ;de is loc
+
+    ; [free space][ret][stuff...][more stuff...]...
+    ; ^		      ^				
+    ; dest		  src
+    ; -> go n bytes where n = len([ret][stuff...]) = loc-src
+    
+    ex de,hl ;ok, now de is new sp is dest
+    ;hl is loc
+    
+    ;src = dest + amount
+    
+    or a
+    sbc hl,de ;sub dest
+    or a
+    sbc hl,bc ;sub amount
+    ;hl is n
+    ;de is dest
+    ;bc is amount
+    
+    ;bc needs to be n
+    ;hl needs to be sp + amount
+    ;this is ok since we'll pop it soon
+    push hl
+    ld h,d ;set hl to sp
+    ld l,e
+    
+    add hl,bc ;add bc to it
+    pop bc
+    inc bc
+    ;ok, now we can ldir
+    ldir ;leaves de pointing to top of data, hl to below bottom (stackwize)
+    ret
+    
+allocStackDataRelative:
+	;inserts free space into the stack
+    ;bc is amount of data
+    ;hl is relloc
+    ex de,hl ;stick relloc in de
+    ld hl,0 
+    add hl,sp 
+    or a
+    sbc hl,bc
+    ld sp,hl ;quick alloc stack data
+    
+    ex de,hl ;relloc in hl ; relloc is loc-src
+
+    push hl
+    ld h,d 
+    ld l,e
+    add hl,bc ;add bc to it
+    pop bc
+    inc bc
+    ldir
+    ret
+    
+    
+;this gets a pointer to the end of the local name table in hl, preserves all but hl, doesnt check for validity
+;used for allocing a new name
+getEndLNT:
+	push de
+	ld hl,(LVAT)
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    ex de,hl
+    pop de
+    dec hl
+    ret
+    
+    
+allocLVarData: ;allocs bc amount of data at the lower in memory end of the local variable heap thing
+			   ;adjusts (LVAT) and the pointers at the low end of the memory
+	ld hl,(LVAT)
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    
+    ex de,hl
+    add hl,bc ;correct the ptr to past
+    ex de,hl
+    
+    ld (hl),d
+    dec hl
+    ld (hl),e
+    inc hl
+    
+    
+    inc hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    
+    ex de,hl
+    add hl,bc ;correct the ptr to names
+    ex de,hl
+	
+    ld (hl),d
+    dec hl
+    ld (hl),e
+    inc hl
+    
+    push bc ;save to fix lvat
+    ;now we alloc data
+    call allocStackData
+    
+    pop bc
+    ld hl,(LVAT)
+    or a
+    sbc hl,bc
+    ld (LVAT),hl
+    ret
+    
+    
+allocLName: ;allocates (and writes) a name (de) to the local namespace
+    ;returns hl pointing to the end of the name
+    ld hl,(LVAT)
+    
+    ld a,(de)
+    ld b,0
+    ld c,a
+    inc bc ;add one byte for the len byte
+    
+    push bc ;save for ldir
+    
+    push de ;save this for when we need to write
+    
+    push hl
+    
+	ld e,(hl)
+    inc hl
+    ld d,(hl)
+    
+    push de
+    
+    ex de,hl
+    add hl,bc ;correct the ptr to past, no need to correct the ptr to the names because that doesn't need to change
+    ex de,hl
+    
+    ld (hl),d
+    dec hl
+    ld (hl),e
+    inc hl
+    
+    inc hl
+    ld e,(hl) ;rel ptr to num of strs
+    inc hl
+    ld d,(hl)
+    ;increment the number of strings in [names]
+    
+    ;empty vat: [06][02][00][PLVAT]
+    
+    dec hl
+    add hl,de
+    
+    ld e,(hl) ;num of strs
+    inc hl
+    ld d,(hl)
+	inc de
+    ld (hl),d
+    dec hl
+    ld (hl),e
+    
+    pop de
+    pop hl
+    add hl,de ;this points to [plvat] now
+    dec hl ;insert mem before it
+    
+    ;bc is mem to insert
+    ;hl is where
+    
+    call allocStackData
+    ;outputs de pointing to [low] of data
+    pop hl ;get name into source
+    pop bc ;get len into lenght
+    push bc
+    ;de is already dest
+    ldir
+    pop bc
+    ld hl,(LVAT)
+    ;subtract len
+    or a
+    sbc hl,bc
+    ld (LVAT),hl
+    
+    ret ;returns de pointing to one past the just-added name
+    
+
+
+allocLocalVar: ;allocates a local var iff there is a local layer , keeps stack nice and clean    
+    ;input:
+    ; hl - size (0 for primitives)
+    ; de - ptr to name (with type set)
+    
+    ;if type allocated is a t_relative, it will set val to the start (low) of the newly allocated stack data
+    
+    ;outputs: name added to table, (LVAT+4) is start of dat (if exists)
+    ;
+    
+    
+    push de ;save for later
+    ld b,h ;put size in bc
+    ld c,l
+    ld hl,(LVAT) ;hl now points to [rel ptr to past]
+    ld a,l
+    or h ;check if no locals
+    ret z
+    
+    ld a,b
+    or c
+    call nz,allocLVarData
+    pop de
+    call allocLName
+    
+    dec de
+    dec de
+    dec de
+    ld a,(de)
+    and t_relative
+    cp t_relative
+    scf
+    ret nz
+    ;adjust pointer
+    inc de
+    ld hl,(LVAT)
+    ex de,hl
+    ;(hl) is dat
+    ;(de) is vat
+    
+    ;rel ptr has to be vat+4-hl
+	inc de
+    inc de
+    inc de
+    inc de
+    ex de,hl
+    or a
+    sbc hl,de
+    ex de,hl ;sub de,hl
+    ld (hl),e
+    inc hl
+    ld (hl),d
+    scf
+    ret
+    
+     
+     
+     
+ ;local = [rel ptr to past][rel ptr to names][local vars][names][past ptr to lvat , past...     
+     
+     
+
+
+LVAT: ;Local Variable Allocation Table pointer, points to [rel ptr to past]
+.dw 0
+
+
+
+makeLocalVAT: 
+	;it constructs an empty local vat, destroys hl, sets LVAT correctly
+    
+    ;empty vat: [06][02][00][PLVAT]
+    
+    ;empty vat is empty name array
+    ;name array is [number of names:2][names...]
+    
+    
+    ;prev local ptr
+    ld hl,(LVAT)
+    ex (sp),hl
+    push hl
+    
+    ;no local var names
+    ld hl,0
+    ex (sp),hl
+    push hl
+    
+    ;rel ptr to names = 2
+    ld hl,2
+    ex (sp),hl
+    push hl
+    
+    ;sp points to [ret:2][rpn:2][00][plvat:2]...
+    ;			  ^			 
+    ;so we set LVAT to sp
+    ld hl,0
+    add hl,sp
+    ld (LVAT),hl
+    
+    ;no local vars
+    
+    
+    ;[ret:2][rpn:2][00][plvat:2]...
+	;rel ptr to past   ^
+    ld hl,6 
+    ex (sp),hl
+    jp (hl) ;ret
+    
+    
+delLocalVAT: ;deleats a local vat and falls stack down correctly and cleanly, rets c if successfull
+	 
+    ;if i do this right, i can just ret at the end
+     
+    ld hl,(LVAT)
+    
+    ld a,h
+    or l ;check that it isn't 0
+    ret z ;do nothing if it's 0
+    
+    
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    ;de is now rpp
+    ex de,hl
+    add hl,de ;hl is now ptr to past lvat
+    
+    
+    ;get and store prev ptr to lvat
+    ld c,(hl)
+    inc hl
+ 	ld b,(hl)
+    ld (LVAT),bc
+	
+    ex de,hl
+    ;so now we need to copy to lower stack,
+    
+	;[ret][stuff...][rel ptr to past][rel ptr to names][local vars][names][prev ptr to lvat][past...
+;   ^								^									  				   ^
+;	sp								hl													   de
+	
+    ; de is correct destination
+    dec hl
+    dec hl ;now hl is correct source
+    ;but how much?
+    ;we need to copy hl-sp bytes
+    ;save hl
+    ld b,h
+    ld c,l
+    
+    or a ;zcf
+    sbc hl,sp
+	;hl is now amount, de is dest, bc is source
+	
+    
+    ;swap bc and hl
+	ld a,b
+    ld b,h
+    ld h,a
+    
+    ld a,c
+    ld c,l
+    ld l,a
+
+	;copy going downwards
+    lddr
+    ;de is the new sp now
+    ex de,hl
+    ld sp,hl
+    scf ;ret c for success
+    ret ;done, this is safe because we shifted the stack
+
+
+
+
+
+
+
+
+

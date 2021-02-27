@@ -1,0 +1,376 @@
+
+
+
+
+
+
+
+
+
+
+minifloatComp: ;compare a with b, preserves all except f
+	cp b
+    ret z
+    bit 7,b
+    ;A < num	C flag is set
+    jr nz,minifloatCompBneg
+	bit 7,a
+	jr nz,minifloatCompAneg
+    cp b
+    ret
+minifloatCompAneg:
+    ;b > 0 > a thus a < b
+minifloatCompRetc:
+    scf
+    ret
+minifloatCompBneg:
+	bit 7,a
+	jr z,minifloatCompApos
+	;both negative, thus c if a > b
+    cp b
+    jr nc,minifloatCompRetc
+minifloatCompApos:
+	; a > b thus ccf
+    ccf
+    ret
+
+minifloatToInt: ;a to hl, uses bc
+	ld l,a
+    and $78
+    jr nz,minifloatToIntNotSubnormal
+    ld h,a
+    ld a,l
+    and $87
+    ld l,a
+    res 7,l
+    rlca
+    ret nc
+     xor a
+     sub l
+     ld l,a
+     ret z ;zero is only thing that doesnt need h to be negative
+     dec h
+    ret
+minifloatToIntNotSubnormal:
+    rrca
+    rrca
+    rrca
+    ld b,a
+    ld a,l
+    and $07
+    ld c,l
+ 
+    or $08
+    ld l,a
+    xor a
+    ld h,a
+    dec b
+    jr z,minifloatToIntSign
+minifloatToIntShiftLoop:
+	add hl,hl
+	djnz minifloatToIntShiftLoop
+minifloatToIntSign:
+	bit 7,c
+    ret z
+    ld b,h
+    ld c,l
+    ccf
+    sbc hl,bc 
+    ccf
+    sbc hl,bc 
+    ret
+    
+
+
+
+
+
+minifloatAddCIsBigger:
+    push bc
+    ld a,b
+    ld b,c
+    ld c,a
+    call minifloatAdd
+    pop bc
+    ret
+
+minifloatAddBInf:
+	;check if c also inf
+    ld a,c
+    and $78
+    cp $78
+    ld a,b
+    ret nz ;if c not inf, res inf
+    ;c is inf, check that sign same
+    xor c
+    rlca;sign into carry
+    ld a,b
+    ;1 if they were different
+	ret nc
+    ;nan
+    or $1
+    ret
+    
+minifloatAdd: ; adds b to c into a, uses de, af, hl
+	;minifloat: s eeee [1] mmm
+    ld a,b
+    and $78
+    cp $78	;check for ±inf/nan
+ 
+    jr z ,minifloatAddBInf
+    
+    ld a,b
+    xor c	;b's image
+    and $78;b's e image
+    xor c	;c with b's ex
+	sub c	;diff of ex*8
+    ;A < num	C flag is set
+    jr c,minifloatAddCIsBigger
+    
+   
+    ;result is thus positive or 0 (bE-cE) mag(b)>=mag(c)
+    rrca	;to avoid making carry into the thing
+    rrca
+    rrca
+    ld e,a
+    cp 4	; need last bit for later for sign
+    ld a,b
+    ret nc ; result is b √
+    ;00001ccc
+    ;0001bbb0
+    ;   01234
+    
+    ;check if subnormal
+    and $78
+    ld h,a	;save b's ex for later
+    ld a,b
+    jr z,minifloatAddBSubnormal
+     or $08
+     rrca
+minifloatAddBSubnormal:
+    rlca
+	and $0F
+    
+    add a,a ;shift left
+    ;check if neg
+    bit 7,b
+    jr z,minifloatAddBPos
+     neg
+minifloatAddBPos:
+    ld d,a
+	
+    
+    ld a,c
+    and $78
+    ld a,c
+    jr z,minifloatAddCSubnormal
+     or $08
+     rrca
+minifloatAddCSubnormal:
+	rlca
+	and $0F
+    
+    add a,a ;shift left
+    inc e
+minifloatAddRotLoop:
+    dec e
+    jr z,minifloatAddEndRotLoop
+    rra
+    jr minifloatAddRotLoop
+minifloatAddEndRotLoop:
+    and $1F
+    ;check if neg
+    bit 7,c
+    jr z,minifloatAddCPos
+     neg
+minifloatAddCPos:
+    
+    add a,d			;add them  000 B bbb 0
+    
+    ret z ;a is zero
+    
+    add a,a	;put sign in carry
+    jr nc,minifloatAddResultPositive
+	 neg ;since uint it was odd, twos compliment uint is also odd  bbb1 -> BBB0+1 
+     	 ;e is where we make our result, it starts at 0 from prev loop
+     ld e,$80
+minifloatAddResultPositive:
+	
+    
+	
+	sra h
+    sra h
+    sra h
+    
+    ;0rR RRRr0
+    add a,a
+
+    ;rRRRr00
+    inc h
+    inc h
+minifloatAddNormalize:
+    ;normalize
+    dec h
+    jr z,miniFloatAddsubNormalize	;worst case is 0, which is handled earlier
+    rla
+    jr nc,miniFloatAddNormalize
+    ; not subnormal
+miniFloatAddsubNormalize:
+    ; 
+    
+    ;a is now nnnn0001, the 1 is implicit 
+    ;h is now 0000eeee
+    and $F0
+    or h
+    rlca
+    rlca
+    rlca
+    and $7F ; clear 7 bit (this rounds to 0 btw)
+    or e
+    ;check if result is ±inf
+    inc h
+    bit 4,h ;result would be 10000 if e is 1111 (inf)
+    ret z;not inf
+    ;make sure result is inf instead of nan
+    and $F8 ;cut off mantissa
+	    
+    ret 
+
+    
+   
+   
+   
+   
+   
+   
+miniFloatMul: ;b*c*2^(e signed)->a, uses de, bc
+    ld d,2
+miniFloatMul2check:
+    dec d
+    ld a,b
+    and $78
+    xor $78	;check for ±inf/nan
+    jr nz,miniFloatMulBNotInf
+    or c
+    jr z ,miniFloatMulretNan
+    ld a,c
+    and $80
+    xor b
+    ret	
+miniFloatMulretNan:
+	ld a,b
+	or $79
+    ret
+miniFloatMulBNotInf:
+	
+    ld a,b
+    ld b,c	
+    ld c,a	;swap a and b
+    xor a
+    or d	;track for the jr, on second through d is 0, c and b are swapped twice
+    jr nz,miniFloatMul2check
+
+    sla e
+    sla e
+    ;add the exps first to check for infs
+    ld a,b
+    and $78
+    rrca
+    add a,e ;add sign offset
+	ld d,a
+    ld a,c
+    and $78
+    rrca
+    add a,d						
+    
+    rlca ;undo the rots
+    							
+    ;sign bit is carry now
+    jr nc,miniFloatMulresnot0
+    ;round to 0
+	;sign of 0 is xor of signs 
+    ld a,b
+    xor c
+    and $80
+    ret
+miniFloatMulresnot0:
+	
+    ;check for inf by bit 7
+    bit 7,a
+    jr z,miniFloatMulresnotinf
+    ;round to inf
+    ld a,b
+    xor c
+    and $80
+    or $78
+    ret
+miniFloatMulresnotinf:  
+    
+    ;now we can actually do the multiply
+    ;save exp
+    and $78
+    ld d,a
+    ld a,b
+    xor c
+    and $80
+    or d
+    ld d,a ;save sign result, now I can use b and c
+  	
+  
+    ld a,b
+    
+    and $78
+    ld a,b
+    jr z,minifloatMulBSubnormal
+     or $08
+     rrca
+minifloatMulBSubnormal:
+    rlca
+	and $0F
+    ld e,a
+    
+    
+    ld a,c
+    and $78
+    ld a,c
+    jr z,minifloatMulCSubnormal
+     or $08
+     rrca
+minifloatMulCSubnormal:
+    rlca
+	and $0F
+    rrca
+    rrca
+    rrca
+    rrca
+    ld c,a
+    xor a
+    ;now mul e by c
+    ld b,4
+miniFloatMulMulMantLoop:
+    rlca
+    srl e
+    jr nc,miniFloatMulMulMantLoopNoAdd
+     add a,c
+miniFloatMulMulMantLoopNoAdd:    
+    djnz miniFloatMulMulMantLoop
+
+    rrca
+    rrca
+    rrca
+    rrca
+    ;check if subnormal
+    ld e,a
+    ld a,d
+    and $78
+    ld a,e
+    jr nz,miniFloatMulResNormal
+	 rrca
+miniFloatMulResNormal:
+    and $07
+    or d
+    ret
+    
+    
+    
+    

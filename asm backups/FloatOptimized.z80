@@ -1,0 +1,1096 @@
+;little endian
+
+
+
+
+;getters
+FPGetExp_a_hl: ;get exp of hl into a, should only be used in stuff that doesn't have to be fast
+	push de
+	inc hl
+    inc hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+	ex de,hl
+    add hl,hl
+    ld h,a
+    ex de,hl
+    dec hl
+    dec hl
+    dec hl
+	pop de
+    or a	;flags, why not
+	ret
+FPGetExp_a_ix:
+	push hl
+	ld h,(ix+3)
+    ld l,(ix+2)
+	add hl,hl
+    ld h,a
+    pop hl
+    or a
+    ret
+
+FPGetExpA_MantCDE_hl: ;gets mantissa (properly implicited) of hl into cde, also stores exp into a
+	push hl				;returns sign in s flag, no checks for inf/nan
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl
+    ld c,(hl)
+	inc hl
+	ld a,(hl)
+    ld l,c
+    ld h,a
+    add hl,hl
+    ;sign into l7
+    rr l
+    push hl
+    ld a,h
+    or a
+    set 7,c
+    jr nz,_FPGetExpA_MantCDE_hl_Normal
+     sla e
+     rl d
+     rl c
+_FPGetExpA_MantCDE_hl_Normal:   
+    pop af ;sign in s
+    pop hl
+	ret
+
+
+
+
+
+
+
+
+
+FPInfMinusInfNan:     
+.db 1,0,$80,$7f
+
+
+
+FPadd_hl_de:
+	push hl
+    call FPsum_hl_de
+    pop de
+    ld bc,4
+    ldir
+	ret
+
+;time: ±8? tstates
+;N = NaN
+;1 + 1	:	1272
+;∞ + _	:	664
+;∞ + N	:	656
+;∞ + ∞	:	472
+;N + _	:	560
+;∞ - ∞	:	488
+;1 - 1	;	1112
+;1 - (1-e);	1344
+;1 + e	;	1456
+;1 + e/2:	928
+FPsum_hl_de: ;calcs the sum of hl and de and returns ptr to result
+	ld (_FPadd_hl_de_maxExpPtr+1),hl
+	push de	;save op2 for later						;1
+    ld e,(hl)
+    inc hl
+    ld d,(hl)	;loading op1 into bcde
+    inc hl
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    ld h,b      ;copy bc to hl to extract sign and exp
+    ld l,c
+    add hl,hl ;gets sign in carry and exp in h
+    ld a,h	;exp in a
+    push af ;save carry and exp for later			;2
+    xor $ff ;check for nan/inf
+    jr nz,_FPadd_hl_de_ok1
+	     ;is it nan?
+	     ld a,c
+	     and $7f
+	     or d
+	     or e
+	     jr z,_FPadd_hl_de_inf1
+	      pop af			;1
+	      pop de			;0
+	      ret ;return the nan
+_FPadd_hl_de_inf1:     
+	     pop bc ;it's an inf, check the other			;1
+	     ;carry (sign) was popped into bit 0 of c, move it to 7
+	     pop de											;0
+	     ex de,hl
+	     inc hl
+	     inc hl
+	     inc hl
+	     ld a,c
+	     ;carry (sign) was popped into bit 0 of c, move it to 7
+	     rrca
+	     xor (hl)
+	     ld c,a
+	     dec hl
+	     ld a,(hl)
+	     and $7f
+	     dec hl
+	     or (hl)
+	     dec hl
+	     or (hl)
+	     ret nz ;it's a nan, ret it
+	     ;it's an inf, check signs agree
+	     bit 7,c
+	     ret z ;ret if signs agree
+	     ld hl,FPInfMinusInfNan
+	     ret
+
+_FPadd_hl_de_ok1:
+    xor $ff	;return a to what it was
+    ld b,0 ;zero b to use bcde as int32
+    set 7,c ;assume normal
+    or a ;check for subnormal
+    jr nz,_FPadd_hl_de_normal1
+     rl e
+     rl d
+     rl c;no rl b because to clear top bit
+_FPadd_hl_de_normal1:  
+    pop af	;get exp and sign of op1							;1
+    jr nc,_FPadd_hl_de_nonneg1
+     ;negate bcde
+     ld h,d
+     ld l,e
+     ;there is carry here so we invert it
+     ccf
+     ld hl,0
+     sbc hl,de ;negation, results in carry
+     ld d,h
+     ld e,l
+     ld hl,0
+     sbc hl,bc ;continuation of negation
+     ld b,h
+     ld c,l
+_FPadd_hl_de_nonneg1:
+	;a has exp1
+    ;bcde has mant1
+    pop hl	;get op2 ptr into hl	;0
+    push de	;save abcde for later	;1
+    push bc							;2
+    push af							;3
+    ld (_FPadd_hl_de_otherExpPtr+1),hl ;save op2 in some smc later on
+    
+    ld e,(hl)	;load op2 into bcde
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    ld h,b	;same as before: ld hl,bc
+    ld l,c
+    add hl,hl ;gets sign2 in carry and exp2 in h
+    ld a,h ;exp2 in a
+    push af ;save carry and exp for later	;4
+    xor $ff ;check for nan/inf
+    jr nz,_FPadd_hl_de_ok2
+	     ld hl,(_FPadd_hl_de_otherExpPtr+1)
+	     pop af;3
+	     pop af;2
+	     pop af;1
+	     pop af;0
+	     ret ;return it, inf-inf is covered in first check 
+     
+_FPadd_hl_de_ok2:
+    xor $ff ;fix a from prev xor
+    ld b,0 ;zero b to use it for the mantissa int32
+    set 7,c ;assume the number is normal
+    or a ;check for subnormal
+    jr nz,_FPadd_hl_de_normal2
+     rl e 
+     rl d
+     rl c;no rl b because to clear top bit
+_FPadd_hl_de_normal2:  
+    pop af ;get carry and exp back into a			;3
+    jr nc,_FPadd_hl_de_nonneg2
+     ;negate bcde
+     ld h,d
+     ld l,e
+     ;there is carry here so we invert it
+     ccf
+     ld hl,0
+     sbc hl,de ;negation, results in carry
+     ld d,h
+     ld e,l
+	 ld hl,0
+     sbc hl,bc ;continuation of negation
+     ld b,h
+     ld c,l
+_FPadd_hl_de_nonneg2:
+	;a has exp2
+    ;bcde has mant2
+    pop hl ;get exp1 in h, flags in l (unused)	;2
+    ld (_FPadd_hl_de_exp),a ;save exponent result
+   	;e1-e2 if e1>e2, shift m2, else shift m1
+    sub h	;(e2-e1)  ;get diff of exps, c if a<h  e1>e2 so we keep m2 so we can shift it
+    jr c,_FPadd_hl_de_keepM2
+     ;m1 has lower exp so we are shifting it
+     neg ;fix a to be e1-e2, a turns negative here but will be negated again later
+     ld l,a ;store it in l for right now as we...
+     ld a,h 
+     ld (_FPadd_hl_de_exp),a ;overwrite exp result
+     ld a,l ;get it back
+     ;stack is ..[bc][de]..
+     ;do an exchange of the values with the stack now
+     ;ex (sp),debc
+     ;hl is disposable now (yay!)
+     pop hl ;hl has m1 bc (m1hi)			;1
+     ex de,hl ;now hl = m2lo, de = m1hi
+     ex (sp),hl ;exchange m2lo with m1lo
+     push bc ;put m2hi in m1hi's place	;2
+     ;now de has m1hi and hl has m1lo
+     ex de,hl ;hlde = m1
+     ld b,h	;make it bcde = m1
+     ld c,l
+     ;m2 has max exp
+_FPadd_hl_de_otherExpPtr:
+	 ld hl,0000 ;get our ptr to the op with least exp that we stored with smc a wile ago
+     ld (_FPadd_hl_de_maxExpPtr+1),hl ;it actually has the most exp so we store it there
+     
+_FPadd_hl_de_keepM2:
+	neg ;make a positive here
+    ;store the max exp into the answer's exp
+    ld l,a 
+    ld a,(_FPadd_hl_de_exp) ;get old min xp
+    add a,l ;add the diff
+    ld (_FPadd_hl_de_exp),a ;store it back
+    ld a,l;restore a
+    
+    
+    ;ok now we can do the shifting, a is shift amount
+    cp 25 ;for shift greater than 24, addition has no effect
+    jr c,_FPadd_hl_de_noOutOfRange
+     pop af
+     pop af
+_FPadd_hl_de_maxExpPtr:
+     ld hl,0000
+     ret
+    
+_FPadd_hl_de_noOutOfRange:   
+    or a ;test a > 0
+    ld l,0 ;we will use this for a rounding guard byte
+    jr z,_FPadd_hl_de_noShift
+     ld h,a ;save it for the remainder
+     rra
+     rra
+     rra	;mul a by 8
+     and $1f ;mask away top 3 rotated bits, they were the lsbs
+     jr z,_FPadd_hl_de_noByteShift
+_FPadd_hl_de_byteShiftLoop:    
+      ;shift bcdel a byte at a time, doing sign extention
+      ld l,e
+      ld e,d
+      ld d,c
+      ld c,b
+      bit 7,b
+      ld b,0
+      jr z,_FPadd_hl_de_byteShiftLoop_extend0
+       dec b
+_FPadd_hl_de_byteShiftLoop_extend0:
+	  
+     dec a
+     jr nz ,_FPadd_hl_de_byteShiftLoop
+      
+_FPadd_hl_de_noByteShift:
+	
+    ld a,h
+    and 7 ;get remainder modulo 8
+    jr z,_FPadd_hl_de_noShift
+_FPadd_hl_de_bitShiftLoop:
+	 ;sra bcdel
+     sra b
+     rr c
+     rr d
+     rr e
+     rr l
+    dec a
+    jr nz,_FPadd_hl_de_bitShiftLoop
+_FPadd_hl_de_noShift:
+	;now we can do the addition
+    ld a,l;bcdel -> bcdea to free up hl
+    
+    ;stack is ..[bc][de]..
+	pop hl ;hl is other mhi
+    add hl,bc ;perform addition on bc with stack bc
+    ld b,h ;store it in bc
+    ld c,l
+    pop hl ;get other Mlo
+    add hl,de ;do add with de and stack de
+    jr nc,_FPadd_hl_de_addNoCarry
+	 inc bc ;carry to bc
+_FPadd_hl_de_addNoCarry:
+    ld d,h ;store in de
+    ld e,l
+    ;addition complete
+    ;now check for 0
+    push af ;save a of bcdea
+    or b ;or-collapse bcdea into a
+    or c
+    or d
+    or e
+    jr nz,_FPadd_hl_de_non0ans 
+     pop af
+     ld hl,_FPadd_hl_de_ans
+     xor a
+     ld (hl),a
+     inc hl
+     ld (hl),a
+     inc hl
+     ld (hl),a
+     inc hl
+     ld (hl),a
+     dec hl
+     dec hl
+     dec hl
+     ret
+    
+_FPadd_hl_de_non0ans:    
+    pop af ;restore a of bcdea, bcdea wasn't 0
+    bit 7,b ;check the sign
+    ld h,0 ;FP sign positive
+    jr z,_FPadd_hl_de_nonnegAns
+     ;negate bcdeA
+     ld h,a
+     ld a,0
+     sub h
+     ld h,d
+     ld l,e
+     ld hl,0 
+     sbc hl,de ;negation, results in carry
+     ld d,h
+     ld e,l
+     ld hl,0
+     sbc hl,bc ;continuation of negation
+     ld b,h
+     ld c,l
+     ld h,$80 ;set FP sign negative
+     
+_FPadd_hl_de_nonnegAns:
+    
+    ld l,a ;restore l of bcdel
+    ld a,h ;put FPsign in a to load to fpAns
+    ld (_FPadd_hl_de_ans+3),a ;write FPsign
+    
+    ;normalization
+    ld a,b ;case check for inc exp (eg 1+1=1*2^1)
+    or a ;flags 
+    jr z,_FPadd_hl_de_contNorm
+     ;we need to inc the exp
+     ld a,(_FPadd_hl_de_exp);get exp
+     inc a;inc it
+     cp $ff;check for inf
+     jr nz,_FPadd_hl_de_contIncExp
+      ld hl,_FPadd_hl_de_ans;was inf
+      xor a
+      ld (hl),a
+      inc hl
+      ld (hl),a
+      inc hl
+      ld (hl),$80
+      inc hl
+      ld a,(hl)
+      or $7f
+      ld (hl),a
+      dec hl
+      dec hl
+      dec hl
+      ret
+_FPadd_hl_de_contIncExp:
+	 ;carry flag doesn't matter here because the top bit of c will be overwritten
+     srl c;srl cdel , b is ignored now
+     rr d
+     rr e
+     rr l
+     ;before the jump, we have to store the exp in b
+     ld b,a
+     jr _FPadd_hl_de_normEnd
+     
+_FPadd_hl_de_contNorm: ;normalize normally
+	ld a,(_FPadd_hl_de_exp);get exp in a
+    ld b,a ;put in b as our loopcounter
+_FPadd_hl_de_normLoop:
+     bit 7,c;check for top
+     jr nz,_FPadd_hl_de_normEnd ;bit at top, exit loop
+     sla l ;sla cdel
+     rl e
+     rl d
+     rl c
+    djnz _FPadd_hl_de_normLoop ;loop unless exp is 0
+    ;subnormal case, undo rl
+    rr c ;rr to get msb back from carry
+    rr d
+    rr e
+    rr l
+     
+_FPadd_hl_de_normEnd:     ;expects b to be exp
+     ;now we construct our float in bcde while preserving l
+     rl c ;shift c up to get top bit of exp
+     srl b ;put exp in place, with 0 in top of b so we can or with sign
+     rr c ;put bottom bit of b into top of c in place of c's old top (implicit) bit
+     
+     ;now we round, ties to even
+     ;construct test
+     ld h,$40 ;$40 because we will shift it left to make it
+     ld a,e ;get e in a to check evenness of m
+     rra ;set carry to lsb of e without affecting e
+     ccf ;invert carry flag so even will make .5 round down
+     rl h ;put the carry into h
+     ld a,l ;guard byte test
+     cp h 
+     ;if odd: h is $80, if even: h is $81
+     ;l < h, c set -> round down
+     jr c,_FPadd_hl_de_roundDown
+      ;increment bcde (if overflow to inf, this works fine)
+      inc e
+      jr nz,_FPadd_hl_de_roundDown
+      inc d
+      jr nz,_FPadd_hl_de_roundDown
+      inc c
+      jr nz,_FPadd_hl_de_roundDown
+      inc b
+_FPadd_hl_de_roundDown:    
+	;now we load it up and return
+    ld hl,_FPadd_hl_de_ans 
+    ld (hl),e ;e first because little endian
+    inc hl
+    ld (hl),d
+    inc hl
+    ld (hl),c
+    inc hl
+    ld a,b ;b has 0 in top
+    or (hl) ;so or works fine
+    ld (hl),a ;finish store
+    dec hl
+    dec hl
+    dec hl
+    ret
+
+    
+_FPadd_hl_de_exp: ;has max exp
+.db 0
+    
+_FPadd_hl_de_ans:
+.db 0,0,0,0
+    
+    
+    
+    
+    
+    
+    
+    
+
+FPInfTimesZeroNan:     
+.db 2,0,$80,$7f
+
+
+
+FPmul_hl_de:
+	push hl
+    call FPprod_hl_de
+    pop de
+    ld bc,4
+    ldir
+	ret
+
+
+;time stats:
+;0*0 			~700
+;n*n in domain	~3472 to ~4736 (depending on number of 1's in numbers
+;n*n underflow	~880
+;n*0 underflow	~644
+;n*0 in domain	~728
+;n*n overflow	~672
+;n*n carry to overflow 	 max ~4448
+;n*nan			~672
+;n*inf			~544
+;0*inf			~636
+;
+FPprod_hl_de:
+	push de
+    ld b,(hl)
+    inc hl
+    ld c,(hl)
+    inc hl
+    ld e,(hl) ;this bits backwards for the part ahead
+    inc hl
+    ld d,(hl)
+    
+    ex de,hl
+    ld d,l ;save mant top, mant top is l
+    
+    xor a ; zero a
+    add hl,hl ;sign in carry, exp in h
+    rra ;sign in a.7
+	ld e,h ;save exp
+    
+    pop hl ;start loading other
+    push bc
+    push de
+
+	ld b,(hl)
+    inc hl
+    ld c,(hl)
+    inc hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+	
+    ex de,hl
+    ld d,l ;save mant top
+    
+    add hl,hl ;sign in carry, exp in h
+	ld e,h ;save exp
+    ;sign
+    jr nc,FPmul_hl_de_noInvSign
+     xor $80
+FPmul_hl_de_noInvSign:
+    ;a has sign now
+    ld (FPmul_hl_de_ans+3),a
+    
+    ;ok now we can do checks
+    ;check that op2 ≠ inf or nan
+    
+    ld a,e
+    cp $ff
+    jr nz,FPmul_hl_de_op2Ok
+     ;op2 is nonfinite
+     ;store into ans w/o sign
+     ;op2 is: a dcb
+     ld hl,FPmul_hl_de_ans+3
+     srl a
+     or (hl)
+     ld (hl),a
+     dec hl
+     ld (hl),d
+     ld a,d
+     and $7f
+     dec hl
+     ld (hl),c
+     dec hl
+     ld (hl),b
+     or c
+     or b
+     ;stack is [de][bc]..
+     pop de
+     pop bc
+     ret nz ;op2 was nan, ret it
+
+     ;check that op1 isnt 0
+     ld a,e
+     and $7f
+     or d
+     or c
+     or b
+     jr z,FPmul_hl_de_ret0INFnan
+	 ;ok, is it a nan?
+     ld h,e
+     ld l,d
+     add hl,hl
+     ld a,h
+     cp $ff
+     ld hl,FPmul_hl_de_ans
+     ret nz ;it's finite, the inf wins
+     ;it might be a nan
+     ld a,d
+     and $7f
+     or c
+     or b
+	 ret z ;its another inf
+	 ;its a nan, ret it not ans
+     ld hl,FPmul_hl_de_ans+3
+     ld a,(hl)
+     and $80
+     xor e 
+     and $80
+     xor e
+     ld (hl),a
+     dec hl
+     ld (hl),d
+     dec hl
+     ld (hl),c
+     dec hl
+     ld (hl),b
+	 ret     
+FPmul_hl_de_op2Ok:    
+    
+    ;assume op2 is normal
+    set 7,d
+    ;check that op2 is normal
+    or a ;cp 0 
+    jr nz,FPmul_hl_de_op2Normal
+     ;its subnormal so we adjust by shifting dcb left 1
+     sla b
+     rl c
+     rl d
+FPmul_hl_de_op2Normal:
+	
+    ;op2 mantissa is now correct, now we must investigate op1
+    pop hl ;get op1's de into hl
+    ld a,l
+    cp $ff
+    jr nz,FPmul_hl_de_op1Ok
+     ;op1 is nonfinite
+     ;op2 is finite, so only check for op2=0
+     ;op2 e is a, m is dcb
+     ld a,d 
+     or c
+     or b
+     pop bc ;op 1's bc
+     jr nz,FPmul_hl_de_op1NONFOP2NON0
+      ;check if op1 is nan
+      ;op1 is lhcb
+      ld a,h
+      and $7f
+      or c
+      or b
+      jr nz,FPmul_hl_de_op1NONFOP2NON0 ;op1 was nan
+       ;ret the ∞*0 nan
+FPmul_hl_de_ret0INFnan:
+       ld hl,FPInfTimesZeroNan+2	;load nan w/o affecting sign
+       ld de,FPmul_hl_de_ans+3
+       ld a,(de)
+       or $7f
+       ld (de),a
+       dec de
+       ld bc,3
+       lddr
+       ex de,hl
+       inc hl
+       ret
+FPmul_hl_de_op1NONFOP2NON0:
+     ex de,hl
+     ld hl,FPmul_hl_de_ans+3
+     ld a,(hl)
+     res 7,e
+     and $80
+     or e
+     ld (hl),e
+     dec hl
+     ld (hl),d
+     dec hl
+     ld (hl),c
+     dec hl
+     ld (hl),b
+     ret
+FPmul_hl_de_op1Ok:
+    
+    ;assume op1 is normal
+    set 7,h
+    ;check it is
+    or a ;op1e
+    jr nz,FPmul_hl_de_op1Normal
+     ;its subnormal so we adjust by shifting the mant left 1
+     ex (sp),hl ;hl is now m1 bc
+     sla h
+     rl l
+     ex (sp),hl
+     rl h
+;todo: check for 0 as well to make that fast
+     
+FPmul_hl_de_op1Normal:
+	push hl ;put it back bc we'll need storage for the next bit
+	;now we compare exps
+    ;e1+e2-127 in a way that detects overflow/underflow
+    ld h,0
+    add a,e ;e1+e2
+	rl h
+    sub 127
+    jr nc,FPmul_hl_de_ExpAddNoC
+	 dec h
+FPmul_hl_de_ExpAddNoC:
+	;ha has signed offset exp now
+    bit 7,h
+    jp z,FPmul_hl_de_ExpAddResPos    
+    ;seee eeee  eMMM MMMM  MMMM MMMM  MMMM MMMM
+    ;0000 0000  01 = 2^-127
+    ;0000 0000  0000 0000  0000 0000  0000 0001 = 2^-149
+    
+    ;because of subnormal, only exps below -149 present underflowing and only those below -150 can't round up	
+    ;hence the min value of exp is -23 (those below round down)
+	
+    ; NB: below e0 the whole multiply doesn't nescesarilly have to be performed, but I'm lazy so...
+    
+    ;check for -23
+    ;max negative value is -127 or 0x81 which is in 1 byte
+    ;since I don't want to check s and p/v, I'll just treat it as unsigned
+
+    ;domain: 0x81 to 0xff and 0x00, check at -23 or 0xe9
+    dec a ;shift domain to 0x80--0xff, check at -24 or 0xe8
+    cp -24
+    inc a ;restore a w/o affecting c flag
+    ;now if a < cp, return 0
+    jr nc,FPmul_hl_de_ExpSubnormal
+    ;return ±0
+    pop af
+    pop af;free the stack
+    
+FPmul_hl_de_Ret0:
+    ld hl,FPmul_hl_de_ans+2 ;sign part is already zero exp
+
+    xor a
+    ld (hl),a
+    dec hl
+    ld (hl),a
+    dec hl
+    ld (hl),a
+    ret
+FPmul_hl_de_ExpSubnormal:
+		;if a is 0, it's fine
+        or a
+        jp z,FPmul_hl_de_ExpSafeish
+
+	  	;ok, now we trick the rest into being a subroutine
+        
+        ;save a
+        ld (FPmul_hl_de_ExpSubnormalSaveA+1),a
+        
+        ;stack has m1 as [de][bc]..
+        ;dcb has m2
+        ;free:a,hl,e
+        pop af
+        pop hl
+        call FPmul_hl_de_ExpSubnormalSubroutine
+FPmul_hl_de_ExpSubnormalSaveA:
+        ld c,0
+        ;ok, (hl) is ans
+        ;get 
+        ld b,(hl)
+        inc hl
+        ld d,(hl)
+        inc hl
+        ld e,(hl)
+        inc hl
+        ld h,(hl)
+        ld l,e
+        add hl,hl
+        ld a,h
+        ld h,0
+        ;ha is exp of result = exp+$7f
+        ;c is our (negative) exp offset
+        ;true exp is ha-$7f+c
+        sub $7f
+        jr nc ,FPmul_hl_de_ExpSubnormal_noCarryOnSubtraction
+         dec h
+FPmul_hl_de_ExpSubnormal_noCarryOnSubtraction:     
+        add a,c
+        ;c is negative, so a carry means don't dec a
+        jr c,FPmul_hl_de_ExpSubnormal_CarryOnCadd
+         dec h
+FPmul_hl_de_ExpSubnormal_CarryOnCadd:  
+		ld l,a
+        ;hl is our true exp now
+        ;number of shifts is -ha + 1
+        push de
+        ld de,1
+        ex de,hl
+        or a
+        sbc hl,de
+        pop de ;hl is number of shifts now, min 1
+        ;if hl > 24, it rounds to 0
+        ld a,h
+        or a
+        jr z,FPmul_hl_de_ExpSubnormal_noRet0
+FPmul_hl_de_ExpSubnormal_Ret0:
+          ld a,(FPmul_hl_de_ans+3)
+          and $80 ;keep only sign
+          ld (FPmul_hl_de_ans+3),a
+          jr FPmul_hl_de_Ret0
+FPmul_hl_de_ExpSubnormal_noRet0:
+	    ld a,l
+        cp 25
+        jr nc,FPmul_hl_de_ExpSubnormal_Ret0
+        ;ok, now we can shift
+        
+        ld a,e
+        or $80 ;implicit bit
+        ld e,b
+        ld b,l
+        ; adeh will be our shifting register
+FPmul_hl_de_ExpSubnormal_shiftLoop:
+		srl a
+        rr d
+        rr e
+        rr h
+        djnz FPmul_hl_de_ExpSubnormal_shiftLoop
+        ;k, now we round
+        ld l,$40
+        ld b,a
+        ld a,e
+        rra
+        ccf
+        rl l
+        ld a,h
+        cp l
+        ;reg is bde
+        jr c,FPmul_hl_de_ExpSubnormal_roundDown
+         inc e
+         jr nz,FPmul_hl_de_ExpSubnormal_roundDown
+         inc d
+         jr nz,FPmul_hl_de_ExpSubnormal_roundDown
+         inc b ;since at least 1 shift occured, sign of b is ok for exp
+FPmul_hl_de_ExpSubnormal_roundDown:        
+        
+        ;ok, now we store ans and ret
+        ld hl,FPmul_hl_de_ans+3
+        ld a,(hl)
+        and $80
+        ld (hl),a
+        dec hl
+        ld (hl),b
+        dec hl
+        ld (hl),d
+        dec hl
+        ld (hl),e
+        ret
+        
+FPmul_hl_de_ExpSubnormalSubroutine:
+        push hl
+        push af
+        
+        ;load something sane into a
+        ld a,$7f ;2^0
+        
+        jr FPmul_hl_de_ExpSafeish
+
+FPmul_hl_de_ExpAddResPos:    
+    
+    ;ha is positive so we just have to check for overflows now
+    ;since the only things that lie about their true exponent are subnormals and no finite exp can reach infinite when multiplying with a subnormal, we don't have to worry about them producing false overflows
+    bit 0,h
+    jr nz,FPmul_hl_de_Overflow
+    ;also check for a = $ff
+    cp $ff
+    jr nz,FPmul_hl_de_ExpSafeish
+FPmul_hl_de_Overflow:    
+    
+    ;overflow, load inf into ans
+    pop af
+    pop af ;free stack
+    xor a
+    ld hl,FPmul_hl_de_ans
+    ld (hl),a
+    inc hl
+    ld (hl),a
+    inc hl
+    ld a,$80
+    ld (hl),a
+    inc hl
+    cpl
+    or (hl)
+    ld (hl),a
+    
+    ld hl,FPmul_hl_de_ans
+    ret
+    
+FPmul_hl_de_ExpSafeish:
+	;the exp can now only be incremented so there will be a check for that later
+    
+    
+    ;ok now we save this exp 
+    ld (FPmul_hl_de_ans),a ;in the wrong place so we can access it easier
+    
+    ;state: dcb has m2, stack has m1 as [de][bc]..
+    
+    ;now do a 24x24 multiply
+	
+    ;we will use shadow registers for this so we must save interupt status
+    ;for that we need to get our stuff off the stack
+    ;free:a,hl,e
+    ;elh will hold m1 temporarily
+    pop af
+    pop hl
+    ld e,a
+    
+    ;note: unless we check for 0's the normalization loop later will be horribly ineffecient, so we do it before the multiply for speed
+    ;also, I want multiplying by 0 to be a cheap operation
+    ;m1:elh m2:dcb
+    
+    or l
+    or h
+    jp z,FPmul_hl_de_Ret0
+    ld a,d
+    or c
+    or b
+    jp z,FPmul_hl_de_Ret0
+    
+    
+     ld a, i  ; this is the core of the trick, it sets P/V to the value of IFF so P/V is set iff interrupts were enabled at that point
+     jp pe,FPmul_hl_de_IntPE
+     ld a, i  ; test again, to fix potential "false negative" from interrupt occurring at first test
+FPmul_hl_de_IntPE:
+     push af  ; save flags
+     di       ; disable interrupts
+  	
+	;hld'e'h'l' will have result
+	;save the shadow registers we will use
+    exx
+    push hl
+    push de
+    push bc
+    ld hl,0
+    ld d,h
+    ld e,h
+    exx
+    
+    ;elh has m1
+	;which will be our adding one
+    ;gotta load lh into b'c'
+    ld a,h
+    ld h,l
+    ld l,a
+    push hl
+    exx
+    pop bc
+    exx
+    
+    
+	;dcb (m2) is our bits one
+    ;free:a
+    ;make b free for loop ctr
+    ld l,b	;dcb -> dhl
+    ld h,c
+    ld b,24
+FPmul_hl_de_mul24:
+    ;shift and test bit
+    exx
+    add hl,hl
+    ex de,hl
+    adc hl,hl
+    ex de,hl
+    exx
+    adc hl,hl
+    rl d
+    jr nc,FPmul_hl_de_mul24_noAdd
+     ld a,e
+     exx
+     add hl,bc
+     adc a,e
+     ld e,a
+     jr nc,FPmul_hl_de_mul24_noCarryD
+      inc d
+FPmul_hl_de_mul24_noCarryD:
+     exx
+     jr nz,FPmul_hl_de_mul24_noCarryHL ;nz because inc d doesn't affect carry
+     inc hl 
+FPmul_hl_de_mul24_noCarryHL:
+FPmul_hl_de_mul24_noAdd:   
+    djnz FPmul_hl_de_mul24
+    
+    ;ok, prod in hld'e'h'l'
+    ;move it to hldebc
+    exx
+    push de
+    push hl
+    exx
+    pop bc
+    pop de
+    
+    exx ;restore shadow registers
+    pop bc
+    pop de
+    pop hl
+    exx
+	
+     pop af   ; get back flags
+     jp po,FPmul_hl_de_IntwereOff   ; po = P/V reset so in this case it means interrupts were disabled
+     ei       ; re-enable interrupts
+FPmul_hl_de_IntwereOff:
+    
+    
+    ;normalize
+    ;ok now we need to shift hldebc up until we get a carry
+    
+    ld a,(FPmul_hl_de_ans) ;get exp back from earlier
+    inc a 
+FPmul_hl_de_Normloop:
+	sla c
+    rl b
+    rl e
+    rl d
+    adc hl,hl
+    jr c,FPmul_hl_de_NormloopEnd
+    dec a
+    jr nz,FPmul_hl_de_Normloop
+    ;subnormal
+    
+FPmul_hl_de_NormloopEnd:
+    
+    ;if a is 0xff here, there is no way it can decrease, so ret inf
+    cp $ff
+    jr nz,FPmul_hl_de_noloadInf
+FPmul_hl_de_loadInf:
+      ld d,0
+      ld l,d
+      ld h,$80
+      ld b,$ff
+      jr FPmul_hl_de_RoundDown
+FPmul_hl_de_noloadInf:
+    ;compute final exp and values
+    srl a
+    rr h
+    rr l
+    rr d
+    rr e
+	rr b
+    rr c
+	push af
+    push hl 
+    ;round
+    ld h,$40
+    ld a,c
+    or b
+    jr z,FPmul_hl_de_RoundNoSetE
+     set 0,e
+FPmul_hl_de_RoundNoSetE:   
+	ld a,d
+    rra
+    ccf ;invert carry
+    rl h
+    ld a,e
+    cp h
+    pop hl
+    pop bc ;a into b
+    jr c,FPmul_hl_de_RoundDown
+    ;round up by incrementing bhld
+     inc d
+     jr nz,FPmul_hl_de_RoundDown ;these have to be nz because, believe it or not, inc doesn't affect carry
+     inc l
+     jr nz,FPmul_hl_de_RoundDown
+     inc h
+     ;if we got here, we don't have to check the exp because everything before will be cleared if it were to carry to inf
+     
+ 	 
+     jr nz,FPmul_hl_de_RoundDown
+     inc b
+FPmul_hl_de_RoundDown:
+	ld c,d ;bhlc
+	ex de,hl ;bdec
+    
+    ld hl,FPmul_hl_de_ans+3
+    ld a,b
+    or (hl)
+    ld (hl),a
+    dec hl
+    ld (hl),d
+    dec hl
+    ld (hl),e
+    dec hl
+    ld (hl),c
+    ret ;hl pts to ans
+    
+    
+FPmul_hl_de_ans:
+.db 0,0,0,0
+
+
+
+

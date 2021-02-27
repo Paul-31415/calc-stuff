@@ -1,0 +1,88 @@
+Glasscars v1.0 (83, 83 Ion, 83+, or 83+ Ion)
+
+by Matt Roberts
+meroberts@chesapeake.net
+
+Zip file includes:
+Glasscar
+gclevel1
+glasscar.txt
+
+**********************************************************************************
+*    Note to ASM programmers:
+*    Impressed by Glasscars' 3-D capabilities? It is powered by a small, fast,
+*    easy-to-adapt engine. If you would send me a personal email, I would be
+*    happy to send the source code and detailed instructions, which I will be
+*    preparing shortly. Also write if you would like the code for the extremely
+*    fast and reasonably accurate line drawing program that allows so many lines
+*    to be drawn to the screen so quickly in Glasscars. It runs at an average of
+*    6.5 frames per second!
+**********************************************************************************
+
+FIRST, A WORD ABOUT COMPATIBILITY
+	For those of you who wish to play Glasscars two player, every version can play
+with every other version that is out or will ever come out. (See TWO PLAYER) Furthermore, the level
+files are exactly the same between the 83 and 83+. They are completely transferable
+between the two platforms, and always will be. The Glasscars program itself will only run on it's
+respective systems.
+
+STARTING A GAME
+	This is the first version of Glasscars. Many bells and whistles have yet to be put
+in. For now, all the choices you have are 1) which level, 2) how many players (calcs),
+3) which player you are (two player only),  and 4) how many laps the race will run. Note
+that hitting MODE (quit) will exit at practically any time.
+	If no levels are in RAM when the program looks for them, it will simply exit out. To
+put a level in RAM, just load it onto the calculator. If you are using an 83+, the levels
+cannot be archived.
+	Select the level by pressing the corresponding number (or letter, for later levels).
+
+GAMEPLAY
+	You will find yourself dropping down onto the starting position of the track. The screen will
+display Ready..., Set..., then GO!!! The objective is to beat the smart opponent. The keys are as
+follows:
+	
+	Mode - quits to home screen, or if you have finished the race, the scoring screen.
+	2nd - Accelerates the car forward.
+	Alpha - Will brake if moving forward, and eventually will cause you to go reverse.
+	Del - Camera toggle inside/outside the car. Just press it and see!
+	Stat - Looks behind your car.
+	Vars - Looks to your left.
+	Clear - Looks to your right.
+	Left Arrow - Turns the wheel left.
+	Right Arrow - Turns the wheel right.
+
+	The three view keys work in both inside and outside camera modes. They only look in
+their respective directions as long as they are pressed.
+
+	You cannot go off the track. Hitting the side will slow you down, as will hitting the opponent.
+It is important to note that the opponent plays by exactly the same rules you do. Neither of you can
+go off the road, exceed a certain speed, or turn faster than a certain rate. I have also made it very
+hard to cut the course or cheat by not going all the way around! :)
+	The race is over when you see the camera switch to a fixed view of the finish line with you
+passing over it. Isn't that neat?
+
+TWO PLAYER
+	After selecting two calcs, you and the other calculator user must agree on which player
+each of you are. One must be player one, and the other must be player two. Player one gets to
+choose the number of laps, but player two gets the more advantageous starting position. You will
+reach a screen that says to wait for the other calculator and then press a key. Once both calculators
+are on this screen AND they are linked together, hit a key on each at the EXACT same time (There is a
+1 or 2 second margin for error). This is necessary to sync the calcs. You will know the key was
+succesfully pressed because the message on the screen will change to "Waiting for other player..." 
+	I really apologize for the inconvenience this method might cause. It is really the only way I know of
+to arrange a two-player calc-to-calc game. But playing a human opponent in real-time 3-D is a really
+worthwhile use of your calculator! :)
+	If the two players have not selected the same level in the beginning of the game, an error will
+result and the game will end.
+	If the connection is lost at any time for more than a second or two, (because of a bad link
+connection), each player's game will freeze and then result in an error or quit.
+	If either player hits quit during a game, both games will end. Any players that have finished will
+go to the scoring screen, or if they are still racing they will be kicked out to the home screen.
+
+
+KNOWN BUGS
+	No real bugs, really. If for any reason one car "lands" on another car from a height, they may
+become locked together. An element of reality! Try not to jump on other cars for that reason. :)
+
+THANK YOU FOR PLAYING GLASSCARS! MORE LEVELS ALWAYS ON THE WAY!
+(Level 2 at least will be available shortly after you read this)

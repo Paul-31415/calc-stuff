@@ -1,0 +1,125 @@
+.nolist
+    #include      "ti83plus.inc"
+.list
+.org    $9D93
+.db    t2ByteTok, tAsmCmp
+
+
+
+	ld	a, 3
+	out	($20), a
+	ei
+	halt
+
+	di
+
+	
+	in	a, ($2E)
+	push	af
+	and	%10001111
+	out	($2E), a
+
+	
+	ld	de, 0
+	ld	hl, 0
+
+	ld	a, $47
+	out	($30), a
+	xor	a
+	out	($31), a
+	ld	a, 8
+	out	($32), a
+timingLoop:
+	ld	bc, 1		;10
+	add	hl, bc		;11
+	ld	bc, 0		;10
+	ex	de, hl		;4
+	adc	hl, bc		;15
+	ex	de, hl		;4
+	in	a, (04)		;11
+	and	%00100000	;7
+	jp	z, timingLoop	;10
+				;82
+
+	xor	a
+	out	($30), a
+	out	($31), a
+
+	
+	pop	af
+	out	($2E), a
+
+	push	hl
+	ex	de, hl
+	bcall(_setXXXXOp2)
+
+	bcall(_Op2ToOp1)
+
+	ld	hl, $100
+	bcall(_setXXXXOp2)
+
+	bcall(_fpMult)
+	bcall(_fpMult)
+
+	pop	hl
+	bcall(_setXXXXOp2)
+	bcall(_fpAdd)
+	
+	ld	hl, 82
+	bcall(_setXXXXOp2)
+	bcall(_fpMult)
+
+	bcall(_pushRealO1)
+
+	ld	a, 8
+	bcall(_formReal)
+
+	ld	hl, cpuText
+	bcall(_putS)
+
+	ld	hl, op3
+	bcall(_putS)
+	ld	hl, hz
+	bcall(_putS)
+	bcall(_newLine)
+
+	bcall(_popRealO1)
+
+	ld	hl, 696
+	bcall(_setXXXXOp2)
+	bcall(_fpDiv)
+
+	ld	d, 0
+	bcall(_round)
+
+	ld	a, 8
+	bcall(_formReal)
+
+	ld	hl, sample
+	bcall(_putS)
+
+	ld	hl, op3
+	bcall(_putS)
+	ld	hl, hz
+	bcall(_putS)
+	bcall(_newLine)
+
+	ret
+
+
+
+
+
+sample:
+	.db	"sample: ", 0
+cpuText:
+	.db	"CPU: ", 0
+hz:
+	.db	"Hz", 0
+
+
+
+
+
+.end
+.end

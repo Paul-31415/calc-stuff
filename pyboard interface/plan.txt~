@@ -1,0 +1,1 @@
+make a pyboard program that sends a small, safe assembly program to the calculator it's connected to to use it as a keyboard and screen (and power suppily)

@@ -1,0 +1,831 @@
+.NN
+
+
+
+
+
+.sgmd Test
+.0->X
+.ClrDraw
+.Repeat getKey(41)
+. Pxl-On(X//64+48,SGMD(X)/5+6)
+. DispGraph
+. Text(2,30,X>Dec)
+. Text(2,40,SGMD(X)>Dec)
+. Text(2,50,{GDB0SGMDS+2}^^r>Dec)
+. Repeat getKey(0)
+.  ReturnIf getKey(41)
+. End
+. getKey(4)?(X++)
+. getKey(3)?(X+16->X)
+. getKey(2)?(X-16->X)
+. getKey(1)?(X--)
+.End
+
+.nn test
+[05 05 04 03 02 02 01] -> GDB1
+"appvTESTNN"-> Str1
+
+.NNNEW(Str1,GDB1) -> P
+.ClrDraw
+.Text(10,10,P>Dec)
+.For(L,0,4)
+. Text(40,L*8+10,NNAN(P,L)>Dec)
+.End
+.For(L,0,5)
+. Text(70,L*8+10,NNNN(P,L)>Dec)
+.  Text(12,L*8+20,NGETN(P,L,0)>Dec)
+.End
+.Repeat getKey(41)
+. If getKey(9)
+.  NSTEP(P)
+. End
+. If getKey(15)
+.  NNZ(P)
+. End
+. If getKey(14)
+.  NNI(P,256)
+. End
+. If getKey(13)
+.  For(L,0,2)
+.   For(I,1,NNAN(P,L))
+.    rand -> {NGETA(P,L,I-1)}
+.   End
+.  End
+. End
+. If getKey(12)
+.  For(L,0,3)
+.   For(I,1,NNNN(P,L))
+.    rand -> {NGETN(P,L,I-1)}^^r
+.   End
+.  End
+. End
+. While getKey(0)
+. End
+. Repeat getKey(0)
+. End
+.End
+
+
+
+Goto ENDNN
+Lbl SGMD
+.(1+2^-x)^-1
+.do sneaky because r1>0 looks great, r1<0 looks bad, and there is symmetry
+ [0000 0000 0000] -> GDB0SGMDS
+ If r1<<0
+  255-SGMD(~X)
+  Return
+ End
+ If r1>2047
+  255
+  Return
+ End
+ e^(128-r1//256 -> {GDB0SGMDS}^^r +8) -> {GDB0SGMDS+2}^^r + 256 ^^-1 -> {GDB0SGMDS+4}^^r
+ 
+ .derivitive = (ln(2)2^-x)*((1+2^-x)^-2)
+ .ln(2)*256 = 177
+ {GDB0SGMDS+4}^^r^^2^^r ** 177**{GDB0SGMDS+2}^^r -> {GDB0SGMDS+2}^^r
+ 
+ {GDB0SGMDS}^^r*256+r1 ** {GDB0SGMDS+2}^^r + {GDB0SGMDS+4}^^r -> r1
+ r1>255?255,r1
+Return
+
+Lbl NMUL
+.{r1 (neuron)0.8}*{r2 (axon)4.4} -> 8.8
+
+ If {r2} and 128
+  ~(not({r2})+1*{r1})
+ Else
+  {r2}*{r1}
+ End
+.result fixed pt correction: -8-4+8 = -4, divs of 2 for speed
+ //2//2//2//2
+Return
+
+Lbl NSTEP
+. r1 - nn Pointer
+ [0000 0000 0000 00 00 0000] -> GDB0NSTEP
+ r1 -> {GDB0NSTEP}^^r
+.data:
+.L - num of layers
+.A - num of inputs
+.[inputNeuron data (len=2A)(halfwords)]
+.N - num of neurons in next layer
+.[axon data (len=A*N)]
+.[neuron data (len=2N)(halfwords)]
+.N - num of neurons in next layer
+.[axon data,neuron data]...
+.Neuron: [Sigmoid output (rounded to 1 byte)][Sigmoid derivitive (1 byte)]
+ {r1 + 1} -> {GDB0NSTEP+6}
+ r1 + 2 -> r4
+.r4 is pointer to start of neuron data
+.{GDB0NSTEP+6} is #neurons this layer
+.{GDB0NSTEP+7} is #neurons next layer
+
+.main loop
+ For(r6,1,{{GDB0NSTEP}^^r})
+  .sigmoid neurons this layer
+  For(r3,1,{GDB0NSTEP+6})
+   SGMD({r4}^^r) -> {r4}
+   {GDB0SGMDS+2} -> {r4+1}
+   r4 + 2 -> r4
+  End
+  .r4 now points to #neurons next layer
+  {r4} -> {GDB0NSTEP+7}
+  r4 + 1 -> {GDB0NSTEP+4}^^r
+  .{GDB0NSTEP+4}^^r points to start of axons
+  r4 - ({GDB0NSTEP+6} * 2) -> {GDB0NSTEP+2}^^r
+  .{GDB0NSTEP+2}^^r now points to beginning of neurons this layer
+  {GDB0NSTEP+6} * 2 + ({GDB0NSTEP+6} * {GDB0NSTEP+7}) + {GDB0NSTEP+2}^^r + 1 -> {GDB0NSTEP+10}^^r
+  .{GDB0NSTEP+10}^^r points to beginning of neurons next layer
+  For(r3,0,{GDB0NSTEP+6}-1)
+   r3 * {GDB0NSTEP+7} -> {GDB0NSTEP+8}^^r
+   For(r4,0,{GDB0NSTEP+7}-1)
+    {r4*2+{GDB0NSTEP+10}^^r}^^r
+    + NMUL(r3*2+{GDB0NSTEP+2}^^r,{GDB0NSTEP+8}^^r + r4 +{GDB0NSTEP+4}^^r)
+    ->{r4*2+{GDB0NSTEP+10}^^r}^^r
+   End
+  End
+  .now this layer is done, move up 1 layer
+  {GDB0NSTEP+7} -> {GDB0NSTEP+6}
+  {GDB0NSTEP+10}^^r -> r4
+ End
+Return
+
+Lbl NNZ
+.r1-ptr to neural net
+.this zeros all the neuron's states 
+ r1 +2 -> r5
+ {r1+1} -> r3
+ .r3 is num of neurons in this layer
+ For(r6,0,{r1})
+  For(r2,0,r3-1)
+   0 -> {r5}^^r
+   r5 + 2 -> r5
+  End
+  r3 -> r2
+  {r5} -> r3
+  r5++
+  r2*r3+r5->r5
+ End
+Return
+
+Lbl NNI
+.r1-ptr to neural net
+.this sets all the neuron's states to their values ** r2
+ [0000] -> GDB0NNI
+ r2 -> {GDB0NNI}^^r
+ r1 +2 -> r5
+ {r1+1} -> r3
+ .r3 is num of neurons in this layer
+ For(r6,0,{r1})
+  For(r2,0,r3-1)
+   {r5} ** {GDB0NNI}^^r -> {r5}^^r
+   r5 + 2 -> r5
+  End
+  r3 -> r2
+  {r5} -> r3
+  r5++
+  r2*r3+r5->r5
+ End
+Return
+
+Lbl NGETA
+.get axon
+.r1 - NN ptr
+.r2 - layer
+.r3 - id
+ sub(NNAN)
+ r1 + r3 + 1
+Return
+
+Lbl NNAN
+.get # of axons
+.r1 - NN ptr
+.r2 - layer
+ r1++
+ {r1} -> r5 .A
+ r5 * 2 + r1 + 1 -> r1 .at N 
+ For(r6,1,r2)
+  {r1} -> r4
+  r1++
+  r4 * r5 + r1 -> r1
+  r4 * 2 + r1 -> r1
+  r4 -> r5
+ End
+ {r1}*r5
+Return
+
+Lbl NGETN
+.get Neuron
+.r1 - NN ptr
+.r2 - layer
+.r3 - id
+ sub(NNNN)
+ r3*2+r1
+Return
+
+Lbl NNNN
+.get # of Neurons
+.r1 - NN ptr
+.r2 - layer
+
+ r1++ 
+ {r1} -> r5 .A
+ r1++ .after A
+ For(r6,1,r2)  
+  r5 * 2 + r1 -> r1
+  {r1} -> r4 .N
+  r1++ .Axon Start
+  r4 * r5 + r1 -> r1
+  r4 -> r5
+ End
+ r5
+Return
+
+Lbl NNNEW
+.r1 - ptr to name
+.r2 - Ptr to data [LANNN...]
+ {r2+1} * 2 + {r2} + 2 -> r3 .A and 1Byte stuff
+ For(r6,1,{r2})
+  {r2+r6}*{r2+r6+1}+r3->r3 .axons
+  {r2+r6+1}*2+r3 -> r3
+ End
+ GetCalc(r1,r3) -> r4
+ !If r4
+  0
+  Return
+ End
+ {r2}->{r4}
+ {r2+1} -> {r4+1}
+ {r2+1} * 2 + 2-> r3 
+ For(r6,1,{r2})
+  {r6+r2+1} -> {r4+r3}
+  {r2+r6}*{r2+r6+1}+r3->r3 .axons
+  {r2+r6+1}*2+r3 -> r3
+  r3++
+ End
+ r4
+Return
+
+Lbl ENDNN
+
+
+.NNSG
+
+4*256 -> GDB1HITR
+512 -> GDB1STSPD
+16 -> GDB1STDMG
+256 -> GDB1STINR
+16 -> GDB1STRLD
+
+64 -> GDB1TURND
+2 -> GDB1ACMIN
+16 -> GDB1ACDIV
+512 -> GDB1MAXSP
+64 -> GDB1STRAD
+
+64 -> GDB1SLIFE
+
+.num of ships
+0 -> {L2}
+SHIP(48*256,32*256,0)
+SHIP(66*256,32*256,128)
+.Ship: Type,X^^r,Y^^r,vX^^r,vY^^r,Theta,Health,ShotCoolDown 
+. 12
+. type and 128 means NN ship
+.nnin:
+. turn
+. accell
+. strafe
+. shoot
+
+
+.num of shots
+0 -> {L1}
+.Shot: OriginShip,X^^r,Y^^r,vX^^r,vY^^r,Life,Damage
+. 12
+
+
+.neural nets:
+[0000 0000 0000 0000]->GDB1NNPTR
+
+"appvNN1" -> Str1NN
+[010C08] -> GDB1NNDAT
+
+"appvNN2" -> Str2NN
+"appvNN3" -> Str3NN
+"appvNN4" -> Str4NN
+!If NNNEW(Str1NN,GDB1NNDAT) -> {GDB1NNPTR}^^r
+ Return
+End
+For(L,0,0)
+ For(I,1,NNAN({GDB1NNPTR}^^r,L))
+  rand -> {NGETA({GDB1NNPTR}^^r,L,I-1)}
+ End
+End
+
+
+
+
+
+
+.shipGraphics
+[001038287CFE2800]
+.[05 FDFE03FE FEFF02FF FFFDFF01 01FD0101 00010002] -> Pic1PLAYR 
+[0010000010440000]
+[04 0001FEFD 000102FD 00FE02FD 00FEFEFD] -> Pic1PLAYR 
+[06 0001FEFD 000102FD 00FE02FD 00FEFEFD 0505FBFB 05FBFB05] -> Pic1DPLAR
+[04 0001FEFD 000102FD 00FE02FD 00FEFEFD] -> Pic1AI
+[06 0001FEFD 000102FD 00FE02FD 00FEFEFD 0505FBFB 05FBFB05] -> Pic1DAI
+.main
+
+RSTAR()
+Repeat getKey(41)
+ 
+ .constrols
+ .Player 1 is always ship 0
+ If {L2+11}
+  getKey(4)? ACCEL(0,255 / GDB1ACDIV - GDB1ACMIN)
+  getKey(1)? ACCEL(0, ~GDB1ACMIN)
+  getKey(3)? TURN(0,128 / GDB1TURND)
+  getKey(2)? TURN(0,~128 // GDB1TURND)
+  getKey(50)? STRAF(0,128 / GDB1STRAD)
+  getKey(49)? STRAF(0,~128 // GDB1STRAD)
+  getKey(54)? SHOOT(0,GDB1STSPD,GDB1STDMG,GDB1SLIFE)
+ End
+ 
+ .Text(0,0,FSWR({L2+2}^^r,{L2+4}^^r,2560,2560,1)>Dec)
+ 
+ .do physics
+ SHOTS()
+ SHIPS()
+ 
+ .Draw
+ {L2+2}^^r - (95*128) -> H
+ {L2+4}^^r - (63*128) -> V
+ For(I,1,{L1}) .shots
+  I-1*11+L1+1 -> P
+  !If max(abs({P+1}^^r-H-(95*128))/48,abs({P+3}^^r-V-(63*128))/32) > 266
+   Line({P+1}^^r-H/256,{P+3}^^r-V/256,~{P+5}^^r*2+{P+1}^^r-H/256,~{P+7}^^r*2+{P+3}^^r-V/256)
+  End
+ End
+ For(I,1,{L2}) .ships
+  I-1*12+L2+1 -> P
+  {P+1}^^r -> X
+  {P+3}^^r -> Y
+  !If max(abs(X-H-(95*128))/48,abs(Y-V-(63*128))/32)>266
+   .Screen Clipping, 266 for partial drawing of ships outside of screen
+   If {P} and 128
+    {P+10}?Pic1AI,Pic1DAI
+   Else
+    {P+10}?Pic1PLAYR,Pic1DPLAR
+   End
+   -> G
+   sin({P+9} - 64) * 2 -> S
+   cos({P+9} - 64) * 2 -> C
+   For(L,1,{G}) .draw the vgraphics
+    Line({L-1*4+G+1} * 256 ** C - ({L-1*4+G+2} * 256 ** S)+X-H/256,{L-1*4+G+1} * 256 ** S + ({L-1*4+G+2} * 256 ** C)+Y-V/256,{L-1*4+G+3} * 256 ** C - ({L-1*4+G+4} * 256 ** S)+X-H/256,{L-1*4+G+3} * 256 ** S + ({L-1*4+G+4} * 256 ** C)+Y-V/256)
+   End
+  End
+ End
+ STARS(~H,~V)
+ DispGraphClrDraw^^r
+ 
+End
+
+Lbl RSTAR
+.randomize stars
+ For(r3,0,{GDB0STARS})
+  rand^(64*256) -> {r3*4+3+GDB0STARS}^^r
+  rand^(96*256) -> {r3*4+1+GDB0STARS}^^r
+ End
+Return
+
+Lbl STARS
+.draw stars pos (h,v)
+[08 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000] -> GDB0STARS
+[0000 0000] -> GDB0STARV
+ r1-{GDB0STARV}^^r -> r1
+ {GDB0STARV}^^r + r1 -> {GDB0STARV}^^r
+ r2-{GDB0STARV+2}^^r -> r2
+ {GDB0STARV+2}^^r + r2 -> {GDB0STARV+2}^^r
+ For(r3,0,{GDB0STARS}-1)
+  Line({r3*4+1+GDB0STARS}^^r/256,{r3*4+3+GDB0STARS}^^r/256,r1+{r3*4+1+GDB0STARS}^^r/256,r2+{r3*4+3+GDB0STARS}^^r/256)^^r
+  r1//2+{r3*4+1+GDB0STARS}^^r -> {r3*4+1+GDB0STARS}^^r
+  r2//2+{r3*4+3+GDB0STARS}^^r -> {r3*4+3+GDB0STARS}^^r
+  If {r3*4+1+GDB0STARS}^^r << 0
+   96*256 - 1 -> {r3*4+1+GDB0STARS}^^r
+   rand^(64*256) -> {r3*4+3+GDB0STARS}^^r
+  End
+  If {r3*4+1+GDB0STARS}^^r >> (96*256-1)
+   0 -> {r3*4+1+GDB0STARS}^^r
+   rand^(64*256) -> {r3*4+3+GDB0STARS}^^r
+  End
+  If {r3*4+3+GDB0STARS}^^r << 0
+   64*256 - 1 -> {r3*4+3+GDB0STARS}^^r
+   rand^(96*256) -> {r3*4+1+GDB0STARS}^^r
+  End
+  If {r3*4+3+GDB0STARS}^^r >> (64*256-1)
+   0 -> {r3*4+3+GDB0STARS}^^r
+   rand^(96*256) -> {r3*4+1+GDB0STARS}^^r
+  End 
+ End
+Return
+
+
+
+
+
+Lbl SHIP
+.new ship at r1,r2 with type r3
+ ReturnIf {L2} > 32 
+ .n 44 is hard max
+ For(r4,0,5)
+  0 -> {{L2} * 12 + 1 + L2 + (2*r4)}^^r
+ End
+ 255 -> {{L2} * 12 + 1 + L2 + 10}
+ r3->{{L2} * 12 + 1 + L2}
+ r1->{{L2} * 12 + 1 + L2 + 1}^^r
+ r2->{{L2} * 12 + 1 + L2 + 3}^^r
+ 
+ {L2}++
+Return
+
+Lbl SHIPS
+.do ships step
+ For(r1,1,{L2})
+  r1-1*12+L2+1 -> r2
+  If {r2+10}
+   {r2+1}^^r+{r2+5}^^r->{r2+1}^^r
+   {r2+3}^^r+{r2+7}^^r->{r2+3}^^r
+   {r2+11}?{r2+11}--
+   If {r2} and 128 
+    . do NN
+    {{r2} - 128 * 2 + GDB1NNPTR}^^r -> r3
+    sub(SETIN^^r,r3,r2-128,0)
+    sub(NSTEP^^r,r3,0,0)
+    sub(NGETN^^r,r3,{r3},0) -> r3
+    For(r5,0,3)
+     sub(SGMD^^r,{r5*2+r3}^^r) -> {r5*2+r3}
+     {GDB0SGMDS+2} -> {r5*2+r3+1}
+    End
+    sub(TURN^^r,r1-1,{r3} - 128 / GDB1TURND,0)
+    r3+2->r3
+    sub(ACCEL^^r,r1-1,{r3} / GDB1ACDIV - GDB1ACMIN,0)
+    r3+2->r3
+    sub(STRAF^^r,r1-1,{r3} - 128 / GDB1STRAD,0)
+    r3+2->r3
+    {r3} > 128?sub(SHOOT^^r,r1-1,GDB1STSPD,GDB1STDMG,GDB1SLIFE)
+   End
+  End
+ End
+Return
+
+Lbl EARW
+.r1 - Theta
+ sin(r1)+128
+Return
+Lbl SETIN
+.r1 ptr to NN, r2 ship ID
+.NN Inputs:
+. vTheta
+. vMag
+. Health
+. L ear Enemy Bullets
+. R ear Enemy Bullets
+. L ear Enemy 
+. R ear Enemy 
+. Rand
+. Mem1
+. Mem2
+. Mem3
+. Mem4
+ [0000] -> GDB0SETIN
+ .Vels
+ sub(NGETN^^r,r1,0,0)->r3
+ {r2*12+L2+6}^^r -> r4
+ {r2*12+L2+8}^^r -> r5
+ max(abs(r4),abs(r5))->r6
+ .Range: -8,8
+ tan^-1(r4/*r6,r5/*r6) - {r2*12+L2+10} ^ 256 - 128 * 16 -> {r3}^^r
+ r3+2 -> r3
+ .range: -4,4
+ r4^^2^^r+(r5^^2^^r) * 2 - (4*256) -> {r3}^^r
+ r3+2 -> r3
+ .Health range:4
+ {r2*12+L2+11} - 128 * 8 -> {r3}^^r
+ r3+2->r3
+ .ears
+ 0 -> {r3}^^r -> {r3+2}^^r
+ For(r6,1,{L1})
+  {r6-1*11+L1+2}^^r - {r2*12+L2+2}^^r-> r5
+  {r6-1*11+L1+4}^^r - {r2*12+L2+4}^^r -> r4
+  abs(r4)/256^^2 + (abs(r5)/256^^2) ^^-1 -> {GDB0SETIN}^^r
+  EARW(tan^-1(r5/*max(abs(r4),abs(r5)),r4/*max(abs(r4),abs(r5))))->r5
+  256-r5 -> r4
+  {GDB0SETIN}^^r ** r5 + {r3}^^r -> {r3}^^r
+  {GDB0SETIN}^^r ** r4 + {r3+2}^^r -> {r3+2}^^r
+ End
+ 
+ r3 + 4 -> r3
+ 
+ 0 -> {r3}^^r -> {r3+2}^^r
+ For(r6,1,{L2})
+  {r6-1*12+L2+2}^^r - {r2*12+L2+2}^^r-> r5
+  {r6-1*12+L2+4}^^r - {r2*12+L2+4}^^r -> r4
+  If max(abs(r4),abs(r5))
+   abs(r4)/256^^2 + (abs(r5)/256^^2) ^^-1 -> {GDB0SETIN}^^r
+   EARW(tan^-1(r5/*max(abs(r4),abs(r5)),r4/*max(abs(r4),abs(r5))))->r5
+   256-r5 -> r4
+   {GDB0SETIN}^^r ** r5 + {r3}^^r -> {r3}^^r
+   {GDB0SETIN}^^r ** r4 + {r3+2}^^r -> {r3+2}^^r
+  End
+ End
+ r3 + 4 -> r3
+ .rand
+ rand -> {r3}^^r
+ r3+2->r3
+ .mem 1-4
+ sub(NGETN^^r,r1,{r1},0) -> r6
+ For(r5,4,7)
+  {r5*2+r6}^^r -> {r3}^^r
+  r3+2 -> r3
+ End
+
+. Todo?:
+. Angle to nearest enemy Bullet
+. Dist to nearest enemy Bullet
+. Angle to nearest enemy 
+. Dist to nearest enemy  
+ 
+Return
+
+Lbl TURN
+. turn ship ID r1 by r2 units
+ {r1*12+L2+10} + r2 -> {r1*12+L2+10}
+Return
+
+Lbl ACCEL
+.accel ship ID r1 by r2 units
+ r1*12+L2+1 -> r3
+ cos({r3+9})*2 ** r2 + {r3+5}^^r->{r3+5}^^r
+ sin({r3+9})*2 ** r2 + {r3+7}^^r->{r3+7}^^r
+ If  sub(DIST^^r,{r3+5}^^r,{r3+7}^^r,0) -> r4 > GDB1MAXSP
+   GDB1MAXSP/*r4 -> r4
+   {r3+5}^^r ** r4 ->{r3+5}^^r
+   {r3+7}^^r ** r4 ->{r3+7}^^r
+ End
+Return
+
+Lbl STRAF
+.Strafe ship ID r1 by r2 units
+ r1*12+L2+1 -> r3
+ cos({r3+9}+64)*2 ** r2 + {r3+5}^^r->{r3+5}^^r
+ sin({r3+9}+64)*2 ** r2 + {r3+7}^^r->{r3+7}^^r
+ If  sub(DIST^^r,{r3+5}^^r,{r3+7}^^r,0) -> r4 > GDB1MAXSP
+   GDB1MAXSP/*r4 -> r4
+   {r3+5}^^r ** r4 ->{r3+5}^^r
+   {r3+7}^^r ** r4 ->{r3+7}^^r
+ End
+Return
+
+Lbl SHOOT
+.add shot- parent ID, spd, dmg, life
+ ReturnIf {L1} > 64 
+ .n 69 is hard max
+ r1*11+L2+1 -> r5
+ ReturnIf {r5+11}
+ {L1} * 11 + 1 + L1 -> r6
+ GDB1STRLD -> {r5+11}
+ r1 -> {r6}
+ {r5+1}^^r -> {r6+1}^^r
+ {r5+3}^^r -> {r6+3}^^r
+ cos({r5+9}) ** r2 + ({r5+5}^^r ** GDB1STINR) -> {r6+5}^^r
+ sin({r5+9}) ** r2 + ({r5+7}^^r ** GDB1STINR) -> {r6+7}^^r
+ r4 -> {r6+9}
+ r3 -> {r6+10}
+ {L1}++
+Return
+
+Lbl SHOTS
+.do shots step
+ For(r1,1,{L1})
+  r1-1*11+L1+1 -> r2
+  {r2+1}^^r+{r2+5}^^r->{r2+1}^^r
+  {r2+3}^^r+{r2+7}^^r->{r2+3}^^r
+  {r2+9}?{r2+9}--
+  .Text(0,r1*2,{r2+9}>Dec)
+  If sub(NSWR^^r,{r2+1}^^r,{r2+3}^^r,GDB1HITR,GDB1HITR) -> r5 != ~1
+   If r5 != {r2}
+    .Text(0,r1*2,{GDB0NSWR}^^r>Dec)
+    If {GDB0NSWR}^^r < GDB1HITR
+     If {r2+10} > {r5*12+L2+11} .do hit thing
+      0 -> {r5*12+L2+11}
+     Else
+      {r5*12+L2+11} - {r2+10} -> {r5*12+L2+11}
+     End
+     0 -> {r2+9} .mark for gc
+    End
+   End
+  End
+ End
+ .gc
+ 0 -> r6
+ For(r1,1,{L1})
+  r1-1*11+L1+1 -> r2
+  If {r2+9}
+   If r6*11+L1+1 -> r5 < r2
+    Copy(r2,r5,11)
+   End
+   r6++
+  .Else
+   .Line(0,63,95,r1*2)
+  End
+ End
+ r6 -> {L1}
+Return
+
+Lbl NSHIP
+.nearest ship to r1,r2
+ ~1 -> r3
+ ~1 -> r5
+ For(r6,1,{L2})
+  sub(DIST^^r,{r6-1*12+L2+2}^^r-r1,{r6-1*12+L2+4}^^r-r2,0) -> r4
+  If r4 < r3 ? r4
+   r4 -> r3
+   r6 - 1 -> r5
+  End
+ End
+ r5
+Return
+
+Lbl FSWR
+.first ship starting at r5 within rect 
+.Rect center r1,r2  2x w,h - r3,r4
+ For(r6,r5+1,{L2})
+  If abs(r1-{r6-1*12+L2+2}^^r) < r3
+   If abs(r2-{r6-1*12+L2+4}^^r) < r4
+    r6-1
+    Return
+   End
+  End
+ End
+ ~1
+Return
+Lbl NSWR
+.nearest ship within rectangle
+.rect centered on r1,r2  2x w,h - r3,r4
+ [0000 00 0000] -> GDB0NSWR
+ 0 -> r5
+ If FSWR() -> r6 -> {GDB0NSWR+2} != ~1
+  sub(DIST^^r,{r6*12+L2+2}^^r-r1,{r6*12+L2+4}^^r-r2,0) -> {GDB0NSWR}^^r
+  r6+1->r5
+  If r5 >= {L2}
+   {GDB0NSWR+2}
+   Return
+  End 
+  While FSWR() -> r6 != ~1
+   If sub(DIST^^r,{r6*12+L2+2}^^r-r1,{r6*12+L2+4}^^r-r2,0) -> {GDB0NSWR+3}^^r < {GDB0NSWR}^^r
+    {GDB0NSWR+3}^^r -> {GDB0NSWR}^^r
+    r6 -> {GDB0NSWR+2}
+   End
+   r6+1->r5
+   If r5 >= {L2}
+    {GDB0NSWR+2}
+    Return
+   End 
+  End
+ Else
+  ~1
+ End
+Return
+
+Lbl DIST
+.euclid dist r1,r2
+ abs(r1)->r1
+ abs(r2)->r2
+ max(r1,r2)/2/2/2 -> r3 .range extension
+ !If r3
+  0
+  Return!If max(r1,r2)
+  max(r1,r2) -> r3
+ End
+ sqrt(r1/*r3^^2^^r + (r2/*r3^^2^^r))^^r ** sqrt(r3)^^r
+Return
+ 
+
+prgmAXENN
+
+
+
+.LCDLIB
+
+
+
+
+
+
+
+
+
+
+
+
+
+[0F]->GDB0FRD
+
+Asm(F3              3E41            D330            3E00            D331            3E10            D332)
+Goto LCD99
+
+
+[0000]->GDB0FRMTM
+Lbl DISPS
+~1
+Asm(23              DB04            CB5F            2804            CB6F            28F5)
+->{GDB0FRMTM}^^r
+{GDB0FRD}=0+{GDB0FRD}
+Asm(F3              45              3E41            D330            3E00            D331            78              D332)
+DISPG()
+{GDB0FRMTM}^^r
+Return
+[0000]->GDB0FFSET
+Lbl DISPG
+pi0110110110110110/e^({GDB0PHASE})->r4
+DISPA(L6,L3,{GDB0FFSET}^^r,r4,3)
+{GDB0PHASE}+1^3->{GDB0PHASE}
+End
+
+
+
+[0000]->GDB0SMASK
+[00]->GDB0SNUM
+[00]->GDB0PHASE
+Lbl DISPA
+r4->{GDB0SMASK}^^r
+r5->{GDB0SNUM}
+For(r6,0,|E2FF
+!If r6^64
+r6/64
+Asm(DB02            E602            28FA           3E20            85              D310             DB02            E602            28FA           3E80            D310
+End
+r4/2->r4
+If r5--=0
+{GDB0SMASK}^^r->r4
+{GDB0SNUM}->r5
+End
+{r6+r3^|E300+r1} and r4 or (not(r4) and {r6+r3^|E300+r2}
+Asm(DB02            E602            28FA            7D              D311)
+End
+End
+Return
+
+Lbl PTOOX
+.X,Y,PO,PX,B
+If r1^8
+For(r6,0,7
+{r1/8*64+r2+r6+{GDB0FFSET}^^r^|E300+r5} or ({r3+r6}/e^(r1^8)) xor ({r4+r6}/e^(r1^8))->{r1/8*64+r2+r6+{GDB0FFSET}^^r^|E300+r5}
+{r1/8+1*64+r2+r6+{GDB0FFSET}^^r^|E300+r5} or ({r3+r6}*e^(r1^8)) xor ({r4+r6}^e^(r1^8))->{r1/8+1*64+r2+r6+{GDB0FFSET}^^r^|E300+r5}
+End
+Else
+For(r6,0,7)
+{r1/8*64+r2+r6+{GDB0FFSET}^^r^|E300+r5} or {r3+r6} xor {r4+r6}->{r1/8*64+r2+r6+{GDB0FFSET}^^r^|E300+r5}
+End
+End
+Return
+
+
+Lbl PTMOX
+.X,Y,PO,PX,B
+If r1>>~8
+If r2>>~8
+If r1<<96
+If r2<<64
+If r1^8
+For(r6,0,7
+If r2+r6<64
+If r1>>0
+{r1/8*64+r2+r6+{GDB0FFSET}^^r^|E300+r5} or ({r3+r6}/e^(r1^8)) xor ({r4+r6}/e^(r1^8))->{r1/8*64+r2+r6+{GDB0FFSET}^^r^|E300+r5}
+End
+If r1<<56
+{r1/8+1*64+r2+r6+{GDB0FFSET}^^r^|E300+r5} or ({r3+r6}*e^(r1^8)) xor ({r4+r6}^e^(r1^8))->{r1/8+1*64+r2+r6+{GDB0FFSET}^^r^|E300+r5}
+End
+Else
+For(r6,0,7
+If r2+r6<64
+{r1/8*64+r2+r6+{GDB0FFSET}^^r^|E300+r5} or {r3+r6} xor {r4+r6}->{r1/8*64+r2+r6+{GDB0FFSET}^^r^|E300+r5}
+End
+End
+End
+End
+End
+End
+End
+Return
+
+Lbl LCEND
+Asm(AF              D330            D331)
+Return
+
+Lbl LCD99

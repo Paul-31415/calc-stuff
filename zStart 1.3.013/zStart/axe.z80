@@ -1,0 +1,212 @@
+
+
+
+;##########################################
+toggleAxeHook:
+	toggle_(avbAxeHook)
+	
+axeMenuReturn:
+	call	makeAVDirty
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;############################################
+axeMenu:
+	bcall(_grBufClr)
+	
+	bit_(avbAxeHook)
+	call	yesOrNo8
+
+
+	ld	hl, $8000
+	push	hl
+	ld	c, 9
+	call	clearMemSmall
+
+	ld	a, (avShadow+avAxeMode)
+	ld	e, 9
+	bcall(_multAbyE)	;this kills me inside
+
+	ld	de, axeOptions+1
+	add	hl, de
+	pop	de
+	push	de
+	ld	bc, 8
+	ldir
+	pop	hl	
+
+	ld	d, 16
+	call	putOnRight
+
+
+	ld	hl, axeText
+	jp	menu
+	
+
+
+
+
+
+;##########################################
+compileMenu:
+	ld	hl, axeOptions
+	ld	de, saveSScreen
+	ld	bc, axeOptionsEnd-axeOptions
+	ldir
+	ld	a, 5
+	ld	(itemsFound), a
+
+	call	newItemsMenu
+
+	jr	c, axeMenu
+	
+	ld	a, (selected)
+	dec	a
+	ld	(avShadow+avAxeMode), a
+	jr	axeMenuReturn
+
+
+
+
+
+
+axeOptions:
+	.db	67, "No shell"
+	.db	82, "Ion", 0, 0, 0, 0, 0
+	.db	64, "MirageOS"
+	.db	67, "DoorsCS", 0
+	.db	82, "App", 0
+axeOptionsEnd:
+
+
+axeName:
+	.db	appObj, "Axe     "
+
+
+
+
+;#########################################
+axeCall:
+	push	af
+	push	hl
+	call	pushOP1
+	ld	hl, axeName
+	rst	20h
+	bcall(_findApp)
+	call	popOP1
+	pop	hl
+	pop	bc
+	ret	c
+	push	bc
+
+	call	makeAnOffPageJump
+
+	ld	hl, $4083
+	bcall(_loadCIndPaged)
+	ld	a, c
+	cp	$C3
+	pop	bc
+	ld	a, b
+	push	ix
+	call	z, $8000
+	pop	ix
+	ret
+
+
+;##############################
+;is this an axe program
+;carry if it's not
+;op2 is its compiled name
+
+isAxeProgram:
+	bcall(_chkFindSym)
+	ret	c
+	ld	a, b
+	or	a
+	jr	z, axeRamProgram
+
+	call	findStartInROM
+	inc	hl
+	inc	hl
+	call	fast_bhl
+	ld	a, b
+	ld	de, op2
+	ld	bc, 9
+	bcall(_flashToRam)
+	jr	gotFirstByte
+axeRamProgram:
+	inc	de
+	inc	de
+	ex	de, hl
+	ld	de, op2
+	bcall(_mov9B)
+gotFirstByte:
+	ld	hl, op2
+	ld	d, (hl)
+	ld	(hl), 6
+	ld	a, $3F
+	ld	bc, 10
+	cpir
+	dec	hl
+	ld	(hl), 0
+	bit	3, c
+	jr	nz, notAxeProg
+	ld	a, d
+	cp	$3A
+	ret	z
+notAxeProg:
+	scf
+	ret
+
+
+;##############################
+;compile op1
+;a = mask to send to axe routine
+;carry means basic program
+;z means runnable
+;op1 is program to run
+
+compileOP1:			
+	push	af
+	call	isAxeProgram
+	pop	de
+	bit	0, d
+	ret	c		;c, Z
+	push	de
+	call	pushOP1
+	ld	hl, op2
+	call	deleteHL
+	call	findArcAppVar
+	call	popOp1
+	
+	jr	nc, appVarWasFound
+	pop	af
+	or	1		
+	ret			;nc, nz
+
+appVarWasFound:
+	ld	de, avAxeMode+2
+	add	hl, de
+	call	fast_bhl
+	bcall(_loadCIndPaged)
+	bit	2, c
+	jr	z, notAnApp
+	ld	hl, op2
+	ld	(hl), appObj
+	call	getLastLetter
+	ld	b, 7		;screw op3
+fillSpacesLoop:
+	inc	hl
+	ld	(hl), 0
+	djnz	fillSpacesLoop
+notAnApp:
+	pop	af
+	or	c
+	call	releaseOn
+	bcall(_pushRealO2)
+	ld	hl, $4086
+	call	axeCall
+	bcall(_popRealO1)
+	xor	a
+	ret			;nc, z
+
+

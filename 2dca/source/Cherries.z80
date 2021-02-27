@@ -1,0 +1,822 @@
+StartCellularAutomaton:
+ di
+ xor a
+ ld hl,Options
+ set 0,(hl)
+ bit 2,(hl)
+ jr z,_
+ in a,(2)
+ rla
+ sbc a,a
+_:
+ out ($20),a    ;Speed toggle
+ ld a,$80
+ out ($10),a    ;set top row
+ call backupsides ;backs up the image sides.
+ call clearsides ;clear off the sides of the buffer in case of deadzone mode
+ call BuildLUTS ;rebuild lookup tables
+ exx            ;saving these values for very quick reference
+ ld hl,rulesLUT+256 ;
+ exx
+CellularAutomatonLoop:
+ ld hl,Options                ; 7    6   5   4  3   2    1    0  
+ call getdirectkey            ;del mode 2nd y= up right left down
+ bit 6,(hl)
+ jr z,_
+ cp $FF
+ jr z,CellularAutomatonLoop   ;halt until a key is pressed
+_:
+ cp $FF
+ jr z,CellularAutomatonContinue
+ bit 6,a
+ jr nz,_
+ call restoresides
+ ld iy,flags
+ bcall($5011)    ;restores first 1087 bytes in RAM. brandonw found this one.
+ bcall(_DelRes)  ;invalidates statistics location coz it was used as scratch.
+ call keyrelease 
+ ei
+ ret 
+_:
+ bit 4,a
+ jr nz,_
+ToggleStateLock:
+ ld a,%01000000 ;toggle bit 6 for step by step mode
+ ld hl,Options
+ xor (hl)
+ ld (hl),a
+ call keyrelease
+ jr CellularAutomatonLoop
+_:
+ bit 5,a
+ call z,keyrelease
+CellularAutomatonContinue:
+
+; ld hl,(counter+0)
+; inc hl
+; ld (counter+0),hl
+; ld a,L
+; or h
+; jr nz,_
+; ld hl,(counter+2)
+; inc hl
+; ld (counter+2),hl
+;_:
+ exx
+ ld de,(writebuf)
+ exx
+ ld ix,(readbuf)
+ ld a,(Options)
+ bit 1,a
+ jr nz,_
+ call fixreadedge
+ call workonthisscreen
+ jr ++_
+_:
+ call workonthisscreen2
+_:
+ call swapbuffers  ;it doesn't actually swap them. Just their pointers.
+
+ jp CellularAutomatonLoop
+
+
+;The crazy as hell stuff starts here. Tomorrow. We'll be using stack abuse and
+;probably all the registers. Or something. We'll be happy.
+workonthisscreen:
+ ld (temp1),sp
+ push ix
+ pop hl
+ ld sp,hl
+ ld iyl,$20  ;$20+12 = end. Is our counter and LCD updater thingie.
+_:
+;Okay, we're redoing the whole byte sweep thing. This is going to involve 4
+;LUTs, each of which follow a slightly different bitcount standard. To do this
+;we're gonna need to reorder which sequence of bits is tested at any given
+;time. So here we are:
+;   ORIGINAL     CHERRY FLAVORED
+;1: x000 x000     1: x000 000x
+;2: 0x00 0x00     2: 00x0 0x00
+;3: 00x0 00x0     3: 0x00 x000
+;4: 000x 000x     4: 000x 00x0
+;These four LUTs are going to output the same 4.4 nibble count, BUT the input
+;bits will be varied such that we need to no longer do any shifts besides that
+;which rebuffers the new side bits. The input format will be in this order:
+;1: --LRLRLR (interleaved bits for the outside left/right bits)
+;2: LL----RR (2.4.2) for inside left/right bits
+;3: -LLLRRR- (1.3.3.1 for center testing, like our old LUT except ends cut)
+;4: LLL-RRR- (3.1.3.1 for left-ish testing)
+;5: -LLL-RRR (1.3.1.3 for right-ish testing)
+;
+;
+ ld h,quadLUTB ;Let's start from the top. LUT.
+;Feeding in bits
+ ld a,(ix-1)   ;"top" left. Tanking right bit (0) of each. Not destructible.
+ rra           ;
+ rl c          ; -------L
+ ld a,(ix+127) ;"top" right.
+ rla           ;
+ rl c          ; ------LR
+ ld a,(ix-64)  ;side left. destructible
+ rra
+ rl c          ; -----LRL
+ ld a,(ix+64)  ;side right
+ rla           ;
+ rl c          ; ----LRLR
+ 
+ ld a,(ix-63)  ;bottom left. destructible
+ rra
+ rl c          ; ---LRLRL
+ ld a,(ix+65)  ;bottom right
+ rla           ;
+ rl c          ; --LRLRLR
+ 
+ ld a,iyl
+ out ($10),a   ;Write column out. Wheee. (Here for sufficient delay)
+
+;Fetching the top code (1)
+;always calc masked byte first, since that's the only one free.
+ ld h,quadLUTB+1 ;
+ pop de        ;fetch two bytes, working, and below
+ ld b,(ix+63)  ;"top" byte
+ ld a,e        ;work byte (center)
+ ex af,af'     ;needs to be saved or something
+ ld a,e        ;get work byte back
+ and %01000010 ;yus.
+ ld L,a        ;
+ ld a,(hl)     ;
+ dec h         ;set 1
+ ld L,c        ;
+ add a,(hl)    ;
+ inc h         ;to set 2 again
+ ld L,d        ;
+ add a,(hl)    ;
+ ld L,b        ;
+ add a,(hl)    ;Good.
+ exx           ;switch out to fetch what we know.
+ ld L,a        ;survival/birth LUTs now being readied.
+ ex af,af'     ;swapping back the byte we're working with
+ ld b,a        ;copypasta.
+ and (hl)      ;
+ dec h         ;
+ or (hl)       ;
+ inc h         ;
+ and %10000001 ;
+ ld c,a        ;
+ exx           ;
+;centeriter 2: 00x0 0x00
+ ld a,e        ;working byte
+ and %01011010
+ ld L,a
+ inc h         ;bring to set 3.
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %00100100
+ or c
+ ld c,a
+ exx 
+;center-left 3: 0x00 x000
+ ld a,e
+ and %10110100
+ ld L,a
+ inc h         ;bring to set 4
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %01001000
+ or c
+ ld c,a
+ exx 
+;center-right 4: 000x 00x0
+ ld a,e
+ and %00101101
+ ld L,a
+ inc h         ;bring to set 5
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %00010010
+ or c
+ ld (de),a
+ inc de
+ out ($11),a
+ exx 
+ inc ix
+ 
+ ld iyh,62
+ 
+_:
+;Register order from top to bottom: B E D ... riiight.
+;
+ ld a,(ix-63)  ;bottom left. destructible
+ rra
+ rl c          ; ---LRLRL
+ ld a,(ix+65)  ;bottom right
+ rla           ;
+ rl c          ; --LRLRLR
+ dec sp
+ pop af
+ ld b,e
+ ld e,d
+ ld d,a
+;
+ ld h,quadLUTB+1 ;default to set 2 to avoid the inc h that would happen after.
+ ld a,e        ;work byte (center)
+ ex af,af'     ;needs to be saved or something
+ ld a,e        ;get work byte back
+ and %01000010 ;yus.
+ ld L,a        ;
+ ld a,(hl)     ;
+ dec h         ;set 1
+ ld L,c        ;
+ add a,(hl)    ;
+ inc h         ;to set 2 again
+ ld L,d        ;
+ add a,(hl)    ;
+ ld L,b        ;
+ add a,(hl)    ;Good.
+ exx           ;switch out to fetch what we know.
+ ld L,a        ;survival/birth LUTs now being readied.
+ ex af,af'     ;swapping back the byte we're working with
+ ld b,a        ;copypasta.
+ and (hl)      ;
+ dec h         ;
+ or (hl)       ;
+ inc h         ;
+ and %10000001 ;
+ ld c,a        ;
+ exx           ;
+;centeriter 2: 00x0 0x00
+ ld a,e        ;working byte
+ and %01011010
+ ld L,a
+ inc h         ;bring to set 3.
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %00100100
+ or c
+ ld c,a
+ exx 
+;center-left 3: 0x00 x000
+ ld a,e
+ and %10110100
+ ld L,a
+ inc h         ;bring to set 4
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %01001000
+ or c
+ ld c,a
+ exx 
+;center-right 4: 000x 00x0
+ ld a,e
+ and %00101101
+ ld L,a
+ inc h         ;bring to set 4
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %00010010
+ or c
+ ld (de),a
+ inc de
+ out ($11),a
+ exx 
+ inc ix
+ dec iyh
+ jp nz,-_ 
+
+;Final byte run
+ ld a,(ix-127) ;"bottom" left. *now*, it's destructible. Finally.
+ rra
+ rl c          ; ---LRLRL
+ ld a,(ix+1)   ;"bottom" right
+ rla           ;
+ rl c          ; --LRLRLR
+; inc sp        ; instead of dec sp / pop af. To keep ourselves on track.
+ ld b,e
+ ld e,d
+ ld d,(ix-63)
+;
+ ld h,quadLUTB+1 ;
+ ld a,e        ;work byte (center)
+ ex af,af'     ;needs to be saved or something
+ ld a,e        ;get work byte back
+ and %01000010 ;yus.
+ ld L,a        ;
+ ld a,(hl)     ;
+ dec h         ;set 1
+ ld L,c        ;
+ add a,(hl)    ;
+ inc h         ;to set 2 again
+ ld L,d        ;
+ add a,(hl)    ;
+ ld L,b        ;
+ add a,(hl)    ;Good.
+ exx           ;switch out to fetch what we know.
+ ld L,a        ;survival/birth LUTs now being readied.
+ ex af,af'     ;swapping back the byte we're working with
+ ld b,a        ;copypasta.
+ and (hl)      ;
+ dec h         ;
+ or (hl)       ;
+ inc h         ;
+ and %10000001 ;
+ ld c,a        ;
+ exx           ;
+;centeriter 2: 00x0 0x00
+ ld a,e        ;working byte
+ and %01011010
+ ld L,a
+ inc h         ;bring to set 3.
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %00100100
+ or c
+ ld c,a
+ exx 
+;center-left 3: 0x00 x000
+ ld a,e
+ and %10110100
+ ld L,a
+ inc h         ;bring to set 4
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %01001000
+ or c
+ ld c,a
+ exx 
+;center-right 4: 000x 00x0
+ ld a,e
+ and %00101101
+ ld L,a
+ inc h         ;bring to set 4
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %00010010
+ or c
+ ld (de),a
+ inc de
+ out ($11),a
+ exx 
+ inc ix
+ inc iyl
+ ld a,iyl
+ cp $20+12
+ jp nz,--_
+ ld sp,(temp1)
+ ret
+
+;Second copy of the algorithm. It limits the sides to dead sides.
+workonthisscreen2:
+ ld (temp1),sp
+ push ix
+ pop hl
+ ld sp,hl
+ ld iyl,$20  ;$20+12 = end. Is our counter and LCD updater thingie.
+_:
+ ld h,quadLUTB ;Let's start from the top. LUT.
+;Feeding in bits
+ xor a
+ ld c,a
+ ld a,(ix-64)  ;side left. destructible
+ rra
+ rl c          ; -----LRL
+ ld a,(ix+64)  ;side right
+ rla           ;
+ rl c          ; ----LRLR
+ ld a,(ix-63)  ;bottom left. destructible
+ rra
+ rl c          ; ---LRLRL
+ ld a,(ix+65)  ;bottom right
+ rla           ;
+ rl c          ; --LRLRLR
+ ld a,iyl
+ out ($10),a   ;Write column out. Wheee. (Here for sufficient delay)
+;Fetching the top code (1)
+;always calc masked byte first, since that's the only one free.
+ ld h,quadLUTB+1 ;
+ pop de        ;fetch two bytes, working, and below
+ ld a,e        ;work byte (center)
+ ex af,af'     ;needs to be saved or something
+ ld a,e        ;get work byte back
+ and %01000010 ;yus.
+ ld L,a        ;
+ ld a,(hl)     ;
+ dec h         ;set 1
+ ld L,c        ;
+ add a,(hl)    ;
+ inc h         ;to set 2 again
+ ld L,d        ;
+ add a,(hl)    ;
+ exx           ;switch out to fetch what we know.
+ ld L,a        ;survival/birth LUTs now being readied.
+ ex af,af'     ;swapping back the byte we're working with
+ ld b,a        ;copypasta.
+ and (hl)      ;
+ dec h         ;
+ or (hl)       ;
+ inc h         ;
+ and %10000001 ;
+ ld c,a        ;
+ exx           ;
+;centeriter 2: 00x0 0x00
+ ld a,e        ;working byte
+ and %01011010
+ ld L,a
+ inc h         ;bring to set 3.
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %00100100
+ or c
+ ld c,a
+ exx 
+;center-left 3: 0x00 x000
+ ld a,e
+ and %10110100
+ ld L,a
+ inc h         ;bring to set 4
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %01001000
+ or c
+ ld c,a
+ exx 
+;center-right 4: 000x 00x0
+ ld a,e
+ and %00101101
+ ld L,a
+ inc h         ;bring to set 5
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %00010010
+ or c
+ ld (de),a
+ inc de
+ out ($11),a
+ exx 
+ inc ix
+ ld iyh,62
+_:
+;Register order from top to bottom: B E D ... riiight.
+;
+ ld a,(ix-63)  ;bottom left. destructible
+ rra
+ rl c          ; ---LRLRL
+ ld a,(ix+65)  ;bottom right
+ rla           ;
+ rl c          ; --LRLRLR
+ dec sp
+ pop af
+ ld b,e
+ ld e,d
+ ld d,a
+;
+ ld h,quadLUTB+1 ;default to set 2 to avoid the inc h that would happen after.
+ ld a,e        ;work byte (center)
+ ex af,af'     ;needs to be saved or something
+ ld a,e        ;get work byte back
+ and %01000010 ;yus.
+ ld L,a        ;
+ ld a,(hl)     ;
+ dec h         ;set 1
+ ld L,c        ;
+ add a,(hl)    ;
+ inc h         ;to set 2 again
+ ld L,d        ;
+ add a,(hl)    ;
+ ld L,b        ;
+ add a,(hl)    ;Good.
+ exx           ;switch out to fetch what we know.
+ ld L,a        ;survival/birth LUTs now being readied.
+ ex af,af'     ;swapping back the byte we're working with
+ ld b,a        ;copypasta.
+ and (hl)      ;
+ dec h         ;
+ or (hl)       ;
+ inc h         ;
+ and %10000001 ;
+ ld c,a        ;
+ exx           ;
+;centeriter 2: 00x0 0x00
+ ld a,e        ;working byte
+ and %01011010
+ ld L,a
+ inc h         ;bring to set 3.
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %00100100
+ or c
+ ld c,a
+ exx 
+;center-left 3: 0x00 x000
+ ld a,e
+ and %10110100
+ ld L,a
+ inc h         ;bring to set 4
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %01001000
+ or c
+ ld c,a
+ exx 
+;center-right 4: 000x 00x0
+ ld a,e
+ and %00101101
+ ld L,a
+ inc h         ;bring to set 4
+ ld a,(hl)
+ ld L,d
+ add a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %00010010
+ or c
+ ld (de),a
+ inc de
+ out ($11),a
+ exx 
+ inc ix
+ dec iyh
+ jp nz,-_ 
+;Final byte run
+ ld a,c
+ and %00001111 ;doctor the flags so that last pair is shifted out.
+ ld c,a        ;and no pairs are shifted in.
+ ld b,e
+ ld e,d
+;
+ ld h,quadLUTB+1 ;
+ ld a,e        ;work byte (center)
+ ex af,af'     ;needs to be saved or something
+ ld a,e        ;get work byte back
+ and %01000010 ;yus.
+ ld L,a        ;
+ ld a,(hl)     ;
+ dec h         ;set 1
+ ld L,c        ;
+ add a,(hl)    ;
+ inc h         ;to set 2 again
+ ld L,b        ;
+ add a,(hl)    ;Good.
+ exx           ;switch out to fetch what we know.
+ ld L,a        ;survival/birth LUTs now being readied.
+ ex af,af'     ;swapping back the byte we're working with
+ ld b,a        ;copypasta.
+ and (hl)      ;
+ dec h         ;
+ or (hl)       ;
+ inc h         ;
+ and %10000001 ;
+ ld c,a        ;
+ exx           ;
+;centeriter 2: 00x0 0x00
+ ld a,e        ;working byte
+ and %01011010
+ ld L,a
+ inc h         ;bring to set 3.
+ ld a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %00100100
+ or c
+ ld c,a
+ exx 
+;center-left 3: 0x00 x000
+ ld a,e
+ and %10110100
+ ld L,a
+ inc h         ;bring to set 4
+ ld a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %01001000
+ or c
+ ld c,a
+ exx 
+;center-right 4: 000x 00x0
+ ld a,e
+ and %00101101
+ ld L,a
+ inc h         ;bring to set 4
+ ld a,(hl)
+ ld L,b
+ add a,(hl)
+ exx
+ ld l,a
+ ld a,b
+ and (hl)
+ dec h
+ or (hl)
+ inc h
+ and %00010010
+ or c
+ ld (de),a
+ inc de
+ out ($11),a
+ exx 
+ inc ix
+ inc iyl
+ ld a,iyl
+ cp $20+12
+ jp nz,--_
+ ld sp,(temp1)
+ ret
+ 
+;=============================================================================
+;=============================================================================
+;=============================================================================
+;Other subroutines that are called only in this file is located in here. 
+ 
+;rework these stupid keyboard routines
+getdirectkey:
+ call clearkeygroup
+ ld a,$BE
+ out (1),a
+ push hl \ pop hl  ;11    ;| /  7    6   5   4  3   2    1    0
+ in a,(1)          ;11 22 ;|/  del mode 2nd y= up right left down
+ ld c,a
+ call clearkeygroup
+ ld a,$FD          ;CLR=BF bit 6 ; ENTR=FE bit 0
+ out (1),a         ;get keygroup from the other side of the keyboard
+ push hl \ pop hl
+ in a,(1) ;\
+ rrca     ;|
+ jr c,_   ;|
+ res 5,c  ;|
+_:        ; > merge CLR/ENTR with MODE/2nd key reads
+ bit 5,a  ;|
+ jr nz,_  ;|
+ res 6,c  ;|
+_:        ;/
+ ld a,c
+ or %10001111  ;make sure that no other keypresses thank the control are valid
+ ret
+clearkeygroup:
+ ld a,$FF
+ out (1),a
+ ret 
+
+keyrelease:
+ di
+ call getdirectkey
+ inc a
+ jr nz,keyrelease
+ ret
+
+ 
+
+
+
+

@@ -1,0 +1,23 @@
+Things to fix:
+
+Check to make sure I have `V' and `NV' correctly assigned as
+conditions.  I've never tested them or used them; they may be reversed.
+
+Make separate stacks for if/endif and do/loop,
+with a simple global stack that indicates which stack to pop from next.
+
+Check stack at end of parsing to ensure that no unclosed blocks exist
+
+Have labels include what line they are defined at, so that
+errors regarding unclosed loops can include line numbers.
+
+make yylval a struct with a union:
+struct yytoken {
+	// members that have constructors/destructors
+	string text; // etc
+	// everything else
+	union {
+		int integer; // etc
+	}
+}
+

@@ -1,0 +1,82 @@
+Quasilat v2.1
+By: program4
+February 24, 2011 (v1.0)
+Updated March 9, 2011 (v1.2)
+Updated March 26, 2011 (v2.0)
+Updated August 4, 2011 (v2.1)
+Calculators: TI-84+/SE and TI-83+/SE
+--------------------------------------------------------------------------------------
+*IMPORTANT: View this text file using a monospace font, like Lucida Console.*
+
+Size: 2042 bytes
+Extra RAM required: about 1000
+Shell: None
+Variables used: lists Q1, Q2, Q3, Q4, QUASI and L6, GDB0, sequence variable u
+
+Quasilat is a game where you play many games simultaneously! You start out from 1 game at a time, increasing to 2 and 3 games at once, until the grand finale of 4 games at once! At only 2042 bytes and including 15 levels and 2 modes, this game is a must-have for anyone!
+
+Disclaimer
+
+I am not responsible for any damage this causes to your calculator (it shouldn't cause any).
+
+Instructions:
+
+Send QUASILAT.8xp to your calculator.
+Run QUASILAT.
+
+2nd-Start game
+Left/right (main menu)-Select level
+Clear-Quit (press 2nd to go to the homescreen)
+Mode-Pause
+
+Game 1 (upper-left corner): Pong
+
+Use the left and right arrow keys to control the paddle.
+
+Game 2 (upper-right corner): Dodge
+
+Use the up and down keys to control the "X". The plus signs are enemies and must be avoided.
+
+Game 3 (lower-left corner): Balance
+
+Use the DEL key to toggle whether to raise or lower the right side of the balance beam. (The left side stays put.) The ball is raised or lowered according to the slope of the balance beam.
+
+Game 4 (lower-right corner): Avoid
+
+Use the number pad to move.
+
+ 8
+4 6
+ 2
+
+8 is up, 4 is left, 6 is right, and 2 is down.
+
+You are the "X" and must avoid the "A", which intelligently moves toward you.
+
+The "Normal" mode is just normal gameplay. In "Hard" mode, the screen is only visible once every 5 frames.
+
+A chart showing what games you have to play at each level (L):
+
+L  1|2|3|4
+1  y
+2    y
+3      y
+4        y
+5  y y
+6  y   y
+7  y     y
+8    y y
+9    y   y
+10     y y
+11 y y y
+12 y y   y
+13 y   y y
+14   y y y
+15 y y y y
+
+Bugs to fix:
+None so far!
+
+Credits:
+ztrumpet for pointing out suggestions for the game
+DJ_O for suggestions

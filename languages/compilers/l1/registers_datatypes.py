@@ -1,0 +1,117 @@
+class ast:
+    def __init__(self,op,*args):
+        self.op = op
+        self.n = args
+    def op(self,op,*others):
+        return ast(op,self,*others)
+    def eqvs(self):
+        return self.op.eqvs(self.n)
+    def __repr__(self,l=10):
+        parens=("([{<«"[::-1],")]}>»"[::-1])
+        o = parens[0][l%len(parens[0])]
+        c = parens[1][l%len(parens[1])] 
+        if l < 0:
+            return 'ast'+o+'...'+c
+        r = "ast"+o+repr(self.op)+","
+        for n in self.n:
+            if isinstance(n,ast):
+                r += n.__repr__(l-1)+","
+            else:
+                r += repr(n)+","
+        return r[:-1]+c
+    
+    def __eq__(self,other):
+        if isinstance(other, ast):
+            return self.op==other.op and self.n==other.n
+        else:
+            return other.__eq__(self)
+    def treecopy(self):  
+        return ast(self.op,[n.treecopy() if isinstance(n,ast) else n for n in self.n])
+    def __iter__(self):
+        yield self
+        for n in self.n:
+            if isinstance(n,ast):
+                for n2 in iter(n):
+                    yield n2
+            else:
+                yield n
+
+exampleAstNoOps = ast("+",ast('-',5),ast("*",ast('+',1,2),3))
+
+                
+class pattern:
+    def __init__(self,astp):
+        self.t = astp
+        self.vars = [n for n in iter(self.t) if isinstance(n,variable)]
+    def __eq__(self,other):
+        for v in self.vars:
+            v.clrVal()
+            v.treeEquals = True
+        return self.t == other
+
+
+
+    
+class variable:
+    def __init__(self,name):
+        self.name=name
+        self.val = None
+        self.treeEquals=False
+    def __repr__(self):
+        return "<var"+hex(hash(self))+":'"+self.name+"'>"
+    def __str__(self):
+        return self.name
+    def clrVal(self):
+        self.val = None
+    def setVal(self,v):
+        r = self.val == v
+        self.val = v
+        return r
+    def __eq__(self,other):
+        if isinstance(other,variable):
+            return hash(self) == hash(other)
+        if self.treeEquals and self.val == None:
+            self.val = other
+            return True
+        return self.val == other
+    
+    def matches(self,other):
+        return True
+    
+
+def matches(ast1,pattern):
+    if ast1.op != pattern.op or len(ast1.n) != len(pattern.n):
+        return False
+    #for i in ast1.n:
+        #if n.matches(pattern)
+    
+class equivalence:
+    def __init__(self,*asts):
+        self.trees = asts
+    #def matches(self,asto):
+
+    
+class op:
+    def __init__(self,name,eqvs,fromStr):
+        self.name = name
+        self.eqvptrns = eqvs
+        self.fromString = fromStr
+    def __repr__(self):
+        return "op:"+name
+    def __str__(self):
+                     return name
+    #def eqvs(self,*args)
+
+
+
+    
+todo = ""
+
+plus = op("+",todo,
+          lambda s,pos:
+          todo)
+
+
+stdOpDict = {'+':plus}
+def astFromString(s,opDict = stdOpDict ):
+    pass

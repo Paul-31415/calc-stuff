@@ -1,0 +1,1838 @@
+
+
+
+
+.nolist
+    #include      "ti83plus.inc"
+	#include	"relocate.inc"
+.list
+
+.org	$4000
+
+
+#define	version	013
+
+_84	equ	1
+_2page	equ	0
+
+#if	_84==0
+.echo	"83+ Compatibility Mode"
+#endif
+
+;VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+	.db	$80, $0F
+	.db	  0, 0, 0, 0		;spasm takes care of this
+	.db	$80, $12
+	.db	  $01, $04
+	.db	$80, $21
+	.db	  $01
+	.db	$80, $31
+	.db	  $01
+	.db	$80, $48
+	.db	  "zStart"
+
+#if	_84
+	.db	0, 0
+#else
+	.db	"83"
+#endif
+
+	.db	$80, $81
+#if	_2page
+	.db	$02
+#else
+	.db	$01
+#endif
+	.db	$03, $26
+	.db	  $09, $04, $19, $F2, $EB, $BD
+	.db	$02, $0D, $40
+dateStamp:			;64 bytes
+
+omniText:
+	.db	4
+	.db	33
+	.db	"Omnicalc", 0
+	.db	3
+	.db	"On / Off", 0
+	.db	"Save current settings", 0
+	.db	"Back", 0
+	.dw	toggleOmni
+	.dw	saveOmni
+	.dw	titleScreen
+
+archiveText:
+	.db	"Archiving", 0
+dateStampEnd:
+	.db	$80, $9D, $0F	;15 bytes
+
+;####################################
+displayMenuNumber:
+	push	de
+	ld	de, $8000
+	ld	h, e
+	push	de
+	call	convHex
+	pop	hl
+	pop	de
+	call	putOnRight
+	ret
+
+	.db	$80, $7F
+	.db	  0, 0, 0, 0
+	
+;^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+
+#define	DWAIT	IN A, ($10) \ AND %10010000 \ JR	NZ, $-4 
+#define mCall(xxxx)	ld ix,xxxx \ call mCallApp
+
+						;off 0 on 1
+appInstalled	equ	0		;1
+appAngle	equ	appInstalled+1	;1	radian 0 degree 1
+appDiag		equ	appAngle+1	;1
+appMP		equ	appDiag+1	;1
+appPopUp	equ	appMP+1		;1
+appContrast	equ	appPopUp+1	;1
+appDelay	equ	appContrast+1	;1	
+appCata		equ	appDelay+1	;1	
+appOmni		equ	appCata+1	;1
+appOmniData	equ	appOmni+1	;14
+appPic		equ	appOmniData+14	;1
+appPicName	equ	appPic+1	;9
+appFont		equ	appPicName+9	;1
+appFontName	equ	appFont+1	;9
+appFontNot	equ	appFontName+9	;1
+appFontNum	equ	appFontNot+1	;1
+appPicContrast	equ	appFontNum+1	;1
+appRefresh	equ	appPicContrast+1;1
+appSolverPP	equ	appRefresh+1	;1
+appWizard	equ	appSolverPP+1	;1
+appLongTokens	equ	appWizard+1	;1
+appOldRamClear	equ	appLongTokens+1	;1
+appShell	equ	appOldRamClear+1	;8
+appRCProg	equ	appShell+8	;9
+appOnProg	equ	appRCProg+9	;9
+appHotKeys	equ	appOnProg+9	;81
+appAxeHook	equ	appHotKeys+81	;1
+appAxeMode	equ	appAxeHook+1	;1
+appAxeBackup	equ	appAxeMode+1	;1
+appFastMem	equ	appAxeBackup+1	;1
+appC000		equ	appFastMem+1	;1
+
+appSize		equ	appC000+1	
+
+avFlags			equ	0
+avbInstalled		equ	$10
+avbAngle		equ	$11
+avbDiag			equ	$12
+avbMathPrint		equ	$13
+avbPopUp		equ	$14
+avbCata			equ	$15
+avbOmni			equ	$16
+avbPic			equ	$17
+avbFont			equ	$20
+avbWizard		equ	$21
+avbOldRamClear		equ	$22
+avbAxeHook		equ	$23
+avbFastMem		equ	$24
+avbC000			equ	$25
+avbParser		equ	$26
+
+avFlagSize		equ	2
+
+avContrast		equ	avFlagSize+1	;1
+avDelay			equ	avContrast+1	;1
+avOmniData		equ	avDelay+1	;3
+avPicName		equ	avOmniData+3	;7
+avFontName		equ	avPicName+7	;7
+avShell			equ	avFontName+7	;6
+avRCProg		equ	avShell+6	;7
+avOnProg		equ	avRCProg+7	;7
+avHotKeys		equ	avOnProg+7	;63
+avAxeMode		equ	avHotKeys+63	;1
+avPicContrast		equ	avAxeMode+1	;1
+avRefresh		equ	avPicContrast+1	;1
+avZStartProg		equ	avRefresh+1	;7
+avParserName		equ	avZStartProg+7	;6
+avParserOffset		equ	avParserName+6	;2
+
+avSize			equ	avParserOffset+2
+
+
+
+
+selected	equ	appBackUpScreen ;1
+leftMask	equ	selected+1	;1
+rightMask	equ	leftMask+1	;1
+swapSectorPage	equ	rightMask+1	;1
+pageA		equ	swapSectorPage+1;1
+pageB		equ	pageA+1		;1
+saveA		equ	pageB+1		;1
+saveHL		equ	saveA+1		;2
+erase		equ	saveHL+2	;1
+itemsFound	equ	erase+1		;1
+scrolled	equ	itemsFound+1	;1
+buttonPressed	equ	scrolled+1	;1
+tempBuf		equ	buttonPressed+1	;8
+tagPtr		equ	tempBuf+8	;2
+tempBuf2	equ	tagPtr+2	;8
+saveDE		equ	tempBuf2+8	;2
+tempPage	equ	saveDE+2	;1
+tempAddr	equ	tempPage+1	;2
+tempGood	equ	tempAddr+2	;1
+cursX		equ	tempGood+1	;1
+cursY		equ	cursX+1		;1
+increment	equ	cursY+1		;2
+saveSP		equ	increment+2	;2
+contrastSave	equ	saveSP+2	;1
+realShadow	equ	contrastSave+1	;2
+avShadow	equ	realShadow+2	;avSize
+avDirty		equ	avShadow+avSize	;1
+refresh		equ	avDirty+1	;1
+menuId		equ	refresh+1	;1
+flashSuccess	equ	menuId+1	;1
+
+
+
+
+
+#define	b_(bit)		bit&7
+#define f_(flag)	flag/$10
+
+#define	bit_(flag)	bit b_(flag), (ix + f_(flag))
+#define	set_(flag)	set b_(flag), (ix + f_(flag))
+#define res_(flag)	res b_(flag), (ix + f_(flag))
+
+#macro toggle_(flag)	
+	ld 	a, (ix + f_(flag))  
+	xor 	1 << b_(flag)
+	ld	(ix + f_(flag)), a
+#endmacro
+
+
+fvFontPage	equ	-1
+fvFontAddr	equ	-2
+fvOmniPage	equ	-4
+fvParserPage	equ	-5	;bit 7 is hexMath flag
+fvParserAddr	equ	-6
+;fvFlags		equ	-5	
+fvSize		equ	8	;because of first byte
+
+;fvbHexMath	equ	0
+;fvbChemMass	equ	1
+
+
+	jr	start
+OSEntry:
+	add	a, e
+	jp	fromOSKeyScan
+	.db	$69
+#if	_84
+	jp	fromEntryPoint2+$4000
+#else
+	jp	fromEntryPoint283
+#endif
+
+API:
+	jp	foreignInstall		;808A
+	jp	runOp1			;808D
+	jp	editProgramCustomOffset	;8090
+	
+
+
+start:
+	call	skiFastLosePass
+	ld	a, (contrast)
+	ld	(contrastSave), a
+	set	7, (iy + 20)	;write to PlotSScreen
+	res	2, (iy + 13)	;text scroll
+
+
+	call	prepareAppVar
+	ld	ix, avShadow
+
+
+;#############
+
+titleScreen:
+	bcall(_GrBufClr)
+	bit_(avbInstalled)
+	call	yesOrNo8
+
+	bit_(avbPic)
+	call	z, yesOrNo
+	ld	hl, avShadow+avPicName
+	call	nz, dispNameOrNo
+
+	bit_(avbCata)
+	ld	d, 32
+	call	yesOrNo
+	
+	bit_(avbOmni)
+	call	yesOrNo
+
+
+
+
+	ld	hl, titleText
+	jr	menu
+
+
+;######################################
+cataHelp:
+	bcall(_disableHelpHook)
+	toggle_(avbCata)
+	call	makeAvDirty
+	jr	titleScreen
+
+
+
+;#################################
+install:
+	call	killAllHooks
+
+	toggle_(avbInstalled)
+	call	makeAVDirty
+	jr	titleScreen
+
+
+;#####################
+title2:
+	bcall(_grBufClr)
+	call	isNewROMInstalled
+	ld	d, 16
+	call	yesOrNo
+
+
+	bit_(avbFont)
+	call	z, yesOrNo
+	ld	hl, avShadow+avFontName
+	call	nz, dispNameOrNo
+
+
+	ld	hl, title2Text
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;#####################################
+;do a menu
+;input: hl = menu formatting start
+
+menu:
+	push	hl
+	ld	hl, plotSScreen
+	ld	de, plotSScreen+1
+	ld	bc, 7*12-1
+	ld	(hl), $FF
+	ldir
+	
+	set	3, (iy + 5)	;inverse
+
+	pop	hl	
+
+	ld	a, (hl)
+	ld	(menuId), a
+	inc	hl
+	
+	ld	e, (hl)
+	inc	hl
+	ld	d, 0
+	call	myVPutSDE
+
+	res	3, (iy + 5)	;inverse
+
+doSelections:
+	ld	a, 1
+	ld	(selected), a	
+	ld	b, (hl)
+	inc	hl
+innerSelectionLoop:
+	set	1, (iy + 5)
+	ld	de, 8*256+0
+	ld	(penCol), de
+	push	hl
+	push	bc
+	ld	c, 1
+selectsLoop:
+	ld	a, (selected)
+	cp	c
+	jr	nz, notSelected
+	set	3, (iy + 5)	;inverse
+notSelected:
+	ld	a, ' '
+	push	ix
+	bcall(_vPutMap)
+	ld	a, c
+	add	a, $30
+	bcall(_vPutMap)
+	ld	a, ':'
+	bcall(_vPutMap)
+	pop	ix
+	res	3, (iy + 5)	;inverse
+	ld	a, 10
+	ld	(penCol), a
+	call	myVPutS
+	ld	a, (penRow)
+	add	a, 8
+	ld	(penRow), a
+	xor	a
+	ld	(penCol), a
+	inc	c
+	djnz	selectsLoop
+
+	res	1, (iy + 5)
+
+	push	hl
+	call	graphBufferCopy
+	pop	hl	
+
+	ei
+keyLoop:
+	halt
+	push	hl
+	bcall(_GetCSC)
+	pop	hl
+	or	a
+	jr	z, keyLoop
+
+	cp	skDown
+	jr	nz, notDown
+	ld	a, (selected)
+	pop	bc
+	push	bc
+	cp	b
+	jr	nz, notLast
+	xor	a
+notLast:
+	inc	a
+	ld	(selected), a
+keyFound:
+	pop	bc
+	pop	hl
+	jr	innerSelectionLoop
+notDown:
+
+	cp	skUp
+	jr	nz, notUp
+	ld	a, (selected)
+	dec	a
+	jr	nz, notFirst
+	pop	af
+	push	af
+notFirst:
+	ld	(selected), a
+	jr	keyFound
+notUp:
+	cp	skAdd
+	jr	nz, notAdd
+	
+	push	hl
+	ld	hl, $FF69
+	ld	(cxMain), hl
+	ld	a, (selected)
+	ld	l, a
+	ld	a, (menuId)
+	ld	h, a
+	ld	(cxSizeWind), hl
+	ld	hl, zHelpName
+	rst	20h
+	call	runOp1
+	xor	a
+	pop	hl
+
+notAdd:
+
+	cp	sk2nd
+	jr	nz, not2nd
+_2nd:
+	ld	a, (selected)
+numberEntry:
+	pop	bc
+	push	bc
+	inc	b
+	cp	b
+	jr	nc, keyLoop
+	dec	a
+	rlca
+	ld	e, a
+	ld	d, 0
+	add	hl, de
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	ex	de, hl
+	pop	af
+	pop	af
+	jp	(hl)
+not2nd:
+
+	cp	skClear
+	jr	nz, notClear
+
+	pop	af
+	push	af
+	jr	numberEntry
+	
+notClear:
+	
+	cp	skEnter
+	jr	z, _2nd
+
+	sub	sk3
+	jr	c, keyLoop
+	cp	sk7+1
+	jr	nc, keyLoop
+	ld	e, a
+	ld	d, 0
+	push	hl
+	ld	hl, numChart
+	add	hl, de
+	ld	a, (hl)
+	pop	hl
+	or	a
+	jp	z, keyLoop
+	jr	numberEntry
+	
+	
+
+numChart:
+	.db	3, 6, 9, 0, 0, 0, 0, 0
+	.db	2, 5, 8, 0, 0, 0, 0, 0
+	.db	1, 4, 7
+
+
+;################################
+killAllHooks:
+	bit_(avbCata)
+	jr	z, noAppCata
+	bcall(_disableHelpHook)
+noAppCata:
+	bit_(avbOmni)
+	jr	z, notAppOmni
+	bcall(_disableHomescreenHook)
+;	bcall(_disableGetCSCHook)
+;	bcall(_disableRawKeyHook)
+notAppOmni:
+	bit_(avbFont)
+	jr	z, notAppFont
+	bcall(_disableFontHook)
+notAppFont:
+	bcall(_disableParserHook)
+	bcall(_disableRawKeyHook)
+	bcall(_disableGetCSCHook)
+	call	disableThisSilentLinkHook
+	call	killOnScrpt
+	call	killOffScrpt
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;#############################
+deleteFakeVar:
+	ld	c, -fvSize+1
+	call	fakeVarOffset
+	ret	nz
+
+	ld	b, fvSize-1
+clearFakeName:
+	ld	(hl), 1
+	inc	hl
+	djnz	clearFakeName
+
+	ld	hl, fakeVarName
+	jp	deleteHL
+
+
+
+	
+
+
+#include	"c:\\asm\\source\\zStart\\font.z80"
+#include	"C:\\asm\\source\\zstart\\flash.z80"
+#include	"C:\\asm\\source\\zstart\\omnicalc.z80"
+#include	"C:\\asm\\source\\zstart\\ramClear.z80"
+#include	"C:\\asm\\source\\zstart\\hardware.z80"
+#include	"C:\\asm\\source\\zstart\\catalogHelp.z80"
+#include	"C:\\asm\\source\\zstart\\menu.z80"
+#include	"C:\\asm\\source\\zstart\\util.z80"
+#include	"C:\\asm\\source\\zstart\\defaults.z80"
+#include	"C:\\asm\\source\\zstart\\pic.z80"
+#include	"C:\\asm\\source\\zstart\\hexMath.z80"
+;#include	"C:\\asm\\source\\zstart\\chemmass.z80"
+;#include	"C:\\asm\\source\\zstart\\solverpp.z80"
+;#include	"C:\\asm\\source\\zstart\\longTokens.z80"
+#include	"C:\\asm\\source\\zstart\\homeHooks.z80"
+#include	"C:\\asm\\source\\zstart\\safeRamClear.z80"
+#include	"C:\\asm\\source\\zstart\\runPrograms.z80"
+#include	"C:\\asm\\source\\zstart\\axe.z80"
+#include	"C:\\asm\\source\\zstart\\programEditor.z80"
+
+
+;##################################
+prepareAppVar:
+	ld	hl, $8000
+	ld	c, appSize+2		;this appSize is real
+	call	clearMemSmall		;if av ever gets bigger, change this
+
+	call	findArcAppVar
+	jr	c, formatAppVar
+
+	bcall(_loadDEIndPaged)
+	inc	hl
+	call	fast_bhl
+	ld	a, b
+	ld	b, d
+	ld	c, e
+	ld	de, $8000
+	push	de
+	push	bc
+	bcall(_flashToRam)
+
+	pop	hl
+	ld	bc, avSize
+	or	a
+	sbc	hl, bc
+	call	nz, makeAVDirty
+	pop	hl
+	ld	de, avShadow
+	ldir			;theoretically this shouldn't cause problems
+
+	ld	a, ($8000)
+	or	a
+	jp	m, appVarHasFlags
+
+formatAppvar:
+	call	makeAVDirty
+	ld	a, 2 | $80		;setting this default to force
+	ld	(avShadow), a		;cleanup later
+	ld	hl, $8000
+	ld	b, 5
+	xor	a
+	call	rrBytes
+	inc	hl
+	inc	hl
+	inc	b
+	call	rrBytes
+	ld	de, 14
+	add	hl, de
+	call	rrBytes
+	ld	(avShadow+1), a
+	
+	xor	a
+	ld	de, 9
+	add	hl, de
+	call	rrBytes
+	ld	de, 14
+	add	hl, de
+	call	rrBytes
+	inc	hl
+	call	rrBytes
+	ld	de, 107
+	add	hl, de
+	call	rrBytes
+	inc	hl
+	inc	hl
+	inc	hl
+	inc	b
+	call	rrBytes
+	rrca
+	rrca
+	ld	(avShadow+2), a
+
+	ld	hl, ($8000+appContrast)		;real
+	ld	(avShadow+avContrast), hl
+
+	ld	hl, $8000+appOmniData		;real
+	ld	de, avShadow+avOmniData
+	ld	bc, 3
+	ldir
+
+	ld	hl, $8000+appPicName-1		;real
+	ld	a, 6
+	call	convAndStoreName
+	inc	hl
+	ld	a, 6
+	call	convAndStoreName
+
+	ld	hl, $8000+appShell-1		;real
+	push	de
+	rst	20h
+	pop	de
+	call	justStoreName
+	ld	b, 11
+storeShortcutsLoop:
+	push	bc
+	ld	a, (hl)
+	cp	appObj+1
+	jr	nc, notAName
+	push	de
+	rst	20h
+	pop	de
+	call	storeName
+	jr	storedzz
+notAName:
+	ld	bc, 7
+	ldir
+storedzz:
+	pop	bc
+	djnz	storeShortCutsLoop
+
+	ld	a, ($8000+appAxeMode)		;real
+	ld	(avShadow+avAxeMode), a
+	ld	hl, ($8000+appPicContrast)	;real
+	ld	(avShadow+avPicContrast), hl
+
+
+	
+appVarHasFlags:
+	ld	a, (avShadow+avFlags)
+	and	$7F
+	sub	avFlagSize
+	ret	z		
+	neg
+	ld	de, avShadow+avSize-1
+	ld	hl, avShadow+avSize-avFlagSize-1
+	ld	b, 0
+	ld	c, a
+	add	hl, bc	
+	ld	c, avSize-avFlagSize-1
+	lddr
+	jp	makeAvDirty
+	
+
+;##########
+rrBytes:
+	rr	(hl)
+	rra
+	inc	hl
+	djnz	rrBytes
+	inc	b
+	ret
+	
+
+
+
+
+;#####################################
+;Type name
+;Input: none
+;output: name at hl
+
+bufSize		equ	8
+
+typeName:
+	ei
+	set	curAble, (iy + curFlags)
+	ld	de, tempBuf+1
+	ld	b, 0
+	
+	ld	hl, $0002
+	ld	(curRow), hl
+typeLoop:
+	halt
+	bcall(_GetCSC)
+	or	a
+	jr	z, typeLoop
+
+	cp	skEnter
+	jr	nz, notaEnter
+
+	ld	a, b
+	or	a
+	jr	z, notAEnter
+	xor	a
+	ld	(de), a
+	call	curOff
+	res	curAble, (iy + curFlags)
+	ld	hl, tempBuf+1
+	or	a
+	ret
+
+notaEnter:
+	cp	skDel
+	jr	z, delTa
+	cp	skLeft
+	jr	nz, notBackSpace
+delTa:
+	ld	a, b
+	or	a
+	jr	z, typeLoop
+	call	curOff
+
+	ld	hl, curCol
+	dec	(hl)
+
+	dec	de
+	dec	b
+	ld	a, ' '
+	bcall(_PutMap)
+	
+	call	cursorOn
+	jr	typeLoop
+
+notBackSpace:
+	cp	skClear
+	jr	nz, notClearz
+
+	call	curOff
+	res	curAble, (iy + curFlags)
+
+	scf
+	ret
+	
+notClearz:
+	ld	c, a
+	ld	a, b
+	cp	bufSize
+	jr	z, typeLoop
+	ld	a, c
+
+	sub	skAdd
+	jr	c, typeLoop
+	cp	skMath-skAdd+1
+	jr	nc, typeLoop
+
+	ld	hl, charTable
+	push	bc
+	ld	c, a
+	ld	b, 0
+	add	hl, bc
+	pop	bc
+	call	curOff	;destroys A not HL
+	ld	a, (hl)
+	or	a
+	jr	z, justKidding
+	
+	ld	(de), a
+	inc	de
+	inc	b
+
+	bcall(_PutC)
+
+	call	cursorOn
+	jp	typeLoop
+
+justKidding:
+	call	cursorOn
+	jp	typeLoop
+
+cursorOn:
+	res	curOn, (iy + curFlags)
+	jr	readyk
+curOff:
+	set	curOn, (iy + curFlags)
+readyk:
+	ld	a, 1
+	ld	(curTime), a
+	ei
+	halt
+	ret
+
+
+charTable:
+	.db	0, "WRMH", 0, 0
+	.db	0, $5B, "VQLG", 0, 0
+	.db	0, "ZUPKFC", 0			;this is now in programEditor
+	.db	0, "YTOJEB", 0, 0
+	.db	"XSNIDA"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+quit:
+	call	installEverything
+	ld	a, (avDirty)
+	or	a
+	jr	z, appClean
+
+	ld	hl, appVarName
+	call	deleteHL
+
+	ld	hl, avSize
+	bcall(_createAppVar)
+	inc	de
+	inc	de
+	ld	hl, avShadow
+	ld	bc, avSize
+	ldir
+
+	ld	hl, appVarName
+	rst	20h
+	bcall(_arc_unarc)
+appClean:
+
+
+	res	7, (iy + 20)	;write to PlotSScreen
+	set	2, (iy + 43)	;full screen draw
+	res	2, (iy + 13)	;text scroll
+	set	graphDraw, (iy + graphFlags)
+	bcall(_enableApd)
+	bcall(_GrBufClr)
+	bcall(_ClrLCDFull)
+	bcall(_jForceCMDNoChar)
+
+
+
+;#######################################
+findArcAppVar:
+	ld	hl, appVarName
+	rst	20h
+	bcall(_ChkFindSym)
+	ret	c
+	ld	a, b
+	or	a
+	jr	nz, isInRom
+	bcall(_arc_unarc)
+	jr	findArcAppvar
+isInRom:
+	call	findStartInRom
+	or	a
+	ret
+
+
+;##################################
+dispSuccess:
+	ld	hl, success
+	ld	de, 40*256+35
+	jp	myVPutSDE
+
+
+;##################################
+;Move to start of data in Rom
+;Input: Output of _ChkFindSym
+;Output: HL = start
+;	B = rom page
+;Destroys: C DE 
+
+
+FindStartInRom:
+	ex	de, hl
+	
+	LD	de, 9
+	
+	add	hl, de
+
+	call	fast_bhl
+	
+	bcall(_LoadCIndPaged)
+
+	inc	c
+	ld	e, c
+	
+	add	hl, de
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;fall through	
+;########################################
+;faster bhl
+;only checks for going over
+
+fast_bhl:
+	ld	a, h
+	res	7, h
+	set	6, h
+	cp	h
+	ret	z
+	inc	b
+	ret
+
+
+;#####################################
+yesOrNo8:
+	ld	d, 8
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;#####################################
+;disp yes or no
+;input:	de = pencol
+;	NZ/Z = Yes/No
+;output: 
+;	d+= 8
+
+yesOrNo:
+	push	af
+	ld	hl, yes
+	jr	nz, correct
+	ld	hl, no
+correct:
+	call	putOnRight
+	pop	af
+	ret
+	
+
+;#####################################
+;install all the stuff
+;ix points to avFlags
+
+installEverything:
+
+	bit_(avbInstalled)
+	scf
+	ret	z
+
+	set	lwrCaseActive, (iy + appLwrCaseFlag)
+
+	in	a, (06)
+	ld	hl, parserHookPtr+2
+	cp	(hl)
+	jr	nz, dontKillParserHook
+	bcall(_disableParserHook)
+dontKillParserHook:
+
+	set	2, (iy + 0)	;degrees
+	bit_(avbAngle)
+	jr	nz, wasDegrees
+	res	2, (iy + 0)
+wasDegrees:
+
+	set	0, (iy + 26)	;diagnostic on
+	bit_(avbDiag)
+	jr	nz, wasOn
+	res	0, (iy + 26)
+wasOn:
+	inc	hl
+
+	bcall(_getBaseVer)
+	ld	a, b
+	cp	50
+	jr	c, dontKillIt
+
+	ld	c, (iy + $44)	;see if it changes
+	res	5, (iy + $44)	;classic
+
+	bit_(avbMathPrint)
+	jr	nz, wasClassic
+	set	5, (iy + $44)
+wasClassic:
+
+	ld	a, (iy + $44)
+	cp	c
+	call	nz, fixForMathPrint
+
+
+	bit_(avbPopUp)
+	jr	z, dontKillIt
+	set	4, (iy + $45)
+
+	ld	a, c
+	cp	55
+	jr	c, dontKillIt
+
+	res	2, (iy + $45)
+	bit_(avbWizard)
+	jr	z, wizardsAreOn
+	set	2, (iy + $45)
+wizardsAreOn:
+
+dontKillIt:
+
+	bit_(avbCata)
+	jr	z, notInstallingCata
+
+	in	a, (06)
+	ld	hl, cataEntry
+	bcall(_enableHelpHook)		;the hook should cleanup
+notInstallingCata:
+
+	bit_(avbAxeHook)
+	ld	hl, $4089
+	call	nz, axeCall
+
+	bit_(avbFastMem)
+	jr	z, notFasterMemory
+
+	xor	a
+	out	($2E), a
+	call	makeOnScrpt
+notFasterMemory:
+
+	bit_(avbFont)
+	jr	z, notFontToBeUsed
+
+	in	a, (06)
+	ld	hl, fontHookEntry
+	bcall(_enableFontHook)
+
+	call	initializeFV
+notFontToBeUsed:
+
+	bit_(avbPic)
+	call	nz, makeOffScrpt
+
+
+
+	ld	a, (ix + avContrast)
+	or	a
+	jr	z, dontKnowContrast	
+	
+	ld	(contrast), a
+	add	a, $18 | $C0
+	out	($10), a
+dontKnowContrast:
+	inc	hl
+
+	ld	a, (ix + avDelay)
+	or	a
+	jr	z, cero
+	out	($29), a
+	call	makeOnScrpt
+cero:
+
+
+
+	bit_(avbOmni)
+	jr	z, noOmniCalc
+
+	ld	hl, omniName
+	rst	20h
+	bcall(_FindApp)
+	jr	c, noOmniCalc
+	push	af
+
+	ld	hl, omniVarName
+	call	deleteHL
+	ld	hl, 14
+	bcall(_CreateAppVar)
+
+	inc	de
+	inc	de
+	push	ix
+	pop	hl
+	ld	bc, avOmniData
+	add	hl, bc
+	ld	bc, 3
+	ldir
+
+	ld	c, 11
+	ex	de, hl
+	call	clearMemSmall
+
+	pop	af
+
+	ld	hl, omniInstaller
+	ld	de, $8100
+	ld	bc, omniInstallerEnd-omniInstaller
+	ldir
+	call	$8100
+
+	call	initializeFV
+
+noOmnicalc:
+
+	bit_(avbC000)
+	push	af
+	call	nz, unlockC000
+	pop	af
+	call	nz, makeOnScrpt
+
+
+	ld	a, (ix + avOnProg)
+	or	a
+	call	nz, makeOffScrpt
+
+	bit_(avbParser)
+	jr	z, noParserHook
+	in	a, (06)
+	ld	hl, parserHook
+	bcall(_enableParserHook)
+	call	initializeFV
+noParserHook:
+
+
+	in	a, (06)
+	ld	hl, rawKeyHookEntry
+	bcall(_enableRawKeyHook)
+
+	call	disableThisSilentLinkHook
+
+	ld	a, (ix + avZStartProg)
+	or	a
+	jr	z, noZStartProg
+
+	push	ix
+	pop	hl
+	push	hl
+	ld	de, avZStartProg
+	add	hl, de
+	call	unpackName
+
+	bcall(_chkFindSym)
+	jr	c, zStartProgDone
+
+	pop	hl
+	push	hl
+	ld	de, $8007
+	ld	bc, avSize
+	ldir
+
+	ld	a, (avDirty)
+	ld	($8006), a
+
+	call	runInternalProg
+	
+	ld	a, ($8006)
+	ld	(avDirty), a
+
+	ld	hl, $8007
+	pop	de
+	push	de
+	ld	bc, avSize
+	ldir
+	
+
+zStartProgDone:
+	pop	ix
+
+noZStartProg:
+	
+	or	a
+
+
+	ret
+	
+
+
+
+;######################
+omniInstaller:
+	relocate($8100)
+	ld	c, 6
+	in	b, (c)
+	out	(c), a
+	push	bc
+	ld	b, a
+
+	call	$447B
+	bit	0, (hl)		;straight out of omnicalc
+	call	nz, $44BB
+
+	pop	bc
+	out	(c), b
+	ret
+	endRelocate()
+omniInstallerEnd:
+	
+
+
+
+
+;#############################
+makeFakeVar:
+	ld	hl, fakeVarName
+	rst	20h
+	ld	hl, 0
+	bcall(_createAppVar)		;first vat entry
+moveFV:
+	ld	de, $8100+fvSize+7-1
+	ld	bc, fvSize+7
+	push	hl
+	lddr
+	inc	hl
+	ex	de, hl
+	ld	hl, (progPtr)
+	pop	bc
+	or	a
+	sbc	hl, bc
+	push	bc
+	ex	(sp), hl
+	pop	bc
+	inc	hl
+	ldir
+	ld	hl, $8100
+	ld	bc, fvSize+7
+	ldir
+	ret
+
+
+fakeVarName:
+	.db	appVarObj, $0F, 1, 1, 1, 1, 1, 1, 1
+
+
+;################################
+initializeFV:
+	call	fakeVarOffset
+	call	nz, makeFakeVar
+
+	ld	c, -fvSize+1
+	call	fakeVarOffset
+	ld	c, fvSize-1
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;#####################################
+clearMemSmall:
+	ld	b, 0
+clearMem:
+	push	bc
+	push	de
+	push	hl
+	push	af
+	ld	d, h
+	ld	e, l
+	inc	de
+	dec	bc
+	ld	(hl), 0
+	call	ldir0
+	jp	popAFHLDEBC
+
+
+
+
+;####################################
+;input: c = offset (negative)
+;output: nz = not found
+fakeVarOffset:
+	ld	hl, (progPtr)
+	push	de
+	ld	de, -7
+	add	hl, de
+	ld	a, (hl)
+	cp	$0F
+	jr	nz, findItIGuess
+	
+	ld	e, c
+	add	hl, de		;doesn't affect Z
+	pop	de
+	ret
+
+fvDoesntExist:
+	or	1
+	pop	bc
+	pop	de
+	ret
+
+
+
+
+;####
+findItIGuess:		;DCS is the worst
+	push	bc
+	ld	hl, (progPtr)
+findFakeVarLoop:
+	ld	de, (pTemp)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	z, fvDoesntExist
+
+	ld	de, -6
+	add	hl, de
+	ld	a, (hl)
+	push	hl
+	cp	fvSize
+	jr	nz, cantBeFV
+
+	dec	hl
+	ld	a, (hl)
+	cp	$0F
+	jr	nz, cantBeFv
+
+	inc	hl
+	inc	hl
+	ld	a, (hl)
+	or	a
+	jr	nz, cantBeFv
+
+	inc	hl
+	ld	d, (hl)
+	inc	hl
+	ld	e, (hl)
+	ld	a, (de)
+	or	a
+	jr	nz, cantBeFv
+
+	pop	af
+
+	inc	hl
+	inc	hl
+	inc	hl
+	call	moveFV
+
+	pop	bc
+	call	fakeVarOffset		;recursion ftw
+	pop	de
+	ret
+
+
+
+
+cantBeFV:
+	pop	hl
+	ld	a, (hl)
+	ld	e, a
+	ld	d, 0
+	scf
+	sbc	hl, de
+	jr	findFakeVarLoop
+
+
+;#####################################
+makeOffScrpt:
+	push	hl
+	ld	hl, offName
+	call	deleteHL
+	ld	hl, offEnd-offStart+1		;copies 1 less than length
+	bcall(_CreateAppVar)
+	set	1, (iy + $33)
+	ld	hl, offStart
+	ld	bc, offEnd-offStart+1		;copies 1 less than length
+	jr	scrptCommon
+
+;#####################################
+makeOnScrpt:
+	push	hl
+	ld	hl, onScrptName
+	call	deleteHL
+
+	ld	hl, onScrptEnd-onScrpt+1	;copies 1 less than length
+	bcall(_createAppVar)
+	set	0, (iy + $33)
+	ld	hl, onScrpt
+	ld	bc, onScrptEnd-onScrpt+1
+scrptCommon:
+	inc	de
+	inc	de
+	ldir
+	pop	hl
+	ret
+
+
+
+onScrptName:
+	.db	appVarObj, "ONSCRPT", 0
+
+onScrpt:
+	relocate($8001)
+	ld	hl, onAppName
+	rst	20h
+	bcall(_findApp)
+	ret	c
+	ld	c, 6
+	in	b, (c)
+	out	(c), a
+	call	onScrptEntry
+	out	(06), a
+	ret
+onAppName:
+	.db	appObj, "zStart"
+#if	_84
+	.db	0, 0
+#else
+	.db	"83"
+#endif
+	endRelocate()
+onScrptEnd:
+
+
+
+;##########################
+fixForMathPrint:
+	ld	hl, $577E
+	ld	(lastEntryPTR), hl
+	ld	hl, 0
+	ld	(numLastEntries), hl
+	ld	(menuCurrent), hl
+	ld	(curRow), hl
+;##########################
+clrForMathPrint:
+	push	bc
+	push	hl
+	bcall(_clrTxtShd)
+	bcall(_saveCMDShadow)
+	pop	hl
+	pop	bc
+	ret
+
+
+
+
+
+
+
+
+
+;###########################################
+;		misc. stuff
+;###########################################
+
+appVarName:
+	.db	appVarObj, "zStart"
+
+#if	_84
+	.db	0, 0
+#else
+	.db	"83"
+#endif
+
+cataName:
+	.db	appObj, "CtlgHelp"
+
+omniName:
+	.db	appObj, "Omnicalc"
+
+omniVarName:
+	.db	appVarObj, "Omnicalc"
+
+offName:
+	.db	appVarObj, "OFFSCRPT"
+
+
+
+;############################################
+;		text
+;############################################
+
+yes:
+	.db	"Yes", 0
+no:
+	.db	"No", 0
+radians:
+	.db	"Radians", 0
+degrees:
+	.db	"Degrees", 0
+mathPrint:
+	.db	"Math Print", 0
+classic:
+	.db	"Classic", 0
+
+
+titleText:
+	.db	1
+	.db	23
+	.db	"zStart v1.3." 
+	.db	version/100+$30, version/10%10 + $30, version%10 + $30
+
+#if	_84
+	.db	0
+#else
+	.db	"_83", 0
+#endif
+
+	.db	7
+	.db	"Install", 0
+	.db	"Set picture", 0
+	.db	"Set defaults", 0
+	.db	"Catalog Help", 0
+	.db	"Omnicalc", 0
+	.db	"Next", 0
+	.db	"Quit", 0
+	.dw	install
+	.dw	setPic
+	.dw	setDefaults
+	.dw	cataHelp
+	.dw	omniCalc
+	.dw	title2
+	.dw	quit
+
+title2Text:
+	.db	5
+	.db	23
+	.db	"zStart v1.3."
+	.db	version/100+$30, version/10%10 + $30, version%10 + $30
+
+#if	_84
+	.db	0
+#else
+	.db	"_83", 0
+#endif
+
+	.db	6
+	.db	"Hardware", 0
+	.db	"Run on RAM Clear", 0
+	.db	"Custom Font", 0
+	.db	"Program settings", 0
+	.db	"Axe Settings", 0
+	.db	"Back", 0
+	.dw	hardware
+	.dw	ramClear
+	.dw	fontMenu
+	.dw	programSettings
+	.dw	axeMenu
+	.dw	titleScreen
+
+#if	_84
+
+defaultsText:
+	.db	3
+	.db	28
+	.db	"Set Defaults", 0
+	.db	6
+	.db	"Angle", 0
+	.db	"Diagnostic", 0
+	.db	"Math Print", 0
+	.db	"Kill pop up", 0
+	.db	"Stat wizards", 0
+	.db	"Back", 0
+	.dw	toggleAngle
+	.dw	toggleDiag
+	.dw	toggleMP
+	.dw	togglePopUp
+	.dw	toggleWizard
+	.dw	titleScreen
+
+#else
+
+defaultsText:
+	.db	3
+	.db	28
+	.db	"Set Defaults", 0
+	.db	3
+	.db	"Angle", 0
+	.db	"Diagnostic", 0
+	.db	"Back", 0
+	.dw	toggleAngle
+	.dw	toggleDiag
+	.dw	titleScreen
+
+#endif
+
+
+setPicText:
+	.db	2
+	.db	30
+	.db	"Set Picture", 0
+	.db	5
+	.db	"On / Off", 0
+	.db	"Picture Contrast", 0
+	.db	"Refresh Delay", 0
+	.db	"Find Picture", 0
+	.db	"Back", 0
+	.dw	togglePic
+	.dw	savePicCont
+	.dw	setRefresh
+	.dw	findPic
+	.dw	titleScreen
+
+#if	_84
+
+ramText:
+	.db	7
+	.db	21
+	.db	"Run on RAM Clear", 0
+	.db	4
+	.db	"Install", 0
+	.db	"Uninstall", 0
+	.db	"Old  RAM  clear", 0
+	.db	"Back", 0
+	.dw	installROM
+	.dw	uninstallROM
+	.dw	toggleOldClear
+	.dw	title2
+
+#else
+
+ramText:
+	.db	7
+	.db	21
+	.db	"Run on RAM Clear", 0
+	.db	3
+	.db	"Install", 0
+	.db	"Uninstall", 0
+	.db	"Back", 0
+	.dw	installROM
+	.dw	uninstallROM
+	.dw	title2
+
+#endif
+
+#if	_84
+
+hardwareText:
+	.db	6
+	.db	17
+	.db	"Hardware Settings", 0
+	.db	6
+	.db	"Save Contrast", 0
+	.db	"Get Delay", 0
+	.db	"Reset those ^", 0
+	.db	"Execute >C000", 0
+	.db	"Use fast mem timings", 0
+	.db	"Back", 0
+	.dw	saveContrast
+	.dw	getDelay
+	.dw	resetThose
+	.dw	toggleC000
+	.dw	toggleFastMem
+	.dw	title2
+
+#else
+
+hardwareText:
+	.db	6
+	.db	17
+	.db	"Hardware Settings", 0
+	.db	4
+	.db	"Save Contrast", 0
+	.db	"Reset that ^", 0
+	.db	"Execute >C000", 0
+	.db	"Back", 0
+	.dw	saveContrast
+	.dw	resetThose
+	.dw	toggleC000
+	.dw	title2
+
+#endif
+
+fontText:
+	.db	8
+	.db	28
+	.db	"Custom Font", 0
+	.db	5
+	.db	"Enabled", 0
+	.db	"Select font", 0
+	.db	"New font", 0
+	.db	"Edit font", 0
+	.db	"Back", 0
+	.dw	enableFont
+	.dw	selectFont
+	.dw	newFont
+	.dw	editfont
+	.dw	title2
+
+programsMenu:
+	.db	9
+	.db	18
+	.db	"Program Settings", 0
+	.db	7
+	.db	"Shell", 0
+	.db	"Turning on", 0
+	.db	"Ram clears", 0
+	.db	"On zStart", 0
+	.db	"Parser chain", 0
+	.db	"Run from home", 0
+	.db	$CF, 0
+	.dw	shellMenu
+	.dw	turningOnMenu
+	.dw	ramClearProgmenu
+	.dw	zStartProgMenu
+	.dw	parserChainMenu
+	.dw	toggleParserHook
+	.dw	title2
+
+axeText:
+	.db	10
+	.db	28
+	.db	"Axe Settings", 0
+	.db	3
+	.db	"Enable hook", 0
+	.db	"Compile for:", 0
+	.db	"Back", 0
+	.dw	toggleAxeHook
+	.dw	compileMenu
+	.dw	title2
+
+
+nameErrorText:
+	.db	"Name Error!", 0
+
+success:
+	.db	"Success!", 0
+notFoundText:
+	.db	"Not Found", 0
+
+picContText:
+	.db	"Set  it  while  viewing,  +  -", 0
+
+refreshText:
+	.db	"Set  it  while  viewing,  *  /", 0
+
+zHelpName:
+	.db	protProgObj, "ZHELP", 0
+
+
+enterNameText:
+	.db	"Enter Name", 0
+
+
+#if	_2page
+
+bOpenEditor equ	$-$4000
+	.dw	openEditor
+	.db	1
+
+bEditorToOffset	equ	$-$4000
+	.dw	myEditorToOffset
+	.db	1
+
+
+
+#endif
+
+
+
+.echo	"Page 0: ", 16288-$+$4000
+
+
+
+#if	_2page
+
+
+
+
+
+.block	$8000-$
+.org	$4000
+
+
+
+
+
+
+
+
+
+#include	"C:\\asm\\source\\zstart\\editor.z80"	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.echo	"Page 1: ", 16384-$+$4000
+
+#endif
+
+
+
+
+
+
+
+

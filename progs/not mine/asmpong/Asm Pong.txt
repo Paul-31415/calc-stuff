@@ -1,0 +1,166 @@
+                                                  __ 
+                                                 /\_\
+                                                / / /
+                                               / / / __
+                                  ____        / / / /\ \
+                __               /  \ \      / / / /  \ \
+     __        /\ \             / __ \ \    / /_/ / /\ \_\
+    /\ \      /  \ \           / / /\ \ \   \ \ \ \/_/ / /
+   /  \ \    / /\ \ \       __/ / /  \ \ \   \ \ \  / / /
+  / /\ \_\  / / /\ \ \     /\/ / /    \ \_\   \ \ \/ / /
+ / / / / / / /_/  \ \_\    \  /_/      \/_/    \ \/ / /
+/ /_/ / /  \ \ \  / / /     \ \ \               \  / /
+\ \/ / /    \ \ \/ / /       \ \ \               \/_/
+ \  /_/      \ \/ / /         \ \_\      
+  \ \ \       \  / /           \/_/
+   \ \ \       \/_/
+    \ \ \
+     \ \_\
+      \/_/
+
+============================================Viewer must be this wide=========================================
+Available for any z80 TI calculator 84 or lower
+
+Instructions:
+	I have included shooting, so you can try and shoot your opponent, but i have made it optional,
+	knowing some people will prefer the classic, slower-paced gameplay that doesn't include shooting
+	To play with shooting, select any difficulty by pressing mode
+	To play without shooting, select any difficulty by pressing 2nd
+	Either mode or 2nd can be used to choose quit in the menu
+
+
+What started out as my first assembly game that used text output characters, and had sluggish speed (for ASM)
+has developed into a toplisted game that made top 10 in "TI 83 plus programs", the most competitive category.
+Now that I have realized its greatness I've ported it to all z80 calculators 84 and below.  It has come a 
+long way. This is one of the greatest pong games for the z80 ever.  It lacks only one feature that is soon
+to be implemented: link play.  However, being decked out with an incredible AI, speed control, a
+teacher key (del), 3 different AI difficulties, SHOOTING, pixel inversion,
+contrast control(even returns to original contrast at end of game), and portability to many calculators, 
+all for around 3000 bytes, it will soon be the ZTetris of Pong.
+
+Pong by Jon Martin (drschwanke@hotmail.com)
+v 1.2
+z80 Assembly Game
+NOTE: 83 plus ION removed because it crashes (WTF).  There are very few who have ION on an 83 plus 
+(they all have MirageOS) so this shouldn't be a big problem.  However, I left it in the source for
+anyone who wants to fix this unfortunate bug
+
+NEW Feature Added: Writeback (TIOS and Mirage only), if you exit with [del] you can continue where you 
+left off.  I will add support for this on other shells when i figure out how to do writeback on them.
+ Inversion, you can now also choose whether or not you want your game's pixels to 
+be inverted.  Inverted looks like the original pong (white on black), and is cooler looking in my opinion.
+not inverted uses fewer set pixels, so it will run down batteries less, it is also less strain on the eyes.
+
+All 83 plus versions fully tested on an actual calc (84 plus SE).
+Special thx to the magic bum, who tested the 83 version, and it runs as fast on his
+crappy calc as it duz on my SE!!!! (he is like the only person in my town with a TI 83)
+
+Game: Pong 
+Platform: TI 73/TI 82/TI 83/83+ family
+Shell(73):Mallard (if you own a 73, then your parents must hate you; i pity you with all my heart)
+Shell(82):Ash 3.0
+Shell(83):ION
+Shell(83 plus family): MirageOS/No Shell (runs with the Asm( token)
+Author: Jon Martin (drschwanke@hotmail.com)
+Size on Calc: Around 3000 bytes
+Other possible future platforms:TI 85 USGARD, TI 85 ZShell, TI 86 Shell-less,
+Contents
+		ASM PONG.txt - This readme
+		SCREEN.gif - animated screenshot of ti 83+ ti os version
+	  	asm73.exe  - .83p to .73p program converter (for mallard)
+		z80pongcompile.bat - my batch file I made that outputs all 6 programs
+		devpac8x.com - converts bin files to .8xp files
+		devpac83.com - converts bin files to .83p files
+		TASM.exe - converts any text file to an obj or bin file
+		PRGM82.exe - converts obj files to .82p files
+		TASM80.TAB - tasm file with z80 instruction set
+		ion.inc	- ion include file
+		mallard.inc - ti 73 include file with additional mallard equates
+		mirage.inc - mirage include file
+		ti83plus.inc - ti83 plus include file
+		source.z80 - main program
+		header.z80 - contains conditional code with all the headers
+		sprites.z80 - include with the sprite data
+		Also included will be  the program file, which has one of the following extensions:
+		.73p, .82p, .83p, or .8xp, depending on which shell/calc you use.
+Special Thanks to:
+The Magic Bum, my 83 ION beta tester
+DetachedSolutions, the makers of MirageOS
+Mattias Lindqvist & Dines Justesen, the makers of Ash 3.0
+Michael Vincent, maker of Mallard 
+Joe Wingbermeuhle.  The maker of ION.  His ion libs made this game possible.
+Rusty Wagner for VTI.
+Andre Felix Miertschink for CalcCapture.
+Texas Instruments (for obvious reasons)
+TICalc.org, the biggest calc website on the planet
+Sean McLaughlin, author of "learn ti 83 plus assembly in 28 days", the tutorial where i learned ASM
+
+Please email me if you want to port to 85 and 86 to make this game available for any z80 calc
+To use my compiling, you must put in an #ifdef with the proper header, and add the needed information
+to the batch file.  You will need some extra conditional code to compensate for the wider screen >.<
+IMPORTANT NOTE TO DEVELOPERS:
+	if you want to compile the program using the included batch file, first make the following
+	subdirectories in the directory asmpong:
+	TIOS
+	MALLARD
+	ASH
+	TI83
+	TI83P
+	MIRAGE
+	errorfiles
+Soz no link play yet.  (Someone please make the protocols; ill give you 2nd author credit.)
+
+25 Speeds, and 3 difficulties.
+Runs ultra fast!!
+
+TI 73/82 versions untested.  Please send me feedback.
+
+
+THIS ASM PROGRAM DOES NOT USE A SINGLE ROM CALL(except in TIOS for writeback)!!!!!!
+Using a combination of the ion libs, and my own self-made
+libs, I've been able to make a completely ROM-call-free
+Assembly Game
+
+TI 73 version bugs: unknown (untested)
+TI 82 version bugs: unknown (untested)
+TI 83 ION version bugs: None
+TI 83 plus ION version bugs: CRASHES
+TI - OS version Bugs: None
+MirageOS version Bugs: slightly slower than ti - os ver due to mirage interrupt routines (still wicked fast)
+Please email me ideas to improve my game.
+Controls:
+	Controls in the menu:
+		Up & Down to move arrow
+		2nd to start game without shooting
+		MODE to start game with shooting
+	Controls in - game:
+		2nd to shoot (in shoot mode)
+		Up & Down to move paddle
+		Zoom to pause
+		Mode to exit current game to menu
+		Del to exit to shell (or home screen)
+		Window to speed up
+		Y= to slow down
+	Controls while paused
+		Up or down to unpause
+		+/- to change contrast 
+After someone misses the game will pause.		
+The Difficulty not only changes the speed, but also changes likelihood that AI will miss
+With the ifastcopy lib I have a much faster prog.
+More graphics to come to make the game better.  Current game has 3 difficulties/25 speeds
+and a pause feature, and the AI is spaztic (which is better than the old version where
+it just follows the ball.)
+       __            __               __  
+      /\_\          /\ \             /\ \
+     / / /         /  \ \           /  \ \
+    / / /         / /\ \ \       __/ /\ \ \
+   / /_/         / / /\ \ \     /\/ / /\ \ \
+  /  \ \        / /_/  \ \_\    \  /_/  \ \ \
+ / /\ \ \       \ \ \  / / /     \ \ \   \ \_\
+/ / /\ \ \       \ \ \/ / /       \ \ \   \/_/
+\/_/  \ \ \       \ \/ / /         \ \ \
+       \ \_\       \  / /           \ \_\
+       / / /        \/_/             \/_/
+      / / /                                
+     / / /
+     \/_/

@@ -1,0 +1,50 @@
+
+
+class sfloat():
+
+    def __init__(self,num):
+        self.s = ((num & 0x80000000) == 0)*2-1
+        self.e = (num>>23)&0xff
+        self.m = num & 0x007fffff | (self.e != 0)<<23
+        self.b = 0x01000000 >> (self.e == 0)
+        self.o = 0x7f
+        
+    def __repr__(self):
+        res = ''
+        if self.s == -1:
+            res += '-'
+        res += bin(self.b + self.m)[3]+'.'+bin(self.b + self.m)[4:]+' '
+        res += 'b'+str(self.e-self.o)
+        return res
+
+    def __add__(self,other): #lazy so only add with other floats
+        if self.e < other.e:
+            return other.__add__(self)
+        r = sfloat(0)
+        r.m = (other.b*self.s*self.m << (self.e-self.o-other.e+other.o) + self.b*other.s*other.m)//min(self.b,other.b)
+        r.b = max(self.b,other.b)<<(self.e-self.o-other.e+other.o)
+        if r.m & r.b:
+            r.e += 1
+            r.b <<= 1
+        r.normalize()
+        return r
+            
+    def normalize(self):
+        if self.m == 0:
+            self.e = 0
+        while self.e > 0 and (((self.b>>1) & self.m) == 0):
+            self.e -= 1
+            self.b >>=1
+        
+    def __mul__(self,other):
+        r = sfloat(0)
+        r.s = self.s^other.s
+        r.e = self.e + other.e
+        r.o = self.o + other.o
+        r.m = self.m * other.m
+        r.b = self.b * other.b >> 1
+        if r.m & r.b:
+            r.e += 1
+            r.b <<= 1
+        return r
+        

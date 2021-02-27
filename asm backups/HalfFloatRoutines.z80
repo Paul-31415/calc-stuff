@@ -1,0 +1,1076 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	saveSScreen 86ECh
+.org        progStart-2
+.db         $BB,$6D
+
+
+;test prog calls stuff
+AddLoop:
+	ld hl,str
+    call halfFloatToStr
+    jr AddLoop
+    
+;string place
+str:
+.db 0,0,0,0,0 ,0,0,0,0,0 ,0,0,0
+
+
+
+
+;tostr is broke
+halfFloatToStr: ;writes float in de as string to (hl) , destroys hl, max length -0.000012345  13 bytes 
+	;get sign first
+    
+    ;syntax: 5 digits
+    ; e is exp with offset (ex + 15
+    ;
+    ; 3c00 + 1400 = 3c01
+    ;ex:15   5
+    ; e: 0   -10
+    ; 6400 + 3c00 = 6401
+    ;ex:25   15
+    ; e:10    0
+    ; for e > 10, render as ±n.nnnnEe
+    ; for e < -10, render as ±n.nnnnE-e
+    ; else render as ±nnn.nn
+    
+	ld a,d
+	rla
+    jr nc,halfFloatToStrPositive
+	 ld (hl),'-'
+	 inc hl
+halfFloatToStrPositive:
+	
+    ;now we get exp for planning for later
+    and $f8 ;bc the rla
+    rra
+    rra
+    rra
+    ld b,a
+    
+    cp 31	;do NaN and inf cases
+    jr nz,halfFloatToStrNonIN
+     ld a,d
+     and $03
+     or e
+     jr z,halfFloatToStrInf
+      ld (hl),'N'
+      inc hl
+      ld (hl),97 ;'a' (it makes everything caps
+      inc hl
+      ld (hl),'N'
+      inc hl
+      ld (hl),0
+      ret
+halfFloatToStrInf:
+	 ld (hl),105;'i'
+     inc hl
+     ld (hl),110;'n'
+     inc hl
+     ld (hl),102;'f'
+     inc hl
+     ld (hl),0
+     ret
+halfFloatToStrNonIN:
+    
+    ld a,b
+    ;A < num	C flag is set
+    cp 5
+    jp c,halfFloatToStrSciL
+    cp 26
+    jp nc,halfFloatToStrSciH
+    ;20 e range where it needs to know where to put decimal
+    ;no need to save our exponent because fPart takes care of it
+    
+  push hl;save ptr
+    call halfFloatfPart
+    ;hl now has fpart
+   push hl
+    jr z,halfFloatToStrInt
+     ld a,h
+     xor $80	;negate hl
+     ld h,a	
+     ;we no longer need the origional, so no push de
+     call halfFloatAdd ;add hl,de      hl now has iPart
+     ex de,hl ;de now has ipart
+halfFloatToStrInt:  
+	;toInt de
+    call halfFloatToUInt
+    ;hl now has int of ipart
+    ;now we divide and do modular stuff to convert to decimal
+    ld c,10
+    ld b,0
+    ld de,halfFloatToStrScratchBuff  ;we will do at least one, thus ensuring a leading 0
+halfFloatToStrIntLoop:
+     call Div_HL_C
+     ;a has last digit
+     add a,'0';make ascii
+     ld (de),a
+     inc de
+     inc b ;keep easy track
+    ld a,h
+    or l
+    jr nz,halfFloatToStrIntLoop
+    
+   pop hl ;fpart
+    ex (sp),hl; swap for ptr
+    ;now we transfer the stuff we made while also reversing it
+    ld c,b; save this though to know how many digits after the decimal point to make
+halfFloatToStrIntCopyLoop:
+     dec de
+     ld a,(de)
+     ld (hl),a
+     inc hl
+    djnz halfFloatToStrIntCopyLoop
+    
+  ;now we gotta do the stuff after the decimal point
+  pop de ;fpart
+    ld a,d
+    and $7f
+    or e
+    ld (hl),0
+    ret z ;there was nothing after the decimal point
+    
+    ld (hl),'.'
+    inc hl
+    
+    ;min val of type n.nnnn has exp of 5, meaning I need ~20 bits to store the fixed pt 
+    ;if I do it with floats, I'll have loss of precision?
+    ;eh, it's really easier, I'll use floats
+    
+    
+    ;c is how many digits before the decimal point
+    ld a,(halfFloatToStrScratchBuff)
+    sub '0'
+    add a,c
+    cp 1 ;this can only be 1 if c is 1 and dig is 0 (ie no sigfigs)
+	ld a,5
+    jr nz,halfFloatToStrDecimalAbove1 
+     
+
+	ld b,a
+    ;now we put b sigfigs
+    ;first start by putting n '0's (they don't are sigfigs)
+    push bc;save for actual sigfigs
+halfFloatToStr0Loop:
+	push hl;save ptr
+    ;de is fpart
+    
+    ;10 is 0 10010 01 00000000 (1.01e3)
+    ld hl,$4900
+    call halfFloatMul ;hl = 10de
+    ex de,hl ;put hl into de
+    call halfFloatToUInt ;saves de, which is new fpart
+    ld a,h
+    or l
+    pop hl
+    jr nz,halfFloatToStr0LoopEnd
+    ;if dig is 0 just add 0
+    ld (hl),'0'
+    inc hl
+    jr halfFloatToStr0Loop
+    
+    
+halfFloatToStr0LoopEnd:    
+    pop bc
+    ld c,0
+    ld a,5
+halfFloatToStrDecimalAbove1:
+	 ;c is how many sigfigs we already put
+     sub c
+     ld b,a
+halfFloatToStrDecimalLoop:
+  push hl;save ptr
+    ;
+    
+    ;10 is 0 10010 01 00000000 (1.01e3)
+   push bc ;save this
+    call halfFloatfPart
+    ld de,$4900
+    call halfFloatMul ;hl = 10de
+    ex de,hl ;put hl into de
+    call halfFloatToUInt ;saves de, which is new fpart
+   pop bc
+    ld a,l
+    add a,'0'
+  pop hl
+    ld (hl),a
+    inc hl
+    djnz halfFloatToStrDecimalLoop
+    
+    ld (hl),0 ;null terminate
+    
+    ;everything is popped, now we erase trailing zeros
+halfFloatToStrEraseTrailing0s:
+    dec hl
+    ld a,(hl)
+    cp '0'
+    ret nz
+    ld (hl),0 ;replace with null
+    jr halfFloatToStrEraseTrailing0s
+    
+    
+halfFloatToStrSciH: ;syntax of ±n.nnnnEe
+    
+    ;max val is just 65504 so I can use the int thing
+    push hl;save ptr
+    ;toInt de
+    call halfFloatToUInt
+    ;hl now has int of de
+    ld c,10
+    ld b,0
+    ld de,halfFloatToStrScratchBuff  
+    
+halfFloatToStrIntLoopSciH:
+     call Div_HL_C
+     ;a has last digit
+     add a,'0';make ascii
+     ld (de),a
+     inc de
+     inc b ;keep easy track of exp
+    ld a,h
+    or l
+    jr nz,halfFloatToStrIntLoopSciH
+    pop hl;get ptr
+    ;now we transfer the stuff we made while also reversing it
+     dec b;transfer 1 manually so we can insert '.'
+      ld c,b; save this for exp
+     dec de
+     ld a,(de)
+     ld (hl),a
+     inc hl
+     ld (hl),'.'
+     inc hl
+halfFloatToStrIntCopyLoopSciH:
+     dec de
+     ld a,(de)
+     ld (hl),a
+     inc hl
+    djnz halfFloatToStrIntCopyLoopSciH
+    
+    
+   
+    
+halfFloatToStrEraseTrailing0sSciH: ;also replace trailing '.'s
+    dec hl
+    ld a,(hl)
+    cp '0'
+    jr z,halfFloatToStrEraseTrailing0sSciH0
+    cp '.'
+    jr nz,halfFloatToStrEraseTrailing0sSciHEnd
+halfFloatToStrEraseTrailing0sSciH0:
+    ld (hl),0 ;replace with null
+    jr halfFloatToStrEraseTrailing0sSciH
+halfFloatToStrEraseTrailing0sSciHEnd:
+    
+    ;now we do the exp using c
+    inc hl
+    ld (hl),'E'
+    inc hl
+    ld a,c
+    add a,'0'
+    ld (hl),a
+    inc hl
+    ld (hl),0 ;null terminate
+    ret
+    
+halfFloatToStrSciL: ;syntax of ±n.nnnnE-e, also handles 0 case
+    ;check if 0
+    ld a,d
+    and $7f
+    or e
+    jr nz ,halfFloatToStrNon0
+    ld (hl),'0'
+    inc hl
+    ld (hl),0
+    ret
+halfFloatToStrNon0:
+    ;ugh this is an annoying one, exp is less than 5 meaning e is less than -10
+    ;thus max val is 2^-10, which is ~0.0009 so we can mul by 1,000 to start
+    
+    
+    push hl;save our ptr
+    
+    
+    ;1,000 is 1111101000b is 0 11000 11 1101 0000
+    ;						$63d0
+    ld b,3
+    push bc
+    ld hl,$63d0
+    call halfFloatMul
+halfFloatToStrSciLMul0Loop:
+    ld de,$4900 ;10
+    call halfFloatMul
+     pop bc
+     inc b ;counting 0s
+     push bc
+    ex de,hl
+    call halfFloatToUInt
+    xor a
+    or l ;no need to check h in increments of 10
+    ex de,hl ;hl has num now
+    jr z,halfFloatToStrSciLMul0Loop
+	
+	;transfer manually so we can put '.'
+    
+    ;hl is like n.nnnn now
+    
+    ;hl* 1000 is nnnn.n
+    ld de,$63d0
+    call halfFloatMul
+    ;hl is val
+    ex de,hl
+    call halfFloatToUInt
+    ;hl now has int of val
+    pop bc
+    push de ;we still have 1 more digit to get
+    ld c,10
+    ld de,halfFloatToStrScratchBuff 
+    ;now we do the thing
+halfFloatToStrIntLoopSciL:
+     call Div_HL_C
+     ;a has last digit
+     add a,'0';make ascii
+     ld (de),a
+     inc de
+    ld a,h
+    or l
+    jr nz,halfFloatToStrIntLoopSciL
+    pop hl
+    push de
+    push bc
+    ld de,$4900
+    call halfFloatMul
+    ex de,hl
+    call halfFloatToUInt
+    ld a,l
+    pop bc ;b has exp
+    pop de
+    add a,'0';make ascii
+    ld (de),a
+    
+    ;now we copy back
+    
+     pop hl;get ptr
+    ;now we transfer the stuff we made while also reversing it
+     ld a,(de)
+     ld (hl),a
+     inc hl
+     ld (hl),'.'
+     inc hl
+     ld c,b 
+     ld b,4; 5 digits total we did
+halfFloatToStrIntCopyLoopSciL:
+     dec de
+     ld a,(de)
+     ld (hl),a
+     inc hl
+    djnz halfFloatToStrIntCopyLoopSciL
+    
+   
+    
+halfFloatToStrEraseTrailing0sSciL: ;also replace trailing '.'s
+    dec hl
+    ld a,(hl)
+    cp '0'
+    jr z,halfFloatToStrEraseTrailing0sSciL0
+    cp '.'
+    jr nz,halfFloatToStrEraseTrailing0sSciLEnd
+halfFloatToStrEraseTrailing0sSciL0:
+    ld (hl),0 ;replace with null
+    jr halfFloatToStrEraseTrailing0sSciL
+halfFloatToStrEraseTrailing0sSciLEnd:
+    
+    ;now we do the exp using c
+    inc hl
+    ld (hl),'E'
+    inc hl
+    ld (hl),'-'
+    inc hl
+    ld a,c
+    add a,'0'
+    ld (hl),a
+    inc hl
+    ld (hl),0 ;null terminate
+    ret
+    
+    
+    
+    
+    
+halfFloatToStrScratchBuff:
+.db 0,0,0,0,0
+
+
+Div_HL_C:            ; HL = HL ÷ C, A = remainder
+    XOR    A         ; Clear upper eight bits of AHL
+    LD     B, 16      ; Sixteen bits in dividend
+_loop:
+    ADD    HL, HL     ; Do a SLA HL
+    RLA              ; This moves the upper bits of the dividend into A
+    JR     C, _overflow
+    CP     C         ; Check if we can subtract the divisor
+    JR     C, _skip   ; Carry means C > A
+_overflow:
+    SUB    C         ; Do subtraction for real this time
+    INC    L         ; Set bit 0 of quotient
+_skip:
+    DJNZ   _loop
+    RET
+    
+
+
+
+
+;-----------------------------stuff below here works---------------------------------
+
+
+
+
+
+halfFloatfPart:;takes fpart of de and returns into hl (ignores sign), preserves de and uses bc,a
+	ld a,d	   ; also returns z if zero
+	
+    ; exp
+    and $7c 
+    rra
+    rra
+    ld h,d
+    ld l,e
+    ;A < num	C flag is set
+    cp 15 ;e below 15 is pure fPart
+    ret c ;also nz
+    
+    ;A >= num	C flag is reset
+    cp 25 ;e 25 and above is pure int
+	jr c,halfFloatfPartDoThing
+     ;return 0
+     ld hl,0
+     xor a ;set z
+     ret ;reting z
+halfFloatfPartDoThing: ; we do actually have to calculate now
+	;mask away unneeded info
+    ld b,a
+	ld a,h
+    and $03
+    ld h,a
+    
+    ;how many rrs to do (higher the ex, less we have to do)
+    ld a,25;at ex = 15, we gotta do 10 shifts
+    sub b  ;at ex = 24, we have to do 1 shift
+    ld b,a 
+    ld c,a ;save for later
+    sub 8
+    jr c,halfFloatfPartNoShift8
+     ld l,h; hl -> lh
+     ld h,e; we can do this because l was still a copy of e
+     jr z,halfFloatfPartNorm; we can do this because flags were preserved from sub 8
+      ld b,a
+halfFloatfPartNoShift8:
+     rrc h
+     rlc h;put h's bottom into carry
+halfFloatfPartShiftLoop:
+     rr l
+     rr h
+    djnz halfFloatfPartShiftLoop
+    ;now to normalize
+halfFloatfPartNorm:
+    ld b,c ;c is how many rrs we did, so it's the max number of sls we would need to do
+halfFloatfPartNormLoop:
+	 add hl,hl
+     jr c,halfFloatfPartNormRes
+    djnz halfFloatfPartNormLoop
+    ;we return 0 now
+    ld hl,0
+    xor a ;set z
+    ret
+halfFloatfPartNormRes: 
+    ;b is net rrs we did so it's directly proportional to exp offset
+    ;b = c means exp is 01110
+    ;b = c-1 -> exp: 01101
+    ;exp = (b-c)+14
+    ld a,b
+    sub c
+    add a,14
+    rlca
+    rlca
+    ;do sign
+    xor d
+    and $7f ;preserve only sign from d
+    xor d
+    
+    ;now we put hl back together
+    ld b,l
+    ld l,h
+    ld h,0
+    rl b
+    adc hl,hl
+    add hl,hl ;we don't need to do the c for this one because we are guaranteed to have cut off at least 1 bit
+    or h ;because exp is never 0 here (it's only from 5 to 15) we have nz
+    ld h,a; store da thing
+    ret ;retting nz
+    
+    
+    
+    
+    
+    
+
+
+halfFloatToUInt:	;converts hfloat in de to Uint in hl, also rets sign flag as de's sign, uses bc,a, effectively int(abs(de)) saves de
+	;0 01111 0000000000 = 1
+    ld b,15
+halfFloatToUFixed:  ;you provide exponential offset
+    ld c,0
+    ld a,d
+    and $7c
+    rrca
+    rrca ;shift properly
+    jr nz,halfFloatToUFixedsNorm
+     inc c
+halfFloatToUFixedsNorm:
+    sub b ;A < num	C flag is set
+    jr c,halfFloatToIntRet0
+	ld b,a
+    ld l,e
+    ld a,d
+    and $03
+    bit 0,c
+    jr nz,halfFloatToUFixedSubNorm
+     or $04
+halfFloatToUFixedSubNorm:
+    ld h,a
+    ld a,b
+    sub 10; check whether to sl or sr
+    ;a = -10 means sr 10 (ie so only the implicit 1 remains)
+    jr c,halfFloatToIntShiftRight
+     ;shift left
+     ;a of 0 means don't shift
+     ld b,a
+     or a
+     jr z,halfFloatToIntDoSign
+halfFloatToIntSll:
+      add hl,hl
+      djnz halfFloatToIntSll
+     jr halfFloatToIntDoSign
+     
+halfFloatToIntShiftRight:
+	;a < 0
+    neg ; make a positive
+    ld b,a
+halfFloatToIntSrl:
+     or a ;clear carry flag
+     rr h
+     rr l
+     djnz halfFloatToIntSrl
+    
+halfFloatToIntDoSign:
+	ld a,d
+    or a ;set sign flag
+    ret 
+halfFloatToIntRet0:
+	ld hl,0
+    ld a,d
+    or a ;set sign flag
+    ret
+
+
+
+
+halfFloatComp:; compares hl and de uses a , returns f
+    ld a,h
+    xor d
+    rlca
+    jr c,halfFloatCompDifferentSigns
+     push hl
+     bit 7,h
+     scf
+     ccf
+     jr z,halfFloatCompPositives
+      sbc hl,de
+      ;A < num	C flag is set
+      pop hl
+      ret nz
+      ;invert carry
+      ccf
+	  ret
+halfFloatCompPositives:
+      sbc hl,de
+      ;A < num	C flag is set
+      pop hl
+      ret    
+halfFloatCompDifferentSigns:
+    ; only special case I need to do now is 0 and -0
+    ld a,h
+    or d
+    and $7F
+    or l
+    or e
+    ccf
+    ret z
+    bit 7,h
+    jr nz,halfFloatCompDifferentSignsHLNeg
+ 	 or 1
+     scf
+     ccf
+     ret 
+halfFloatCompDifferentSignsHLNeg:
+    scf
+    ret
+
+
+
+halfFloatMulhlIN:
+    ld a,h
+	and $03
+    or l
+    ;check if nan
+    ret nz ; return hl if hl is nan
+    
+    ;hl is ±inf
+    ;is de nan?
+    ld a,d
+	and $7c
+    xor $7c
+    jr z,halfFloatMulhlINdeN0
+    ;de is finite, check if 0
+    ld a,d
+    and $7F
+    or e
+    jr nz,halfFloatMulhlINdeN0 ;de nonzero, just need to do signs
+    ;ret nan
+    ;for this we can just inc l to make hl nan, because it was inf
+    inc l
+    ret
+    
+halfFloatMulhlINdeN0:
+    
+    ;now we just do the sign game
+    ld a,d
+    and $80
+    xor h
+    ld h,a
+    ret
+    
+    
+
+halfFloatMul: ;hl * de -> hl uses bc and a and de
+    ;uses standard exp offset 
+	;0 01111 0000000000 = 1
+    ; 3c00 = 1
+    
+    ;only 16 bit precision intermediate, not 22
+    
+    
+    ld a,h
+    and $7c
+    xor $7c
+    jr z,halfFloatMulhlIN
+    
+    ex de,hl
+    ld a,h
+    and $7c
+    xor $7c
+    jr z,halfFloatMulhlIN
+    
+    ;now we know that hl and de are safe to multiply normally
+    
+    ;now we compute the exponent
+    
+    ld a,d
+    and $7c
+    rrca
+    rrca
+    ld b,a
+    ld a,h
+    and $7c
+    rrca
+    rrca
+    add a,b ;a has sum of exponents now
+    
+    ;0 01111 0000000000 = 1
+    ; so 15 + 15 + k = 15
+    sub 15
+    ;A < num	C flag is set
+    jr nc,halfFloatMulResNon0
+     ;return ±0 now
+     ld a,h
+     xor d
+     and $80
+     ld h,a
+     ld l,0
+     ret
+halfFloatMulResNon0:
+	
+    ;now we check for ±inf
+    ;if a >= 1 1111, we do inf
+    ;A >= num	C flag is reset
+    cp $1f
+    
+    jr c,halfFloatMulResNoninf
+	 ;return ±inf now
+     ld a,h
+     xor d
+     and $80
+     or $7c
+     ld h,a
+     ld l,0
+     ret
+halfFloatMulResNoninf:
+	;save exponent
+    rlca
+    rlca
+    ld b,a
+    ;now we can proceed to multiply the mantissas
+    ;save the sign
+    ld a,h
+    xor d
+    and $80
+    or b
+    ld ixh,a
+    ;now ixh is the top part of our result
+    
+    
+	;get de and hl as int thingys 
+        ;counter: b
+    ld b,2
+    
+halfFloatMulConv:
+    ;hl
+    ld a,h
+    and $7c
+    ld a,h
+    jr nz,halfFloatMulNorm
+     ;for subnormals, don't supply a 1, also shift left
+     and $03
+     ld h,a ;clear exp, supplying 0
+     add hl,hl ;shift left
+     jr halfFloatMulConvEnd
+halfFloatMulNorm:
+	 and $03
+     or $04 ;supply 1
+     ld h,a
+     ;now do it again but with de
+     ex de,hl
+halfFloatMulConvEnd:
+     djnz halfFloatMulConv
+    
+    ;now we do the actual multiplication
+    ;put de into bc
+    ld b,d
+    ld c,e
+    
+    ;hl is max 0000 01bb L
+    
+    ;shift hl left 0x to be 5 bits from top, this makes the lsb in c but I only need one right shift after
+    
+    
+				;worst case: bc*de with de shifted 2x
+                ; de : 0001 1111 1111 1100 
+                ; bc :*0000 0111 1111 1111
+                ;
+                ; steps:
+                ;	hlb: 0000 0000  0000 0000  0000 0111  a=11
+                ;   hlb: 0001 1111  1111 1100  0000 0011	10
+                ;   hlb: 0010 1111  1111 1010  0000 0001	9
+                ;   hlb: 0011 0111  1111 1001  0000 0000	8
+                ;   hlb: 0011 1011  1111 1000  1000 0000	7
+                ;   hlb: 0011 1101  1111 1000  0100 0000	6
+                ;        .		 0				 1			5
+                ;        .		    0			  1			4
+                ;        .			 0				1		3
+                ;   hlb: 0011 1111  1101 1000  0000 0100	2
+                ;   hlb: 0011 1111  1110 1000  0000 0010	1 
+                ;   hlb: 0011 1111  1111 0000  0000 0001	0 (loop ends)
+    ex de,hl
+    ;bc * de into hl
+    ld hl,0
+    ;using a as counter
+    ld a,11
+halfFloatMulMulLoop: ;measuring here
+    rr h 
+    rr l
+    rr b
+    rr c
+    jr nc,halfFloatMulMulLoopNoAdd
+     add hl,de;never results in carry
+     
+halfFloatMulMulLoopNoAdd:
+
+    dec a
+    jr nz,halfFloatMulMulLoop
+    ;now hlb has 22 bits of de * bc, first 2 bits are 0
+    ;now we round
+    
+    ;round ties to odd
+    ;hlbc: 0000 1111  1111 1100  0000 0000 01(00 0000)
+    ;last stored bit   	     ^ (for normal)
+    
+   ; bit 0,l
+   ; jr z,halfFloatMulRoundDown		;emulator seems to break with bit 0,l so I'm using truncation now
+   ;  ;round up iff lsb is 0
+   ;  set 1,l
+;halfFloatMulRoundDown:
+
+
+    ;now hl has mantissa but we gotta do some things
+    
+    ;mask off implicit 1
+    ld a,h
+    and $03
+    ld h,a
+    
+    ;check for subnormal, exp term
+    
+    ld a,ixh
+    and $7c
+    jr nz,halfFloatMulResNormal
+     ;result is subnormal, shift right hl 1 because we only have 10 bits of precision now
+     rr h
+     rr l
+halfFloatMulResNormal:
+    ld a,ixh
+    or h
+    ld h,a
+    ret ;done!
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+
+
+
+halfFloatAddhlIN:
+	ld a,h
+	and $03
+    or l
+    ;check if nan
+    ret nz ; return hl if hl is nan
+    
+    ;hl is ±inf
+    ;is de nan?
+    ld a,d
+	and $7c
+    xor $7c
+    ret nz ; de is finite
+    
+    ld a,d
+	and $03
+    or e
+    ex de,hl
+    ret z
+    ;de and hl are infs
+    ;now we emit a nan if signs are different
+	ld a,d
+    xor h
+    rlca ;xorsign into carry
+    ;c if signs are different
+    ret nc ;signs are same, ret inf
+    ;ret nan
+    ;for this we can just inc l to make hl nan, because it was inf
+    inc l
+    ret
+
+halfFloatAdd:	;add hl,de but with hl and de being ieee halffloats, destroys all
+	; 0 01111 00;00000000 = 1 for reference
+	ld a,h
+    and $7c
+    xor $7c
+    jr z,halfFloatAddhlIN
+    
+    
+    ld a,h;get exp diff
+    xor d ; d's image on h
+    and $7c;
+	xor d ; d with h's exp
+    sub d ;difference
+    
+	;hE < dE	C flag is set
+	jr nc,halfFloatAddNoSwap
+	 ex de,hl
+     neg
+     ld b,a
+     ;now we have to check if de (now hl) is inf/nan
+      ld a,h
+      and $7c
+      xor $7c
+      jr z,halfFloatAddhlIN
+     ld a,b
+halfFloatAddNoSwap:
+	;a has positive exp diff
+	;check if in range
+    rrca
+    rrca
+    cp 11
+    ret nc ; add doesn't do anything, and hl has max exp
+	ld ixh,a ;save exp diff for later
+    ld c,h   ;save h for it's exp for later
+    ;hl and de to signed ints in hl and de
+    
+    ;counter: b
+    ld b,2
+    
+halfFloatAddConv:
+    ;hl
+    ld a,h
+    and $7c
+    ld a,h
+    jr nz,halfFloatAddHlNorm
+     ;for subnormals, don't supply a 1, also shift left
+     and $83
+     ld h,a ;clear exp, supplying 0
+     add hl,hl ;shift left, putting sign into carry
+     jr halfFloatAddHldoSign
+halfFloatAddHlNorm:
+	 and $83
+     or $04 ;supply 1
+     ld h,a
+	 jp p,halfFloatAddHlNonneg
+     add a,$80 ;put sign into carry
+     ld h,a
+halfFloatAddHldoSign: ;takes c if neg
+     jr nc,halfFloatAddHlNonneg
+	  ;negative, thus negate hl
+      xor a
+	  sub l
+	  ld l,a
+	  sbc a,a
+	  sub h
+	  ld h,a
+halfFloatAddHlNonneg:
+     add hl,hl ;one more shift left to give me a guard digit
+     ;now do it again but with de
+     ex de,hl
+     djnz halfFloatAddConv
+	
+    ;by now it will have ex'd twice, meaning hl still has the bigger exp
+    
+    ;now we do the shifting. we shift de right c times
+    ld a,ixh ;restore exp
+    cp 8 ; if exp is 8 or more, we can do a byte shift at once
+    ;A < num	C flag is set
+    jr c,halfFloatAddNoByteShift
+	 ld e,d
+	 xor a
+     ;check for sign extend tho
+     bit 7,d
+     jr nc,halfFloatAddByteShiftSignExtend
+      dec a ;make a $FF
+halfFloatAddByteShiftSignExtend:
+     ld d,a
+	 ld a,ixh
+     sub 8
+halfFloatAddNoByteShift:
+	
+    
+    ;shiftloop time
+    ld b,a
+    or a; set flags
+    jr z,halfFloatAddNoMoreShifts
+halfFloatAddShiftLoop:
+	 sra d
+     rr e
+	djnz halfFloatAddShiftLoop
+halfFloatAddNoMoreShifts:
+	
+    ;now we add
+    add hl,de
+    ;construct our answer in de
+    ;clear out d, e will be loaded from l eventually
+    ld d,0
+    bit 7,h; check sign
+    jr z,halfFloatAddPositiveRes
+     ;make it positive, mark sign in h
+      set 5,d ;it's 5 because the 2 shifts later after the normalization
+      xor a
+	  sub l
+	  ld l,a
+	  sbc a,a
+	  sub h
+	  ld h,a
+halfFloatAddPositiveRes:
+	
+    	;I only need one guard digit because anything that results in a much closer to zero exponent will have the same or only 1 less exponent than hl
+    
+    ;now we renormalize
+	
+    ;put our exponent in b
+    ld a,c
+    and $7c
+    rra
+    rra
+    ld b,a
+    
+    ;hl is now no larger than 0001 bbbb bbbb bbbb so we need three preemptive shifts to get into place
+    add hl,hl
+	add hl,hl
+    add hl,hl
+    inc b ;this is because it can increase in exponent
+halfFloatAddNormalize:
+	 add hl,hl
+     jr c,halfFloatAddNormalizeEnd
+    djnz halfFloatAddNormalize
+    ; it's subnormal, do corrections and stuff
+    ;when subnormal, um... let me work an example
+    ;   say adding 	0 00001 00 0000 0000
+    ;				1 00001 00 0010 0000
+    ;	result is:	0 00000 11 1110 0000
+    ; 
+    ;
+    
+   
+    
+halfFloatAddNormalizeEnd:
+    
+    ;now b is exp and hl is flush up against the ceiling
+    
+    ;we should do some checks to return the correct thing if it got to infinity        TODO
+    
+    
+    ex de,hl
+    ;put de into hl in the right way
+    
+    ld l,d
+    ;put exp into d
+    ld a,h
+    or b
+    ld h,a
+    ;do 2 shifts now
+    ld a,e
+    rla
+    adc hl,hl
+    rla
+    adc hl,hl
+    
+    ret
+    
+
+
+
+
+
+
+
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+

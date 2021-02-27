@@ -1,0 +1,102 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	saveSScreen 86ECh
+.org        progStart-2
+.db         $BB,$6D
+	
+    
+    call lir1
+.db 0,0,$80,$3f ;1
+	call lir2
+.db 0,0,$80,$3f ;1
+	ld hl,r1
+    ld de,r2
+    call FPadd_hl_de
+    ;r1 should be 2 now
+    ld hl,r1
+    ld de,r2
+    call FPmul_hl_de
+    ;r1 should still be 2
+    
+    
+    ;rounding and 0 test
+    call lir1 ;load 1/3 = 0.0101010101... = 1.01... *2^-2
+.db $aa,$aa,$aa,$3e
+    call lir2
+.db 0,0,0,0
+    ld hl,r2
+    ld de,r1
+    call FPadd_hl_de
+    ld hl,r2
+    ld de,r1
+    call FPadd_hl_de
+    ld hl,r2
+    ld de,r1
+    call FPadd_hl_de
+    ;r2 should be 1-e now
+    
+    call lir2 ;3 = 1.1e1
+.db 0,0,$40,$40
+    ld hl,r1
+    ld de,r2
+    call FPmul_hl_de
+    ;r1 should be 1-e now
+    
+    call lir1 ;load 1/5 = 0.00110011... = 1.10011... *2^-3
+.db $cc,$cc,$4c,$3e
+    call lir2
+.db 0,0,0,0
+    ld hl,r2
+    ld de,r1
+    call FPadd_hl_de
+    ld hl,r2
+    ld de,r1
+    call FPadd_hl_de
+    ld hl,r2
+    ld de,r1
+    call FPadd_hl_de
+    ld hl,r2
+    ld de,r1
+    call FPadd_hl_de
+    ld hl,r2
+    ld de,r1
+    call FPadd_hl_de
+    ;r1 should be 1-e now
+    call lir2 ;5 = 1.01e2
+.db 0,0,$a0,$40
+    
+    ld hl,r1
+    ld de,r2
+    call FPmul_hl_de
+    ;r1 should be 1 now
+    
+    
+    ret
+    
+    
+    
+    
+	
+lir1:
+	pop hl
+    ld de,r1
+    ld bc,4
+    ldir
+    push hl
+    ret
+lir2:
+	pop hl
+    ld de,r2
+    ld bc,4
+    ldir
+    push hl
+    ret
+	
+r1:
+.db 0,0,0,0
+r2:
+.db 0,0,0,0
+	
+	
+#include "FloatMulOptimized.z80"
+#include "FloatAddOptimized.z80"

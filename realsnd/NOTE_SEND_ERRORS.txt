@@ -1,0 +1,2 @@
+Most send errors can be corrected by updating to the newest version of TI-Connect, please see this site if you are in the US.
+http://education.ti.com/educationportal/sites/US/productDetail/us_ti_connect.html

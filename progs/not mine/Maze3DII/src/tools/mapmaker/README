@@ -1,0 +1,49 @@
+Mapmaker reference
+
+USAGE:
+
+mapmaker reads a source file from stdin and writes an include file to stdout.
+
+example:
+
+mapmaker <map.txt >map.inc
+
+SOURCE FORMAT:
+
+A map source file is a plain text file.
+
+Lines starting with ``.'' are special directives.
+A directive consists of a dot, a single character indicating the
+directive, and the rest of the line is treated as a parameter.
+
+..	Comment, rest of line is ignored
+.I	Include, parameter is the name of the file to include
+.X	Set X coordinate to the parameter
+.Y	Set Y coordinate to the parameter
+.W	Set map width to the parameter
+.H	Set map height to the parameter
+.D	Define the the first character of the parameter to a value
+
+Non-directive lines are treated as data, with characters converted
+to numbers as specified in the .D directives.  Characters that
+have not been defined have the value ``0''.
+
+Example:
+
+..This is a comment
+..Make a 4x4 map
+.W4
+.H4
+..x means 0, a means 7
+.Dx0
+.Da7
+aa a
+axxa
+axxa
+aaaa
+
+This map file generates the data:
+
+ .db $07,$07,$00,$07,$07,$00,$00,$07,$07,$00,$00,$07,$07,$07,$07,$07
+
+NOTE: Mach3D maps MUST be 16x16

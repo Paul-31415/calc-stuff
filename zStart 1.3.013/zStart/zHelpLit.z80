@@ -1,0 +1,266 @@
+.nolist
+	#include	"ti83plus.inc"
+.list
+
+.org	$9D93
+.db	$BB, $6D
+
+#define	DWAIT	in a, ($10) \ or a \ jp m, $-3
+
+
+#define	version	013
+
+;these can only be used when being run by OS
+
+selected	equ	appBackUpScreen	;1
+scrolled	equ	selected+1	;1
+scrollDown	equ	scrolled+1	;1
+
+
+
+	bcall(_runIndicOff)
+	ld	a, 3
+	out	($20), a
+
+	set	textWrite, (iy + sGRFlags)
+
+shortcutKeysMenu:
+	xor	a
+	ld	(scrolled), a
+
+displayShortcutMenu:
+	bcall(_grBufClr)
+	ld	a, (scrolled)
+	call	searchForString
+	ld	a, (scrolled)
+	ld	b, a
+	ld	a, (selected)
+	ld	c, a
+	xor	a
+	ld	(penRow), a
+displayShortcutsLoop:
+	push	bc
+	ld	a, 1
+	ld	(penCol), a
+	ld	a, (hl)
+	inc	hl
+	dec	a
+	jr	z, displayShortcutLoop
+	dec	hl
+	push	hl
+	ld	a, b
+	cp	c
+	ld	a, 0
+	ld	(scrollDown), a
+notInversing:
+	ld	hl, spaceHyphenSpaceSpace
+	bcall(_vPutS)
+	pop	hl
+displayShortcutLoop:
+	ld	a, (hl)
+	inc	hl
+	or	a
+	jr	z, endOfString
+	cp	1
+	jr	z, newLineNoUpdate
+	cp	$20
+	jr	nz, notSpacey
+	ld	ix, penCol
+	inc	(ix)
+notSpacey:
+	bcall(_vPutMap)
+	jr	displayShortcutLoop
+
+endOfString:
+	pop	bc
+	inc	b
+	ld	a, b
+	cp	nShortcuts
+	jr	z, doneDrawingShortcuts
+	push	bc
+newLineNoUpdate:
+	pop	bc
+	ld	a, (penRow)
+	add	a, 7
+	ld	(penRow), a
+	cp	57
+	jr	c, displayShortcutsLoop
+doneDrawingShortcuts:
+	call	graphBufferCopy
+
+
+shortcutsKeyLoop:
+	bcall(_getCSC)
+	halt
+	or	a
+	jr	z, shortcutsKeyLoop
+	
+	ld	hl, selected
+
+	cp	skDown
+	jr	nz, notDownz
+
+	ld	a, (scrolled)
+	inc	a
+	cp	nShortcuts
+	jr	z, shortcutsKeyLoop
+	ld	(scrolled), a
+	jp	displayShortcutMenu
+notDownz:
+
+	cp	skUp
+	jr	nz, notUpz
+
+	ld	a, (scrolled)
+	dec	a
+	jp	m, shortcutsKeyLoop
+	ld	(scrolled), a
+	jp	displayShortcutMenu
+notUpz:
+
+	cp	skClear
+	jr	nz, shortcutsKeyLoop
+
+
+quit:
+	bcall(_clrLCDFull)
+	bcall(_grBufClr)
+	bcall(_clrTxtShd)
+	bcall(_homeUp)
+	set	graphDraw, (iy + graphFlags)
+	ret
+
+
+
+
+
+
+
+
+
+
+
+;#####################################
+searchForString:
+	ld	hl, shortcutKeysList
+	or	a
+	jr	z, getAddressForString
+	ld	b, a
+	xor	a
+findStringLoop:
+	push	bc
+	cpir
+	pop	bc
+	djnz	findStringLoop
+
+getAddressForString:
+	ret	
+
+
+
+
+;########################################
+;graph buffer copy
+;input: none
+;output: none
+
+graphBufferCopy:
+	ld	a, $80
+	out	($10), a
+	ld	hl, plotSScreen
+	ld	c, $20
+dispColumn:
+	DWAIT
+	ld	a, c
+	out	($10), a
+	cp	$2C
+	ret	z
+	ld	b, 64
+	ld	de, 12
+dispByte:
+	DWAIT
+	ld	a, (hl)
+	out	($11), a
+	add	hl, de
+	djnz	dispByte
+	ld	de, -767
+	add	hl, de
+	inc	c
+	jr	dispColumn
+
+;#####################################
+vPutSDE:
+	ld	(penCol), de
+	bcall(_vPutS)
+	ret
+
+
+
+
+
+
+
+nShortcuts	equ	35
+
+
+shortcutKeysList:
+	.db	1, "Homescreen:", 1
+	.db	"ON + Y= - headphones", 0
+	.db	"ON + STATS - APD", 0
+	.db	"ON + MATH - MathPrint", 0
+	.db	"ON + Apps - Run MirageOS", 0
+	.db	"ON + Prgm - Run DCS", 0
+	.db	"ON + VARS - archive all", 0
+	.db	"ON + CLEAR - restore", 0
+	.db	"ON + SIN - swap angle", 0
+	.db	"ON + ^ - kill hooks", 0
+	.db	"ON + num - shortcuts", 0
+	.db	"ON + / - Axe compile for", 0
+	.db	"ON + + - Enable base conv", 0
+
+
+	.db	1, "PRGM EXEC menu:", 1
+	.db	"ON + num - set shortcut", 0
+	.db	"ON + * - archive prog", 0
+	.db	"ON + 0 - set run zStart", 0
+	.db	"ON + . - set RAM clear", 0
+	.db	"ON + ", $1A, " - set turn on", 0
+	.db	"ON + ENTER - run prog", 0
+
+	.db	1, "PRGM EDIT menu:", 1
+	.db	"num - edit archived", 0
+	.db	"ENTER - edit archived", 0
+	.db	"ON + num - set shortcut", 0
+	.db	"ON + ENTER - axe compile", 0
+
+	.db	1, "APPS menu:", 1
+	.db	"ON + . - set RAM clear", 0
+	.db	"ON + ", $1A, " - set turn on", 0
+
+	.db	1, "Any other menu:", 1
+	.db	"ON + num - set shortcut", 0
+
+	.db	1, "Program editor", 1
+	.db	"CLEAR - save for undo", 0
+	.db	"ON + ZOOM - zoom test", 0
+	.db	"ON + TRACE - reg test", 0
+	.db	"ON + DEL - quit no save", 0
+	.db	"ON + VARS - Lbl menu", 0
+	.db	"ON + ^ - Undo", 0
+	.db	"ON + * - archive this", 0
+	.db	"ON + STO - Axe compile", 0
+	.db	"ON + + - copy line", 0
+	.db	"ON + ENTER - paste", 0
+	
+	.dw	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+
+
+spaceHyphenSpaceSpace:
+	.db	" -  ", 0
+
+
+
+
+
+
+

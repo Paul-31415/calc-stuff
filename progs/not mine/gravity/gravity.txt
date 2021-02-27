@@ -1,0 +1,22 @@
+***********GRAVITY********** (V.1 / 16DEC02)
+for TI-83+ / by Taren Nauxen
+*Programmed in TI-83+ BASIC*
+****************************
+
+A game of strategy and trial-and-error where your mission is to get from point A to point B in space- by drifting! Use the gravity of nearby stars to get around obstacles. Features a total of 8 challenging levels, level select, and nonstop mode.
+
+MAIN MENU:
+Start- Begin game. Theta is used for angle, and V is velocity, for initial force. A velocity of 100 is equivalent to one pixel per computing cycle.
+
+View Level- Look at current level.
+
+Change Level- Practice each level from 1 to 7 to master each one, then try...
+
+Nonstop Course- Begin with level 1, work your way to level 7 by completing each of the levels in order. If you pass level 7, you can earn a special normally unselectable 8th level.
+
+************************************
+Questions? Comments? Suggestions? 
+Email me: furusato@insightbb.com
+************************************
+
+LEGAL: GRAVITY.8XP is (c) Taren Nauxen.

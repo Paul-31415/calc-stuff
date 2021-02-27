@@ -1,0 +1,169 @@
+
+Subject: SYS, MAKE, ->PROG, PROG->, UNPIXEL programs for the HP28S
+
+|							     |
+| Forwarded for Eric Toonen, who doesn't have USENET access. |
+|							     |
+
+The SYSEVAL command does exactly what its name suggests:
+It EVALuates a SYStem object.
+
+Instead of writing programs like
+	<< #A SYSEVAL #A SYSEVAL >>
+You should be able to write
+	<< System Object System Object >>
+To do the same job.
+
+Here are a small set of utilities and an example to generate those
+System Objects. These will work on VERSION 2BB ONLY!
+If you are not very interested in using SYSEVALS (and therefore SYS)
+a lot, DO NOT type them in, because they can be extremely dangerous!
+
+Please type them in exactly as they are written, because a typo
+can cause a Memory Lost !!
+
+First, save anything on stack you want to keep,
+and type
+----------------------------------------
+					|
+CLEAR HEX 64 STWS			| First, set correct modes
+					|
+<< #71BD SYSEVAL			| Make a temporary SYSEVAL-version
+   #3E9D7 SYSEVAL			|  of SYS.
+>>					|
+'SYS' STO				| chk[A4C8]
+					|
+<< #200E SYSEVAL			| Make a temporary SYSEVAL-version
+   #3EEB SYSEVAL			|  of MAKE.
+>>					|
+'MAKE' STO				| chk[1525]
+					| ** BEWARE THAT THE STACK IS EMPTY
+					|    AT THIS POINT !
+					|
+#71BD SYS				| Use SYS to generate two System 
+#3E9D7 SYS				|  Objects on the stack
+MAKE					| Use MAKE to generate them into
+'SYS' STO				|  a program, and we have the new SYS!
+					|
+					| ** STACK MUST BE EMPTY NOW!
+					|
+#200E SYS				| Again, use SYS to get the System
+#3EEB SYS				|  Objects
+MAKE					| And collect them into a program
+'MAKE' STO				| Called MAKE.
+					| Stack must be empty
+#C53B SYS				| Generate ->PROG program
+#3EEB SYS				|
+MAKE					|
+'->PROG' STO				|
+					| Stack must be empty
+#78A6 SYS				| Generate PROG-> program
+'PROG->' STO				| Because there is only one object,
+					| there is no need to MAKE
+----------------------------------------
+Sorry, posting the checksums of the system-object programs is nonsense,
+the checksum program doesn't see differences between System Objects. (Bob?)
+
+Now, you will have four DANGEROUS programs. These can be very handy,
+but can do enormous damage if you use them wrong.
+
+What they do:
+First, let me explain: Internally, lists and programs are stored in
+almost the same way (a list-structure). With these programs, you
+can do with programs what LIST-> and ->LIST do with lists,
+and thus can put any sequence of objects in a program.
+
+Why, you might ask, do I need this?
+Well, System Objects cannot be typed in. Actually, System Object
+appears on the screen, as soon as the display routines don't know
+how to display it in another way, therefore, in-line machine code,
+and actual system-objects are displayed as "System Object".
+
+To make quick-n-dirty programs (that is, use Syseval addresses
+that don't check arguments, instead of the user-functions),
+you just generate their objects by using SYS, and collect them
+into a program with MAKE or ->PROG. Because you cannot edit those
+programs, they can be put on stack with PROG->.
+
+PLEASE NOTE:
+Sys, ->Prog and Prog-> DO NOT CHECK STACK-DEPTH and ARGUMENT TYPES.
+
+Usage:
+
+SYS (Generate system-objects)
+	!!! Needs a binary integer in level 1. !!!
+	Returns a System-Object in level 1.
+
+	Example: 
+		#A SYS
+	 Returns a System Object, which can be EVAL'd. Try this!
+
+MAKE (Generate program from stack)
+	Takes total stack, and puts it into a program.
+	If the stack is empty, the program will be empty.
+	If there are no << and >> on stack, the program will
+	 not have them either.
+
+	Example1:
+		CLEAR MAKE 5 SWAP
+	 Generates an empty program, which is invisible for the user.
+	Example2:
+		CLEAR 2 5 { + } 1 GET MAKE
+	 Generates the program 2 5 + (without << and >>)
+
+->PROG (to program)
+	!! Takes a real <n> from level1, and stack depth should be <n>+1 !!
+	Returns a program with <n> objects.
+
+	Example:
+		2 5 { + } 1 GET 3 ->PROG
+	 Generates the same program as in Example2 of MAKE.
+
+PROG-> (program out)
+	!! Takes a program in level1 !!
+	Returns all objects separate to stack, and then the number of
+	 objects.
+
+	Example1:
+		<< 2 5 + >> PROG->
+	Example2:
+		<< 2 5 + >> PROG-> ->PROG
+
+
+Example using SYS and MAKE, generating an UNPIXEL function,
+which is exactly compatible with PIXEL.
+
+'UNPIXEL'
+Type in the following, and check the checksum!
+----------------------------------------------------------------
+
+<< CLEAR { C->R } 1 GET
+#2484B SYS #3D5F6 SYS #020E5 SYS #24927 SYS
+#3D7F8 SYS #11D1D SYS 31
+#020E5 SYS #11D82 SYS #020E5 SYS #3D815 SYS
+#11D1D SYS 136
+#020E5 SYS #11D82 SYS #3D6B8 SYS #3D682 SYS
+#11D1D SYS #11D48 SYS #3D72C SYS #3D636 SYS
+#11D1D SYS #11D48 SYS 31
+#020E5 SYS #11D1D SYS #0206E SYS #11B17 SYS
+#020E5 SYS #11B17 SYS #06CB9 SYS #3D636 SYS
+#0C1DD SYS #0206E SYS #072E9 SYS #06E55 SYS
+#020E5 SYS #3ECC2 SYS #06E55 SYS #06CB9 SYS
+#3D65C SYS #06CB9 SYS #18A85 SYS #3DC5F SYS
+#1ADF2 SYS #0211A SYS 
+MAKE 'UNPIXEL' STO >>
+'MUNPIXEL' STO
+
+----------------------------------------------------------------
+The checksum of MUNPIXEL is [8237]
+
+(I have tried it again from this text, and am sure there are
+no typo's)
+
+-----------------------------------------------------------------------------
+           Eric Toonen
+
+Snailmail: Djept-Zuid 6	      | Hogeschool-Eindhoven: s89406143@hsepm1.hse.nl
+           5502 RP Veldhoven  | (Not an uucp-address)
+	   The Netherlands    | (Might work on SURFNET (?))
+-----------------------------------------------------------------------------

@@ -1,0 +1,597 @@
+;#include    "ti83plus.inc"
+
+#define     progStart   $9D95
+.org        progStart-2
+.db         $BB,$6D
+
+#define test 0
+
+
+	;9d95
+        
+    jp after_urand_int_routine ;3
+    
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+
+
+    ;9d9d
+urand_int_routine:
+	jr urand_int_routine_offset8 ;2 ;ex af,af
+    ld a,1					;2
+    ld (urand_get_entropy_from_timers_int_which),a	;5
+    nop ;6
+    jr urand_int_routine_cont ;8
+urand_int_routine_offset8:
+	ex af,af'
+    
+    ld a,0					;28
+    ld (urand_get_entropy_from_timers_int_which),a	;31
+    
+    
+urand_int_routine_cont:
+    ld a,r					;7
+    ld (urand_get_entropy_from_timers_int_output),a	;12
+    
+    ld a,$df				;14
+    out (2),a				;16
+    xor a					;17
+    out ($30),a ;turn off timers ;19
+    out ($31),a				;21
+    
+    im 1					;23
+    ex af,af'				;24
+    ret						;25
+    ;34
+	;222 to go
+.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    
+
+	
+urand_int_routine_2:
+    
+    jr urand_int_routine_2_here ;2 ;ex af,af
+    ld a,3					;2
+    ld (urand_get_entropy_from_timers_int_which),a	;5
+    
+    jp urand_int_routine_cont ;8
+urand_int_routine_2_here:   
+	ex af,af'
+    
+    ld a,2					;28
+    ld (urand_get_entropy_from_timers_int_which),a	;31
+    
+    jp urand_int_routine_cont
+    
+    
+    
+    
+    
+after_urand_int_routine:
+;.echo after_urand_int_routine
+	;setup vec table
+    ld hl,$9d9d
+    ld ($9900),hl
+    ld hl,$9f9f
+    ld ($9902),hl
+    
+    ld hl,$9900
+    ld de,$9904
+    
+	ld bc,256
+	ldir
+    
+    
+    
+
+    LD     A, $99
+    LD     I, A
+
+
+
+;#if test = 0
+	;screen saver
+	
+    
+    
+    
+    
+	ld hl,100
+loop:
+	ld a,$05
+    out ($10),a    
+busyLoop1:
+	 in a,($10)
+     rla
+     jr c,busyLoop1
+    ld c,$20
+    ld d,12
+colLoop:
+busyLoop2:
+	 in a,($10)
+     rla
+     jr c,busyLoop2
+    ld a,c
+    out ($10),a
+    
+    ld b,64
+    
+core:
+busyLoop3:
+	 in a,($10)
+     rla
+     jr c,busyLoop3
+     
+which:
+    call urand_getByte
+    
+    out ($11),a
+    
+	djnz core
+    
+    inc c
+    dec d
+    jr nz,colLoop
+    
+	in a,(4)
+    bit 3,a
+    ret z
+    dec hl
+    ld a,h
+    or l
+    jr nz,loop
+    
+	ret
+
+
+
+
+end:
+;.echo end-after_urand_int_routine
+;#endif
+
+
+
+
+
+
+
+
+
+
+;nondeterministic random number generator
+;doesn't work on emulators
+
+
+    ;synchronize with r register (to the bottom 7 bits)
+syncR_and_ct:
+	push bc
+    ld c,4
+_syncR_and_ct_overloop:
+	ld a,$44      ;32768
+    out ($30),a
+    xor a        ; no loop, no interrupt
+    out ($31),a
+    ld a,1        ;1 tick
+    out ($32),a
+
+syncR_and_ct_loop:;time: 11+7+12+12 = 42 t-states
+	in b,(c) ;12
+    in a,(4) ;11
+    and $20  ;7     ;bit 5 tells if timer 1
+    jr z,syncR_and_ct_loop	;is done
+    and b ;a had $20 in it 
+    jr nz,_syncR_and_ct_overloop; 
+    
+    
+    pop bc
+    ret
+	
+    
+urand_getByte:
+	call urand_get_entropy_from_timers
+    ld a,(urand_get_entropy_from_timers_int_which)
+	ret
+    
+    
+    push bc
+    ld c,0
+    ld b,8
+urand_getByte_loop:
+    call urand_getBit
+    rra
+    rl c
+	djnz urand_getByte_loop
+    
+    
+    ld a,c
+    pop bc
+    ret
+    
+urand_getBit:
+	;check how long it takes to get any entropy from a known state
+;	push de
+;    push bc
+;	call syncR_and_ct
+;	call urand_get_entropy_from_timers
+;    ret
+	push bc
+    push hl
+    ld hl,-1
+    
+    call syncR_and_ct
+    call urand_get_entropy_from_timers
+    ld b,a
+    
+    
+urand_getBit_loop:
+	inc hl
+	call syncR_and_ct
+    call urand_get_entropy_from_timers
+    cp b
+    jr z,urand_getBit_loop
+    ld a,l
+    pop hl
+    pop bc
+    ret
+    
+    
+;    call urand_get_entropy_from_timers
+;    ld d,a ;4
+;    inc hl
+;    dec hl ;12 waste cycles to make the delay between calls the same
+;_urand_getBit_loop:
+	
+     ;waste cycles to tune to 458 t-states between
+;    ld b,4;32
+;_urand_getBit_loop_waste:
+;    djnz _urand_getBit_loop_waste ;13/8
+	;tune the 8 remaining
+;    nop
+;    nop
+    
+    
+    
+;    inc hl ;7
+;	call urand_get_entropy_from_timers
+;    cp d ;4
+;    jr z,_urand_getBit_loop ;12
+	
+    
+;    ld a,l
+;	pop hl
+;    pop bc
+;    pop de
+;	ret
+
+
+;estimated entropy: very very low
+
+
+urand_get_entropy_from_timers: ;gets some random in a, uses timer 1, very low entropy
+	push hl
+	;push bc
+	di
+
+    ld a,$20
+    out (3),a
+
+    IM     2               ; Switch to Mode 2
+     
+	
+
+	ld a,1
+    out ($20),a
+    ld a,$20
+    out (3),a
+    
+    
+	ld a,$44      ;32768
+    out ($30),a
+    ld a,2        ; no loop, yes interrupt
+    out ($31),a
+    ld a,1        ;
+    out ($32),a
+    ;ld c,4
+    ;ld b,64
+    ;ld hl,urand_get_entropy_from_timers_buff
+;_urand_get_entropy_from_timers_Loop:;time: 4+11+7+12 = 34 t-states
+;	inc b
+;    in a,(4)
+;    and $20  ;7     ;bit 5 tells if timer 1
+;    jr z,_urand_get_entropy_from_timers_Loop	;is done
+	ld a,r
+	ei
+    ld l,a
+    
+;need at least 128 bytes of 4 t-state opcodes here that does something usefull
+	
+    
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+	
+    
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+    
+    nop
+    nop
+    nop
+    nop
+	
+    im 1
+    LD     A, %00001011     ; Enable hardware
+    OUT    (3), A
+    
+    ld a,(urand_get_entropy_from_timers_int_output)
+    sub l
+    pop hl
+    ret
+
+urand_get_entropy_from_timers_int_output:
+.db 0
+urand_get_entropy_from_timers_int_which:
+.db 0
+
+#if 0
+	ini ;this is too slow, need to use r and interupts
+    ini
+    ini
+    ini
+   ini
+    ini
+    ini
+    ini  
+    
+    ini
+    ini
+    ini
+    ini
+   ini
+    ini
+    ini
+    ini 
+    
+    ini
+    ini
+    ini
+    ini
+   ini
+    ini
+    ini
+    ini  
+    
+    ini
+    ini
+    ini
+    ini
+   ini
+    ini
+    ini
+    ini 
+    
+    
+    ini
+    ini
+    ini
+    ini
+   ini
+    ini
+    ini
+    ini  
+    
+    ini
+    ini
+    ini
+    ini
+   ini
+    ini
+    ini
+    ini 
+    
+    ini
+    ini
+    ini
+    ini
+   ini
+    ini
+    ini
+    ini  
+    
+    ini
+    ini
+    ini
+    ini
+   ini
+    ini
+    ini
+    ini
+;    dec b
+;    ld a,b
+	ld b,64
+	ld hl,urand_get_entropy_from_timers_buff
+urand_get_entropy_from_timers_loop:
+	ld a,(hl)
+    inc hl
+    and $20
+    jr nz,urand_get_entropy_from_timers_loop_end
+    djnz urand_get_entropy_from_timers_loop
+urand_get_entropy_from_timers_loop_end:
+    ld a,64
+    sub b
+    pop bc
+    pop hl
+    ret
+
+urand_get_entropy_from_timers_buff:
+.dw	0,0,0,0, 0,0,0,0,  0,0,0,0, 0,0,0,0
+.dw 0,0,0,0, 0,0,0,0,  0,0,0,0, 0,0,0,0
+;183
+#endif

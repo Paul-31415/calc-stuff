@@ -1,0 +1,321 @@
+;#######################
+ramClear:
+	bcall(_GrBufClr)
+
+	ld	a, (flashSuccess)
+	or	a
+	jr	z, notFlashSuccess
+
+	ld	hl, success
+	ld	de, 50*256+35
+	call	myVPutSDE
+	
+notFlashSuccess:
+	xor	a
+	ld	(flashSuccess), a
+
+	ld	hl, OSText
+	ld	de, 41*256+60
+	call	myVPutSDE
+	bcall(_getBaseVer)
+	add	a, $30
+	call	myVPutC
+	ld	a, '.'
+	call	myVPutC
+	ld	de, $8000
+	ld	l, b
+	ld	h, 0
+	call	convHex
+	ld	hl, $8000
+	call	myVPutS
+
+	ld	hl, installedText
+	ld	de, 41*256+5
+	call	myVPutSDE
+	call	isNewRomInstalled
+	ld	hl, yes
+	jr	nz, isInstalledz
+	ld	hl, no
+isInstalledz:
+	call	myVPutS
+
+#if	_84
+	bit_(avbOldRamClear)
+	ld	d, 24
+	call	yesOrNo
+#endif
+
+	ld	hl, ramText
+	jp	menu
+
+
+
+
+
+;#######################
+installROM:
+	xor	a
+	jr	stallRomCommon
+
+;#######################
+uninstallROM:
+	ld	a, 1
+stallRomCommon:
+	ld	(erase), a
+	push	ix
+	call	doFlashStuff
+	pop	ix
+	jp	ramClear
+
+;#######################
+toggleOldClear:
+	toggle_(avbOldRamClear)
+	call	makeAvDirty
+	jr	ramClear
+
+
+;#####################################
+fromEntryPoint2:
+	in	a, (07)
+	out	(06), a
+	jp	getOutOf07
+getOutOf07:
+	ld	a, $81
+	out	(07), a
+fromEntryPoint283:
+
+	ld	a, $FB
+	call	keyScan
+	bit	6, b
+	jr	z, abortion
+
+	call	keyScanFD
+	bit	6, b
+	jr	z, abortion
+
+	res	2, (iy + $44)
+
+
+	bcall(_closeEditEqu)
+	call	foreignInstall
+	call	nc, handleRCProg		
+	push	af
+
+	bcall(_getBaseVer)
+	ld	a, b
+	cp	53
+	jr	nc, isAMathPrint
+
+	bcall(_setupEditCmd)
+	jr	notAMathPrint
+
+isAMathPrint:
+	push	bc
+	bcall($5125)
+	pop	bc
+	pop	af
+	push	af
+	jr	c, notAMathPrint
+
+	ld	ix, $8007
+	bit_(avbOldRamClear)
+	jr	z, notAMathPrint
+
+	pop	af
+
+	ld	a, b
+	ld	hl, _253OldCall
+	ld	de, $6DF9
+	cp	53
+	jr	z, foundTheOldCall
+	
+	ld	hl, _255OldCall
+	ld	de, $6FEA
+	
+foundTheOldCall:
+	push	hl
+	ex	de, hl
+	ld	a, $43
+	ret
+
+
+
+notAMathPrint:
+	pop	af
+	
+abortion:
+	bcall(_getBaseVer)
+	ld	a, b
+	cp	19
+	jp	z, _119RealCall
+	cp	43
+	jp	z, _243RealCall
+	cp	53
+	jp	z, _253RealCall
+	jp	_255RealCall
+
+
+;####################################
+fromOSKeyScan:
+
+disableGetCSCHookRet:
+	bcall(_disableGetCSCHook)
+	ret
+
+
+
+;######################################
+
+foreignInstall:
+	call	findArcAppVar
+	ret	c
+
+	ld	a, b
+	ld	de, $8007-2
+	ld	bc, avSize+2
+	bcall(_FlashToRam)
+
+	ld	a, ($8007-2)
+	cp	avSize
+	scf
+	ret	nz		
+	
+	ld	ix, $8007
+	
+	jp	installEverything
+	
+
+
+;###################################
+handleRCProg:
+	ld	hl, $8007+avRCProg
+	ld	a, (hl)
+	or	a
+	ret	z
+
+	call	unpackName
+
+	cp	5
+	jr	z, runInternalProg
+	cp	6
+	jr	z, runInternalProg
+	cp	appObj
+	jp	z, runAnApp
+	ret
+
+
+
+
+;#######################################
+runInternalprog:
+	bcall(_chkFindSym)
+	jr	nc, foundTheProgram
+	or	a
+	ret
+foundTheProgram:
+	ld	a, ($8007+f_(avbOldRamClear))
+	push	ix
+	push	af
+	call	runOP1
+	pop	bc
+	ld	a, b
+	pop	ix
+	ld	($8007+f_(avbOldRamClear)), a
+	ret	nc
+
+	bcall(_grBufClr)
+	call	newScreen
+	or	a
+	ret
+
+
+;41c4
+
+;4c8A
+
+
+;0732
+;07c7
+
+;089E
+
+
+;#####################################
+;is the old ROM installed
+;z = yes, nz = no
+
+isOldROMInstalled:
+	di
+	bcall(_getBaseVer)
+	ld	a, b
+	cp	43
+	jr	nz, not43
+
+	ld	a, $79		;this doesn't matter on 83+
+	out	(07), a
+	ld	a, ($8438)
+	cp	$CD
+	
+fixAndRet:
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+	out	(07), a
+	ret
+
+not43:
+	cp	53
+	jr	nz, not53
+	
+	ld	a, $77		;doesn't matter on 83+
+	out	(07), a
+	ld	a, ($AD62)
+	cp	$F2
+	jr	fixAndRet
+
+not53:
+	cp	55
+	ret	nz
+
+	ld	a, $77
+	out	(07), a
+	ld	a, ($AFA6)
+	cp	$CD
+	jr	fixAndRet
+
+
+;######################################
+isnewRomInstalled:
+#if	_84
+	bcall(_getBaseVer)
+	dec	a
+	ld	a, $75
+	jr	nz, was842
+	ld	a, $79
+was842:
+	ld	hl, $7FD5
+#else
+	ld	a, $19
+	ld	hl, $7FE8
+#endif
+
+
+	bcall(_loadAIndPaged)
+
+	sub	$CD
+	sub	1	;backwards Z flag
+	sbc	a, a
+	ret	
+
+
+
+
+OSText:
+	.db	"OS: ", 0
+installedText:
+	.db	"Installed: ", 0
+
+
+

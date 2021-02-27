@@ -1,0 +1,38 @@
+//back end for z80 opcodes
+
+endien:little
+word size:8 bit
+
+registers:{
+
+definitions:{
+a,b,c,d,e,f,h,l - 8 bit
+hl = h concat l
+af = a concat f
+bc = b concat c
+de = d concat e
+pc,sp - 16 bit
+ixh,ixl,iyh,iyl - 8 bit
+ix = ixh concat ixl
+iy = iyh concat iyl
+i,r - 8 bit
+
+normal8 = {a,b,c,d,e,h,l,ixh,ixl,iyh,iyl}
+normal16= {hl,bc,de,ix,iy}
+}
+
+restrictions:{
+within an opcode:{hl,h,l}, {ix,ixh,ixl}, {iy,iyh,iyl} are mutually exclusive
+}
+}
+
+opcodes:{
+
+{"nop"
+time:4
+size:1
+logic:()
+code:0
+}
+{"ld $r1, &r2"
+time:

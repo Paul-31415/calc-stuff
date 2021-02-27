@@ -1,0 +1,75 @@
+BUILDING:
+
+************************
+* Recommended Software *
+************************
+
+tasm
+	The TASM assembler must be somewhere in your path.
+	On UN*X systems, the following shell script will do:
+	
+	#!/bin/bash
+	wine /path/to/tasm.exe $@
+
+tasm80.tab
+	The table of Z80 instructions used by TASM.  I did not
+	write this file, so I cannot release it under the GPL.
+	If you have tasm, you probably also have ``tasm80.tab''.
+	You must have a copy of this file in the ``src'' directory.
+
+gcc
+	Other compilers may work, but this software has been
+	tested under gcc.
+
+UN*X Standard Library
+	Some of the programs used in building Maze3DII use the
+	getopt() library function, which is declared in unistd.h
+
+lex/yacc
+	lex & yacc (or flex & bison) are needed to
+	build the "condition" program.
+
+cd,cp,mv,dd,rm
+	These UN*X commands are used in the Makefile
+
+make
+	GNU make is required to automatically build the project
+
+gimp
+	You will need an image editor that can write ppm files
+	to edit the textures used by the Mach3D engine.  The gimp
+	is a good choice.
+
+**************************
+* Linux and other Unices *
+**************************
+
+I recommend building Maze3DII on a Unix-like system.
+First of all, most of the recommended software comes standard
+on a Unix-like system.  Secondly, I wrote all this software in
+Linux, and some parts may not be compatible with Windows.
+
+**********
+* Cygwin *
+**********
+
+If you must build Maze3DII on Windows, cygwin is probably your best
+option as far as providing the software and libraries you'll need.
+Cygwin provides a lot of UNIX functionality under Windows.
+
+***********
+* Windows *
+***********
+
+If for some reason you cannot use cygwin, it would be possible to
+port all the utilities to Windows.  I don't envy the person who has
+to do it, but it's probably a good thing to keep the software portable.
+
+******************************
+* Building with the Makefile *
+******************************
+
+If you have all the recommended software installed correctly,
+and are running in Linux or Cygwin, you can assemble the whole
+project by running the command ``make'' from the ``src'' directory.
+This is by far the easiest way to build the project.

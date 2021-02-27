@@ -1,0 +1,123 @@
+;arbitrary precision float
+;format: (little endian)
+; [expl][sign,exph] [mant len] [mantissa...]
+
+;ex: 0000 0000  0000 0000  0000 0001  0000 0001 = 1 
+;exp is signed
+
+;+0 = 1111 1111  0111 1111  0000 0000
+;+∞ = 1111 1111  0011 1111  0000 0000
+;+nan = ---- ----  0--- ----  0000 0000 (where -es don't make a zero or inf)
+
+#macro apf_isNormal(reg)
+	;checks if the apf at reg is normal, uses a, returns z if abnormal
+	inc reg
+    inc reg
+    ld a,(reg)
+    dec reg
+    dec reg
+    or a
+#endmacro
+
+apf_normalize_abnormal:
+	dec hl
+    dec hl
+    ret
+
+apf_normalize: ;normalizes the apf float at hl
+	ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld c,(hl)
+    ld a,c
+    or a
+    jr apf_normalize_abnormal
+    ld b,0
+    push hl
+     add hl,bc
+	 ;cut off high zeros
+     inc c
+     xor a
+apf_normalize_top_loop:
+	 dec hl
+     dec c
+     jr z,apf_normalize_equals_zero
+     or (hl)
+     jr z,apf_normalize_top_loop
+    pop hl
+    push hl
+    ;make exp (de) be proper
+    rl d
+    sra d ;sign extend
+    dec de
+    inc c
+apf_normalize_bottom_search: ;stop if a or if exp reaches $3fff
+	 inc hl
+     dec c ;
+     inc de
+     ld a,d
+     cp $3f
+     jr nz,apf_normalize_bottom_search_cont
+     ld a,e
+     cp $ff
+     jr z,apf_normalize_bottom_search_end
+apf_normalize_bottom_search_cont:
+     
+     xor a
+     or (hl)
+     jr z,apf_normalize_bottom_search
+apf_normalize_bottom_search_end:
+     ;de is new exp
+     ;hl is start of meaningfull mantissa
+     ;c is new len
+     ex (sp),hl
+     dec hl
+     ld a,(hl)
+     res 7,d ;keep sign
+     or a
+     ld (hl),a
+     dec hl
+     ld (hl),e
+     inc hl
+     inc hl
+     ld d,h
+     ld e,l
+     inc de
+     ex (sp),hl
+     
+     ld a,c
+     pop bc
+     ld (bc),a ;save new size
+     ld c,a
+     ld b,0
+     
+     ldir
+     ret 
+     
+apf_normalize_equals_zero:
+	pop hl
+    ld (hl),0
+    dec hl
+    ld a,(hl)
+    or $7f ;preserve sign
+    ld (hl),a
+    dec hl
+    ld (hl),$ff
+    ret
+
+
+apf_add: 
+	;inputs: hl - operand 1
+    ;		 de - destination
+    ;		 bc - op 2
+    ;		 a - precision (0 for automatic)
+    
+	
+    
+    
+    
+    
+    
+    
+    

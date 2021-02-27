@@ -1,0 +1,322 @@
+
+
+#define	fcall(xxxx)	ld ix, xxxx \ call $8000
+
+
+
+
+hexHook:
+	add	a, e
+
+	or	a
+	jr	z, doItz
+retZz:
+	cp	a
+	ret
+
+
+
+doItz:
+	ld	a, (cxCurApp)
+	cp	$40
+	jr	nz, retZz
+	bit	1, (iy + 8)		;basic token parsing
+	jr	nz, retZz
+	ld	hl, (basic_start)
+	ld	de, (basic_end)
+	inc	de
+initCheck:
+	ld	a, (hl)
+	cp	$B1	;b
+	jr	z, goodOne
+	cp	$B7	;h
+	jr	z, goodOne
+	inc	hl
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, initCheck
+	jr	retZz
+
+goodOne:
+
+	ld	hl, fCallRoutine
+	ld	de, $8000
+	ld	bc, fcallEnd-fCallRoutine
+	ldir
+
+
+
+	ld	hl, (basic_start)
+	ld	de, saveSScreen
+parseLoop:
+	push	hl
+	ld	hl, saveSScreen+750
+	sbc	hl, de
+	jp	z, errorMemory
+	pop	hl
+
+
+	push	de
+	ld	de, (basic_end)
+	inc	de
+	or	a
+	sbc	hl, de
+	add	hl, de
+	pop	de
+	jr	nz, notDone
+
+	ld	hl, saveSScreen
+	ld	(basic_start), hl
+	ld	(basic_pc), hl
+	dec	de
+	ld	(basic_end), de
+	jr	retZz
+
+
+notNumber:
+	cp	$BB
+	jr	nz, notBB
+
+	ldi
+notBB:
+	ldi
+	jr	parseLoop
+
+
+notDone:
+	ld	a, (hl)
+	cp	$30
+	jr	c, notNumber
+	cp	$3A
+	jr	c, number
+	cp	$41
+	jr	c, notNumber
+	cp	$47
+	jr	nc, notNumber
+
+number:
+	push	de
+	push	hl
+	ld	de, (basic_end)
+	inc	de
+	ld	c, 0
+findEndOfNumber:
+	inc	c
+	inc	hl
+	ld	a, (hl)
+	cp	$30
+	jr	c, endFoundz
+	cp	$3A
+	jr	c, forSureNum
+
+	cp	$41
+	jr	c, endFoundz
+	cp	$47
+	jr	nc, endFoundz
+forSureNum:
+
+
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, findEndOfNumber
+	jr	dontChange
+
+
+endFoundz:
+	cp	$BB
+	inc	hl
+	jr	nz, dontChange
+	ld	a, (hl)
+	cp	$B1	;b
+	jr	z, binaryConvert
+	cp	$B7	;h
+	jr	z, hexConvert
+
+dontChange:
+	pop	hl
+	pop	de
+	ld	b, 0
+	ldir
+	jr	parseLoop
+
+binaryConvert:
+	pop	hl
+	ld	b, c
+	fcall(_op1Set0)
+makeBinary:
+	fcall(_times2)
+	ld	a, (hl)
+	cp	$30
+	jr	z, itsZero
+	cp	$31
+	jr	nz, errorDomain
+	fcall(_plus1)
+itsZero:
+	inc	hl
+	djnz	makeBinary
+	
+	ex	(sp), hl
+	ex	de, hl
+
+	call	op1ToString
+	
+	pop	hl
+	call	c, errorOverFlow
+	
+	inc	hl
+	inc	hl
+	jp	parseLoop
+
+hexConvert:
+	fcall(_op1Set0)
+	ld	b, c
+	pop	hl
+makeHex:
+	ld	a, 16
+	fcall(_setxxOp2)
+	fcall(_fpMult)
+	ld	a, (hl)
+	sub	$30
+	cp	$41-$30
+	jr	c, notLetter
+	sub	$41-$30-10
+notLetter:
+
+	fcall(_setxxOp2)
+	fcall(_fpAdd)
+	inc	hl
+	djnz	makeHex
+
+	ex	(sp), hl
+	ex	de, hl
+	
+	call	op1ToString
+
+	pop	hl
+	call	c, errorOverflow
+
+	inc	hl
+	inc	hl
+	jp	parseLoop
+
+
+errorOverFlow:
+	ld	(basic_pc), hl
+	ld	a, $80 | E_OverFlow
+	jr	bJumpJError
+
+errorDomain:
+	ld	(basic_pc), hl
+	ld	a, $80 | E_Domain
+	jr	bJumpJError
+
+
+errorMemory:
+	ld	hl, (basic_start)
+	ld	(basic_pc), hl
+	ld	a, $80 | E_Memory
+bJumpJError:
+	bjump(_jError)
+
+
+;############################
+;op1 to string
+;input: de = where to put
+;output: null terminated
+;	c = number too big
+
+op1ToString:
+	ld	a, (op1+1)
+	cp	$80+14
+	jr	c, notOverflow
+	scf
+	ret
+notOverFlow:
+	sub	$80-1
+	ld	b, a
+	ld	hl, op1+2
+
+op1ToStringLp:
+	xor	a
+	rld
+	add	a, $30
+	ld	(de), a
+	inc	de
+	dec	b
+	jr	z, op1Done
+
+	xor	a
+	rld
+	add	a, $30
+	ld	(de), a
+	inc	de
+	inc	hl
+	djnz	op1ToStringLp
+op1Done:
+	xor	a
+	ld	(de), a
+	ret
+
+
+
+
+
+
+;############################
+;calls stuff without affecting registers
+;good for floating point math
+
+fCallRoutine:
+#if	1
+	di
+	push	af
+	ex	af, af'
+	in	a, (06)
+	push	af
+	push	bc
+	push	de
+	push	hl
+	exx
+	ld	hl, fcallReturn-fcallRoutine+$8000
+	push	hl
+		
+	call	translate7B
+	out	(06), a
+
+	ld	l, (ix)
+	ld	h, (ix+1)
+	ld	a, (ix+2)
+	push	hl
+	
+	out	(06), a
+	ex	af, af'
+	exx
+	ret
+
+fcallReturn:	
+	pop	hl
+	pop	de
+	pop	bc
+	pop	af
+	out	(06), a
+	pop	af
+	ret
+
+#endif
+fcallEnd:
+
+
+
+
+
+
+
+
+
+
+
+
+.end
+.end

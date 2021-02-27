@@ -1,0 +1,1114 @@
+#include "FloatOptimized.z80"
+
+
+FPexp2_hl: ;computes 2^hl
+	;check if nan/inf
+    push hl
+    ld a,(hl)
+    inc hl
+    or (hl)
+    inc hl
+    ld e,(hl)
+    inc hl
+	ld d,(hl)
+    ex de,hl
+    add hl,hl
+    ccf
+    rr l ;put inverted sign in top of l, this way is good for later test
+    or l
+    ld l,a
+    ld a,h
+    cp $ff
+    
+    ;zero our ans while hl is free
+    ld hl,0
+    ld (FPexp2_hl_ans),hl
+    ld (FPexp2_hl_ans+2),hl
+
+    pop hl
+    jr nz,FPexp2_hl_finiteIn
+     ld a,l
+     or a
+     pop hl
+     ret nz ;if sign was positive, or it was nan, this rets
+     ;it was negative inf, ret 0
+     ld hl,FPexp2_hl_zero
+     ret
+FPexp2_hl_zero:
+.db 0,0
+FPexp2_hl_inf:
+.db 0,0,$80,$7f
+FPexp2_hl_one:
+.db 0,0,$80,$3f 
+FPexp2_hl_finiteIn:
+
+
+    call FPsplit_hl ;ok de is fpart
+    ;push de ;save fpart
+    jr nc,FPexp2_hl_notWayMuch
+FPexp2_hl_WayMuch:
+	 ;ret inf or 0 depending on sign of input
+     ;ret inf if sign is positive ;stack is [de]...
+     ;hl is our float input
+     
+     inc hl
+     inc hl
+     inc hl
+     bit 7,(hl)
+     jr nz,FPexp2_hl_wayMuchNegative
+FPexp2_hl_wayMuchPositive:
+	  pop af ;discard de
+      ld hl,FPexp2_hl_inf
+      ret
+FPexp2_hl_wayMuchNegative:
+    pop af ;discard de
+	ld hl,FPexp2_hl_zero
+    ret
+FPexp2_hl_notWayMuch:
+    ;but is it in domain?
+    ;if (bc) is more than 1 byte it is
+	inc bc
+    ld a,(bc)
+    ld h,a 		;no need to keep hl, I have a better ipart in bc (also, de has sign)
+    inc bc
+    ld a,(bc)
+    or h
+    jr nz,FPexp2_hl_WayMuch
+    dec bc
+    dec bc
+    ld a,(bc)
+  	;ok, now we are near domain
+    ex de,hl
+    inc hl
+    inc hl
+    inc hl
+    bit 7,(hl)
+    dec hl
+    dec hl
+    dec hl ;hl is fpart
+    ld d,0 ;da pseudo register
+    jr z,FPexp2_hl_inPos
+     
+     ;ok, it's negative, so a (which is (bc)) should be below 150 (means exp above -150)
+     cp 150
+     jr nc,FPexp2_hl_wayMuchNegative
+     
+     cpl ;not neg because we will add 1 to the fpart, cpl is neg without the inc
+     	; so cpl = neg dec which offsets the one plus the fpart
+    
+
+     ;hl is fpart, so it's safe to add to
+     ld de,FPexp2_hl_one
+     push bc
+     push hl
+     call FPadd_hl_de
+     pop hl
+     pop bc
+     
+     
+     
+ 	 ld d,$FF ;extended to da
+     
+     jr FPexp2_hl_contToIpart
+FPexp2_hl_inPos:
+	
+	;its positive, so a needs to be less than 128
+    cp 128
+    jr nc,FPexp2_hl_wayMuchPositive
+	
+FPexp2_hl_contToIpart:
+	;now we load a as a float into our answer
+    bit 7,d ;check sign of da
+    jr z,FPexp2_hl_expPos
+     ;negative, ok if a < -126, ans is subnormal, so we need to check for that
+     ;a<-126  is ua < 130 
+     cp 130 ;c if a is subnormal
+     jr nc,FPexp2_hl_expNegNorm
+      ;a is subnormal, a = -127, shift once, -128 twice
+      neg ;
+      sub 126 ;a has number of shifts now
+      push hl ;save this
+      ld hl,FPexp2_hl_ans+2
+      ld d,0
+      ld e,a
+      srl e
+      srl e	;div by 8
+      srl e
+      ;a is 0, bit 7 : 111
+      ;a is 1, bit 6 : 110
+      cpl ; fix a so it works
+      
+      and 7 ;get remainder and zcf
+      sbc hl,de ;ptr byte offset
+      ;make a set n,a  opcode bits is 11nnn111
+      rlca
+      rlca
+      rlca ;shift it up the right amount
+      or %11000111
+      ld (FPexp2_hl_expNegSubnormSetNa+1),a
+     ld a,0
+FPexp2_hl_expNegSubnormSetNa: ;CB [C7,CF,D7,DF...]
+	set 0,a
+    ld (hl),a
+    ;get hl back
+    pop hl
+    jr FPexp2_hl_expDone
+FPexp2_hl_expNegNorm:
+	;if it's normal, a >= -126, so e >= 1
+    ;so we can just use the positive routine
+FPexp2_hl_expPos:
+    add a,127 ;adjust, will never carry if a was positive
+    ;ok, a is our exp
+    ld d,a
+    srl a
+    ld (FPexp2_hl_ans+3),a
+    ld a,0
+    rr d
+    rra ;get in top
+    ld (FPexp2_hl_ans+2),a
+    
+FPexp2_hl_expDone: 
+    
+    
+    ;now we convert the fpart
+    
+    ;fpart is in hl
+    ;pop hl ;pop de into hl
+    call FPGetExpA_MantCDE_hl
+    ;ok, if fpart is less than a unit in the last place
+	;ok, now if a < 127-24 we have no need to
+    ;top of cde is in the 1/2's place - means √2 - start of table
+    ;so we shift cde right 0 if a is 126, 1 if 125, 126-a
+    ;but, instead of shifting, we can just start the table with an offset
+    
+    ;ok, check for 0
+    or a
+    ld hl,FPexp2_hl_ans
+    ret z
+    
+    sub 126
+    neg
+    push de
+    ld d,0
+    rlca		;a*4 (a is <23 so this is ok
+    rlca
+    ld e,a
+    
+    ld hl,FPexp2_hl_RootsOf2
+    add hl,de
+    pop de
+    ex de,hl
+    ;ok, chl is the thing, de is the rootTable
+    
+    ;if a was 0, do 22
+    ;a 1, 21
+    sub 22
+    neg
+    ld b,a
+FPexp2_hl_RootLoop:
+	 add hl,hl
+     rl c
+     jr nc,FPexp2_hl_RootLoop_Nomul
+     push bc
+     push hl
+     push de
+     ld hl,FPexp2_hl_ans ;de is already table entry
+     call FPmul_hl_de
+     
+     pop de
+     pop hl
+     pop bc     
+FPexp2_hl_RootLoop_Nomul:
+     inc de
+     inc de	;get next table entry
+     inc de
+     inc de
+    djnz FPexp2_hl_RootLoop
+    
+    ld hl,FPexp2_hl_ans
+    ret
+    
+    
+    
+FPexp2_hl_ans:
+.db 0,0,0,0
+
+;table of successive square roots of 2
+;['0xb504f3', '0x9837f0', '0x8b95c1', '0x85aac3', '0x82cd86', '0x8164d1', '0x80b1ed', '0x8058d7', '0x802c64', '0x801630', '0x800b17', '0x80058b', '0x8002c5', '0x800162', '0x8000b1', '0x800058', '0x80002c', '0x800016', '0x80000b', '0x800005', '0x800002', '0x800001']
+FPexp2_hl_RootsOf2:
+.db $f3,$04,$b5,$3f
+.db $f0,$37,$98,$3f
+.db $c1,$95,$8b,$3f
+.db $c3,$aa,$85,$3f
+.db $86,$cd,$82,$3f
+.db $d1,$64,$81,$3f
+.db $ed,$b1,$80,$3f
+.db $d7,$58,$80,$3f
+.db $64,$2c,$80,$3f
+.db $30,$16,$80,$3f
+.db $17,$0b,$80,$3f
+.db $8b,$05,$80,$3f
+.db $c5,$02,$80,$3f
+.db $62,$01,$80,$3f
+.db $b1,$00,$80,$3f
+.db $58,$00,$80,$3f
+.db $2c,$00,$80,$3f
+.db $16,$00,$80,$3f
+.db $0b,$00,$80,$3f
+.db $05,$00,$80,$3f
+.db $02,$00,$80,$3f
+.db $01,$00,$80,$3f
+
+
+
+
+;bug, it splits at the 2^-1 mark, not 2^0
+
+FPsplit_hl: ;splits hl into ipart (hl) and fpart (de),|iPart| in (bc) as int24 with |fpart| as int24 right after iff in range, both (de) and (hl) have same sign as input, returns c if (bc) doesn't contain int, rets z or c if not frac
+	;ok, set fpart and int to 0
+    ex de,hl
+    ld hl,0
+    ld (FPsplit_hl_fPart),hl
+    ld (FPsplit_hl_fPart+2),hl
+    ld (FPsplit_hl_int),hl
+    ld (FPsplit_hl_int+1),hl
+    ex de,hl
+    
+    call FPGetExpA_MantCDE_hl
+
+	
+    jp p,FPsplit_hl_pos
+     push hl
+     ld hl,FPsplit_hl_fPart+3
+     ld (hl),$80
+     pop hl
+FPsplit_hl_pos:
+
+    cp 127 ;exp<0, fpart is num and ipart is 0
+    ex de,hl
+    jr nc,FPsplit_hl_NotUnder
+	 xor a ;if it's under, (bc) still represents int so we zcf, but we szf because frac isn't correct
+     ld bc,FPsplit_hl_int
+     ret
+FPsplit_hl_NotUnder:
+    ex de,hl
+    ;  seee eeee  eMMM MMMM  MMMM MMMM  MMMM MMMM
+    ;			  |                            | exp of 149
+    ;			   exp of 127
+    cp 150 ;exp >= 150 or inf/nan, other way
+    ccf ;invert carry for test
+    ret c	;bc isn't int so we ret c
+    ;ok, now we can actually do the thing
+    ;cde has mant,  cde.hla
+    
+    ld hl,0
+    ;number of shifts : 149->1 148->2  150-a
+    
+    sub 150
+    neg ; because it was off by doing one less shift than needed
+    inc a
+    
+    
+    push af
+    ld b,a
+	rra
+    rra
+    rra
+    and 3 ;this'll never be more than 2, so we can use a as our loopCounter
+	jr z,FPsplit_hl_nobyteShift
+FPsplit_hl_byteShiftLoop:
+	;cde.hla
+    ld l,h
+    ld h,e
+    ld e,d
+    ld d,c
+    ld c,0
+    dec a
+    jr nz,FPsplit_hl_byteShiftLoop
+FPsplit_hl_nobyteShift:
+	ld a,b
+    and 7
+
+    ld b,a
+    ld a,0 ;ok now we can do normal shift
+    jr z,FPsplit_hl_noshift
+FPsplit_hl_shiftLoop:
+	 srl c
+     rr d
+     rr e
+     rr h
+     rr l
+     rra
+    djnz FPsplit_hl_shiftLoop
+FPsplit_hl_noshift: 
+    ;all shifting done, cde.hla 
+    
+    
+    ;load to int.frac area
+    push hl
+    ld hl,FPsplit_hl_int
+    ld (hl),e
+    inc hl
+    ld (hl),d
+    inc hl
+    ld (hl),c
+    ex de,hl	;ex (sp),de
+    ex (sp),hl
+    ex de,hl
+    inc hl
+    ld (hl),a
+    inc hl
+    ld (hl),e
+    inc hl
+    ld (hl),d
+    ;now stack is de, de is hl
+    ex de,hl
+    pop de
+    
+    
+    ld b,a
+    or l
+    or h
+    ld a,b
+    jr z,FPsplit_hl_fPartDone
+     ;ok, normalize hla
+     ld b,126
+FPsplit_hl_fPart_normLoop: ;ok, if it gets it on first one, exp is 126
+	 sla a
+     adc hl,hl
+     jr c,FPsplit_hl_fPart_normLoop_end
+    djnz FPsplit_hl_fPart_normLoop
+FPsplit_hl_fPart_normLoop_end:
+     ;b is exp
+     srl b
+     rr h
+     rr l
+     rra
+     ex de,hl
+     push hl
+     ld hl,FPsplit_hl_fPart
+     ld (hl),a ;now a is free
+     inc hl
+     ld (hl),e
+     inc hl
+     ld (hl),d
+     inc hl
+     ld a,b
+     or (hl)
+     ld (hl),a
+	 pop hl
+	 ex de,hl
+FPsplit_hl_fPartDone:
+	;ok, the ipart in cde, ipart will have same value of exp as input
+    
+    
+    pop af ;get number of shifts back
+    ld b,a ;save
+    sub 8
+    jr c,FPsplit_hl_IpartByteDone
+     ld c,d
+     ld d,e
+     ld e,0
+    sub 8
+    jr c,FPsplit_hl_IpartByteDone
+     ld c,d
+     ld d,e
+     ld e,0
+    sub 8
+FPsplit_hl_IpartByteDone:
+	add a,8
+    jr z,FPsplit_hl_IpartbitShiftDone
+FPsplit_hl_IpartbitShiftLoop:
+	sla e
+    rl d
+    rl c
+    dec a
+    jr nz,FPsplit_hl_IpartbitShiftLoop
+FPsplit_hl_IpartbitShiftDone:
+	;ok, now we recompute exp from shifts
+    ld a,b	;s = 150-e, e = 150-s
+    sub 150
+    neg
+    ;ok now we prep exp and load
+    rl c
+    rra
+    rr c
+    
+    and $7f
+    
+    ld b,a
+    ld hl,FPsplit_hl_iPart+3
+    ld a,(FPsplit_hl_fPart+3)
+    and $80
+    or b
+    ld (hl),a
+    dec hl
+    ld (hl),c
+    dec hl
+    ld (hl),d
+    dec hl
+    ld (hl),e
+    ld de,FPsplit_hl_fPart
+    ld bc,FPsplit_hl_int
+    ;zcf from xor b
+    or 1 ;zcf and zzf, ret (nc,nz)
+    ret
+FPsplit_hl_int:
+.db 0,0,0
+FPsplit_hl_frac:
+.db 0,0,0
+FPsplit_hl_iPart:
+.db 0,0,0,0
+FPsplit_hl_fPart:
+.db 0,0,0,0
+
+
+
+
+
+
+
+FPlog2_hl:
+	call FPlog2_hl_fix ; the output of this is the exp and the bits from the repeated squaring
+    					;So, if the exp was negative (1.53*2^-3), the rest of the bits are effectively added so it works out fine
+	ret c
+    ;now we convert to float
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld c,(hl)
+    inc hl
+    ld a,(hl)
+    ;a cde is the fix value
+    ld (hl),0
+    bit 7,a
+    jr z,FPlog2_hl_resPos
+     ld (hl),$80
+     neg
+FPlog2_hl_resPos:
+
+	;check for 0
+    ld b,a
+    or e
+    or d
+    or c
+    ld hl,FPlog2_hl_ans
+    ret z ;if it's 0, it's also float 0
+    
+	ld a,b
+	ld b,127+8 ;ok, now we normalize acde, if it takes 8 shifts, a had 1 in it, so exp is 127
+FPlog2_hl_NormLoop:
+	sla e
+    rl d
+    rl c
+    rla
+    jr c,FPlog2_hl_NormLoopEnd
+    djnz FPlog2_hl_NormLoop
+FPlog2_hl_NormLoopEnd:
+	;ok, it's normalized and b is the exponent 
+	;implicit bit is carried
+    srl b
+    rra
+    rr c
+    rr d
+    rr e
+    ld l,a  ;ok, now it's b lcd e
+    ld h,$40 ;make test for round
+    
+    rrc d ;bottom bit in carry 
+    rlc d
+    
+    rl h
+    
+    ld a,e
+    cp h ;c is c<half so round down
+    jr c,FPlog2_hl_RoundDown
+     inc d
+     jr nz,FPlog2_hl_RoundDown
+     inc c
+     jr nz,FPlog2_hl_RoundDown
+     inc l
+     jr nz,FPlog2_hl_RoundDown
+     inc b
+FPlog2_hl_RoundDown:
+	;ok now we load it into the place
+    ld hl,FPlog2_hl_ans+3
+    ld a,(hl)
+    or b
+    ld (hl),a
+    dec hl
+    ld (hl),l
+    dec hl
+    ld (hl),c
+    dec hl
+    ld (hl),d
+    ret
+    
+
+LOGNEGATIVENUMBERNAN:
+.db 8,0,$80,$7f
+FPlog2_hl_fix: ;standard repeated square method, returns c if it returned a float, the fix it returns is ok if it's negative
+	
+    ld de,FPlog2_hl_r
+    ld bc,4
+    ldir
+    
+    ld hl,(FPlog2_hl_r+2)
+    add hl,hl
+    ld a,h
+    ld hl,LOGNEGATIVENUMBERNAN
+    ;
+    ret c
+    ld hl,FPlog2_hl_r
+    cp $ff
+    scf
+    ret z
+    or a
+    jr nz,FPlog2_hl_Normal
+     ;subnormal, so we normalize
+     
+     ;is it 0?
+     call FPGetExpA_MantCDE_hl
+     or c
+     or d
+     or e
+     ld a,0
+     ld hl,_FPlog2_hl_minusInf
+     scf ;returning float
+     ret z ;log(0) = -inf
+     ;ok, normalize
+     ld b,0
+_FPlog2_hl_NormalizeLoop:
+     sla e
+     rl d
+     rl c
+     jr c,_FPlog2_hl_NormalizeLoop_end
+     djnz _FPlog2_hl_NormalizeLoop
+     
+_FPlog2_hl_NormalizeLoop_end:
+     ;ok, now we load it back and cont
+     ld a,c
+     or $80
+     ld (hl),e
+     inc hl
+     ld (hl),d
+     inc hl
+     ld (hl),a
+     inc hl
+     ld (hl),$3f
+     ;ok now b is -(the shifts required), b(0) means 2^-127
+     ld a,-127
+     add a,b
+     
+     
+     jr _FPlog2_hl_cont
+_FPlog2_hl_minusInf:
+.db 0,0,$80,$ff
+FPlog2_hl_Normal:  
+    
+    sub 127
+_FPlog2_hl_cont:
+    ld (FPlog2_hl_ans+3),a
+	
+    ld a,$3f
+    ld (FPlog2_hl_r+3),a
+    ld a,(FPlog2_hl_r+2)
+    or $80
+    ld (FPlog2_hl_r+2),a
+    
+    ;dce will hold ans
+    
+    ld b,4
+    ld de,0
+    ld c,d
+_FPlog2_hl_BitsLoop:    
+    
+    push de
+    push bc 
+	ld b,6
+_FPlog2_hl_squareLoop:
+	push bc
+    ld hl,FPlog2_hl_r
+    ld d,h
+    ld e,l
+    call FPmul_hl_de
+    pop bc
+    djnz _FPlog2_hl_squareLoop
+    pop bc
+    pop de
+    
+    ld hl,(FPlog2_hl_r+2)
+    add hl,hl
+    ld a,h
+    sub 127
+   	
+    rlca
+    rlca
+   	
+    ld l,d
+    ld d,c
+    ld c,e
+
+    srl l
+    rr d
+    rr c
+    rra
+    srl l
+    rr d
+    rr c
+    rra
+    ld e,a
+    
+    ld a,$3f
+    ld (FPlog2_hl_r+3),a
+    ld a,(FPlog2_hl_r+2)
+    or $80
+    ld (FPlog2_hl_r+2),a
+    
+    djnz _FPlog2_hl_BitsLoop
+    
+	ld hl,FPlog2_hl_ans+2
+    ld (hl),d
+    dec hl
+	ld (hl),c
+    dec hl
+    ld (hl),e
+    or a ;zcf
+    ret
+
+FPlog2_hl_ans:
+.db 0,0,0,0
+
+FPlog2_hl_r:
+.db 0,0,0,0
+
+
+
+
+
+FPneg_hl:
+	inc hl
+    inc hl
+    inc hl
+    ld a,(hl)
+    xor $80
+    ld (hl),a
+    dec hl
+    dec hl
+    dec hl
+    ret
+
+FPsub_hl_de: ;hl -= de
+	;hl = hl + -de
+    push de
+	ex de,hl
+    call FPneg_hl
+    ex de,hl
+	call FPadd_hl_de
+    pop hl
+    call FPneg_hl ;restore de
+    ret 
+    
+
+FPdiv_hl_de: ;hl /= de
+	;hl = hl * 1/de
+	push hl
+    ex de,hl
+    call FPrecip_hl
+    ex de,hl ;put recip in de
+    pop hl
+    call FPmul_hl_de
+	ret
+  
+FPsqrt_hl_sto_de:
+	push de
+    call FPsqrt_hl
+    ld bc,4
+    pop de
+    ldir
+    ret
+
+
+FPsqrt_hl: ;by newton method
+    ld a,3
+    ld (_FPsqrt_hl_iters+1),a
+    ld (_FPsqrt_hl_saveA+1),hl ;save this for later
+    
+	call FPGetExpA_MantCDE_hl
+    jp p,_FPsqrt_hl_inDomain
+     ;it was negative, return nan
+     ld hl,SQRTNEGATIVENUMBERNAN
+     ret
+SQRTNEGATIVENUMBERNAN:
+.db 4,0,$80,$7f
+_FPsqrt_hl_inDomain:
+    ;check for inf and 0 cases
+    cp $ff
+    ret z	 ;no matter if it's nan or inf, √it = it
+	or a
+    jr nz,_FPsqrt_hl_Normal
+     ;is it 0?
+     or c
+     or d
+     or e
+     ld a,0
+     ret z ;√0 = 0
+	 ;ok, subnormals need a different approx
+     ;they just need the exponent adjusted, then they need to be normalized
+     ;m in [0,1)
+     ;the exp goes from -126 to -63->64
+     
+     ;subnormals need one more iteration
+     ld a,4
+     ld (_FPsqrt_hl_iters+1),a
+     
+     
+     ld b,127
+_FPsqrt_hl_NormalizeLoop:
+     sla e
+     rl d
+     rl c
+     jr c,_FPsqrt_hl_NormalizeLoop_end
+     djnz _FPsqrt_hl_NormalizeLoop
+     
+_FPsqrt_hl_NormalizeLoop_end:
+	srl b	;2^-127 becomes b(127) m(1), needs to go to b(63) m(1.5)
+	rr c 
+	rr d	;first shift divides exp and mant by 2
+	rr e
+
+	rl c	;this preps for loading
+    srl b	
+	rr c 
+    ld a,b
+    jr _FPsqrt_hl_Load
+_FPsqrt_hl_Normal:
+	;first we make a good guess (hopefully to save a lot of time)
+    ; 
+    ; √(2^e * m) = 2^(e/2) * √m
+    ; m is in [1,2) so √m is in [1,√2)
+    ;I will shift right the mantissa (except the implicit bit) to approx √m
+    ;
+    ; error is squared per iteration
+    ; max (proportional) error to start with is 1.5-√2 is ~0.09 is 3.4 bits of precision
+    ; 3 -> 6 -> 12 -> 24
+    ; 3 iterations
+    
+    ;approx e = e//2
+    ;e = ex-127
+    ;(ex-127)//2 =
+    ;ex <- (ex-1)//2 +64
+    
+    sla c
+    dec a
+    srl a		;127 -> 126 -> 63 -> 127 √
+    rr c		;129 -> 128 -> 64 -> 128 √
+    add a,64
+
+	srl a
+	rr c  ;cde/2 while adjusting exp for loading
+	rr d
+	rr e
+_FPsqrt_hl_Load:
+    ;load guess into X
+	ld hl,_FPsqrt_hl_X
+    ld (hl),e
+    inc hl
+    ld (hl),d
+    inc hl
+    ld (hl),c
+    inc hl
+    ld (hl),a
+    
+
+    ;x~=√a
+    ;x = (x+a/x)/2
+_FPsqrt_hl_iters:
+    ld b,3		
+_FPsqrt_hl_refineLoop: 
+    push bc
+    ;compute 1/x
+     ld hl,_FPsqrt_hl_X
+     ld de,_FPsqrt_hl_AoverX
+     call FPrecip_hl_sto_de
+     ;mul by a
+_FPsqrt_hl_saveA:
+     ld de,0
+     ld hl,_FPsqrt_hl_AoverX
+     call FPmul_hl_de
+     ;add x
+     ld hl,_FPsqrt_hl_AoverX
+     ld de,_FPsqrt_hl_X
+     call FPadd_hl_de
+     ;fast div by 2
+     ld hl,(_FPsqrt_hl_AoverX+2)
+     add hl,hl
+     dec h
+     rr h
+     rr l
+     ld (_FPsqrt_hl_AoverX+2),hl
+     
+     ;check if new x = old x
+    ld b,4
+	ld hl,_FPsqrt_hl_AoverX
+    ld de,_FPsqrt_hl_X
+_FPsqrt_hl_cpLoop:
+    ld a,(de)
+    cp (hl)
+    jr nz,_FPsqrt_hl_cont ;if they are unequal, continue normally
+    inc hl
+    inc de
+    djnz _FPsqrt_hl_cpLoop
+    ;they were equal, return ans
+    pop af ;discard bc
+    ld hl,_FPsqrt_hl_X
+    ret
+_FPsqrt_hl_cont:	;load into x
+	ld hl,_FPsqrt_hl_AoverX
+    ld de,_FPsqrt_hl_X
+    ld bc,4
+    ldir
+    
+    pop bc
+    djnz _FPsqrt_hl_refineLoop
+    ld hl,_FPsqrt_hl_X
+    ret
+     
+     
+_FPsqrt_hl_X:
+.db 0,0,0,0
+_FPsqrt_hl_AoverX:
+.db 0,0,0,0
+    
+	
+	
+
+FPrecip_hl_sto_de: ;stores reciprocal of hl into de
+	push de
+	call FPrecip_hl
+	pop de
+    ld bc,4
+    ldir
+    ret
+
+FPrecip_hl: ;computes reciprocal of (hl), ans in tmp buffer
+	;1/(hl) by newton-raphson method
+	
+	;Xn+1 = Xn*(2-D*Xn)
+	;initial estimation: negate exponent and subtract 1
+    ; 
+    ; 1/(2^e * m) = 2^-e * 1/m = 2^(-e-1) * 2/m
+    ;	m in [1,2) 1/m in [1,0.5)	   		2/m in [2,1)
+    ;
+    ld (_FPrecip_hl_saveD+1),hl ;save this for later
+    
+	call FPGetExpA_MantCDE_hl
+    ; -exp = -(exp-127)+127
+    
+    ;save sign for later
+    ld b,a
+    ld a,0
+    ld (_FPrecip_hl_Sign+1),a
+    jp p,_FPrecip_hl_Positive
+     ld a,$80
+     ld (_FPrecip_hl_Sign+1),a
+_FPrecip_hl_Positive:
+	ld a,b
+
+    ;5 = 1.25e2 1.25->1.75 1.75/n ~= 0.2 = 1.75e-3, e $81 -> $7c
+    cp $ff
+    jr nz,_FPrecip_hl_HlNonInf
+     ;return ±0 or it if it's nan
+     ld a,c
+     and $7f
+     or d
+     or e
+     ret nz ;return it if it's nan
+     ;return ±0
+     ld hl,_FPrecip_hl_Xn + 3
+     ld a,(_FPrecip_hl_Sign+1)
+     ld (hl),a
+     xor a
+     dec hl
+     ld (hl),a
+     dec hl
+     ld (hl),a
+     dec hl
+     ld (hl),a
+     ret
+     
+_FPrecip_hl_HlNonInf:
+	or a
+    jr nz,_FPrecip_hl_HlNormal
+     ;if exp is 0, n is subnormal
+     ;reciprocals only exist as finite for values greater than m= 01 0...
+     ld a,c     
+     cp $3f
+     jr c,_FPrecip_hl_retInf
+     ;ok, here we need to get a good guess for Xn
+     and $80
+     ld a,0
+     ;but here, c >= $80, it's ok
+     jr nz,_FPrecip_hl_HlNormal
+     ;here, we shift up m and have a=-1 or 255
+     sla e
+     rl d
+     rl c
+     dec a
+     jr _FPrecip_hl_HlNormal     
+     ;return ±∞ otherwise
+_FPrecip_hl_retInf:
+     ld hl,_FPrecip_hl_Xn + 3
+     ld a,(_FPrecip_hl_Sign+1)
+     or $7f
+     ld (hl),a
+     ld a,$80
+     dec hl
+     ld (hl),a
+     xor a
+     dec hl
+     ld (hl),a
+     dec hl
+     ld (hl),a
+     ret
+     
+_FPrecip_hl_HlNormal:
+    ld b,127		; a = (ex+127)
+    sub b			; a out = (-ex-1+127)
+    neg				; -((ex+127)-127)+127-1 = (-ex-1+127)
+    add a,b 
+    dec a
+    ld b,a
+    
+    ;estimation of 2/m
+    ;
+    ; 2/m ~= 3-m ~= -m for this
+    ;						m		1/m				ex
+    ; m = 1.000 -> 1.111	1/1 ~= . 1111 1111...   0 ->-1
+    ; m = 1.001 -> 1.110	1/9 ~= .000 1110 0...	3	-4
+	; m = 1.010 -> 1.101	1/5 ~= .00 1101 10...	2	-3
+	; m = 1.011 -> 1.100	1/11~= .000 1100 -e		3	-4
+	; m = 1.100 -> 1.011	1/3 ~= .0 1011			1	-2
+	; m = 1.101 -> 1.010	1/13~= .000 1010		3	-4
+    ; m = 1.110 -> 1.001	1/7 ~= .00 1001			2	-3
+    ; m = 1.111 -> 1.000	1/15~= .000 1000		3	-4
+    ;	
+    
+    ;mantissa in cde
+    ;invert cde
+    
+    
+    
+    
+    ld a,e
+    cpl
+    ld e,a
+    ld a,d
+    cpl
+    ld d,a
+    ld a,c
+    cpl
+	;or $80 ;set top bit; this is implicit so no need
+    rla ;put exp into top
+    srl b
+    rra
+    ld c,a
+    ld a,b
+_FPrecip_hl_Sign:
+    or 0
+    
+    ;ok, m=10 -> 11 √
+	;	 m=11 -> 10 √
+    
+	;now we make a float out of it
+   
+    
+    ld hl,_FPrecip_hl_Xn + 3
+    ld (hl),a
+    dec hl
+    ld (hl),c
+    dec hl
+    ld (hl),d
+    dec hl
+    ld (hl),e
+    
+    ;now we do our repeated approximation
+
+   	
+   
+    ld b,4 ;4 iterations in worst case scenario (1/3)
+_FPrecip_hl_RefineStep: ;;Xn+1 = Xn+Xn*(1-D*Xn)
+	push bc
+    ;D*Xn -> DXn
+_FPrecip_hl_saveD:
+    ld de, 0
+    ld hl,_FPrecip_hl_Xn
+    call FPprod_hl_de ;not mul, because we want to store it in DXn, not Xn
+    ld de,_FPrecip_hl_DXn
+    ld bc,4
+    ldir
+    
+    ;negate DXn
+    dec de
+    ld a,(de)
+    xor $80
+    ld (de),a
+    
+    
+    ;1-DXn -> DXn
+    ld hl,_FPrecip_hl_DXn
+    ld de,_FPrecip_hl_1
+    call FPadd_hl_de 
+    
+    ;Xn*(1-D*Xn) -> DXn
+	ld hl,_FPrecip_hl_DXn
+    ld de,_FPrecip_hl_Xn
+    call FPmul_hl_de
+ 	
+    ;Xn+Xn*(1-D*Xn) -> Xn
+    ld hl,_FPrecip_hl_Xn
+    ld de,_FPrecip_hl_DXn
+    call FPsum_hl_de ;sum so we can compare to see if Xn is changing
+    ;hl is ans
+    ;check if it changed
+    push hl
+	ld b,4
+    ld de,_FPrecip_hl_DXn
+_FPrecip_hl_cpLoop:
+    ld a,(de)
+    cp (hl)
+    jr nz,_FPrecip_hl_cont ;if they are unequal, continue normally
+    inc hl
+    inc de
+    djnz _FPrecip_hl_cpLoop
+    ;they were equal, return ans
+    pop af;discard hl
+    pop af ;discard bc
+    ld hl,_FPrecip_hl_Xn
+    ret
+_FPrecip_hl_cont:
+	pop hl
+    ld de,_FPrecip_hl_Xn
+    ld bc,4
+    ldir
+    
+    pop bc
+   djnz _FPrecip_hl_RefineStep
+    
+    ;now we return reciprocal in hl
+    ld hl,_FPrecip_hl_Xn
+    ret
+    
+    
+_FPrecip_hl_Xn:
+.db 0,0,0,0
+_FPrecip_hl_DXn: ;Xn+1 = Xn*(2-D*Xn)
+.db 0,0,0,0
+_FPrecip_hl_1: ;a very important constant ;)
+.db 0,0,$80,$3f  
+
+
+
+
+

@@ -1,0 +1,125 @@
+
+
+left: macro smc_l-stereo_3t_int+$9a9b endm
+right: macro smc_l-stereo_3t_int+$9a9b endm
+main:
+    call setup_sound_engine
+    
+    
+
+mainloop:
+	
+
+
+
+
+
+
+
+	
+    jp cleanup_sound_engine
+
+setup_sound_engine:
+	;setup isr and sample timer
+    di
+    ;xor a
+    ;out ($2e),a
+    
+    ld hl,$9900 ;vec table in appbackupscreen
+    ld de,$9901
+    ld (hl),$9a
+	ld bc,256
+	ldir
+    
+    ld a,$99
+    ld i,a
+    
+    im 2
+	
+	;copy interrupt into appbackupscreen also
+    ld hl,stereo_3t_int
+	ld de,$9a9a
+	ld bc,int_end-stereo_3t_int
+	ldir
+	
+    ;set fast mode
+    ld a,1
+    out ($20),a
+    
+    ;disable interrupts from other sources
+    ld a,$e0
+    out (3),a
+    
+
+    ;setup speeds of other timers
+    ld a,$82 ;/4
+    out ($30),a
+    out ($33),a
+    ;setup sample timer at 23.4khz
+    ;ld a,$82 ;/4
+    out ($36),a
+    ld a,3
+    out ($37),a
+	dec a
+	out ($34),a;set other timers to not loop
+    out ($31),a;
+
+    ld a,163 ;2.5*256 = 20*32
+    out ($38),a
+    ei
+    ret	
+    
+cleanup_sound_engine:
+	di
+   
+    ;turn off all timers' interrupts
+    xor a
+    out ($31),a
+	out ($34),a
+    out ($37),a
+    out (0),a
+
+    ld a,$0b
+    out (3),a
+    
+    im 1
+    ret
+
+
+stereo_3t_int:
+	ex af,af'
+    in a,(4)
+    rlca ;check timer 3, the sample timer
+    jr nc,stereo_3t_int_not_timer_3
+	;reset
+	ld a,3
+	out (37h),a
+	dec a
+	out (0),a
+smc_l:
+	ld a,63
+	out (35h),a
+smc_r:
+	ld a,196
+	out (32h),a
+	ex af,af'
+	ei
+	ret ;113
+stereo_3t_int_not_timer_3:
+	rlca ; timer 2
+	ld a,2
+	jr nc,stereo_3t_int_not_timer_2
+	out (34h),a
+	xor a
+	out (0),a
+	ex af,af'
+	ei
+	ret ;93
+stereo_3t_int_not_timer_2:
+	out (31h),a
+	dec a
+	out (0),a
+	ex af,af'
+	ei
+	ret;98
+int_end:

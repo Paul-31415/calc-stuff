@@ -1,0 +1,42 @@
+
+
+def bs(b,l=8):
+    m = 1<<l
+    return bin(b&(m-1)|m)[2:]
+def hs(n,l=2):
+    m = 1<<(l*4)
+    return hex(b&(m-1)|m)[2:]
+class uint8:
+    def __init__(self,v):
+        self.v = int(v)&0xff
+    def __repr__(self):
+        return f"u8 {hs(self.v)} {bs(self.v)} {self.v}"
+    def __int__(self):
+        return self.v
+    def __add__(self,o):
+        return uint8(self.v+int(o))
+    def __sub__(self,o):
+        return uint8(self.v-int(o))
+    def __neg__(self,o):
+        return uint8(-self.v)
+    def __not__(self,o):
+        return uint8(~self.v)
+    def __and__(self,o):
+        return uint8(self.v&int(o))
+    def __or__(self,o):
+        return uint8(self.v|int(o))
+    def __xor__(self,o):
+        return uint8(self.v^int(o))
+    def rr(self):
+        return uint8((self.v>>1) | (self.v<<7))
+    def rl(self):
+        return uint8((self.v<<1) | (self.v>>7))
+    def sra(self):
+        return uint8((self.v>>1) | (self.v&0x80))
+    def sla(self):
+        return uint8(self.v<<1)
+    def sll(self):
+        return uint8((self.v<<1)|1)
+    def srl(self):
+        return uint8(self.v>>1)
+    

@@ -1,0 +1,12 @@
+0x8000,256,    ,appData
+0x8100,304,    ,ramCode
+0x8182, 65,m   ,Unknown (crypto mult arg 1)
+0x81c3, 65,m   ,Unknown (crypto mult arg 2)
+0x8259, 16,m   ,MD5Temp
+0x8269,  8,m   ,MD5Length
+0x8292, 16,m   ,MD5Hash
+0x82a5,323,    ,tempSwapArea
+0x839F,  4,    ,tempFreeArchive
+0x83a5, 64,m   ,MD5Buffer
+0x843F,  1,k   ,kbdScanCode
+0x8442,  1,k   ,keyDelay

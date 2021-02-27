@@ -1,0 +1,1008 @@
+
+
+#if	_84
+
+copyBuf		equ	$4081		;1 because of carry flag
+;copySize	equ	$407F		;these don't have to be equated
+;copyValid	equ	$407E
+
+undoBuf		equ	$4C00		;bit 6 clear so nz
+
+#else
+
+copyBuf		equ	saveSScreen+3	;odd for carry
+undoBuf		equ	saveSScreen+$180+4	
+
+#endif
+
+;##################################################
+programEditorHook:
+
+	call	handleHomeMessage
+
+	ld	a, (menuCurrent)
+	or	a
+	jr	nz, rawKeyChainCheater
+	ld	hl, (editSym)
+	ld	a, (hl)
+	cp	9
+	jr	nz, notRecalling
+	
+	ld	a, b
+	cp	kEnter
+	jp	z, recallEnter
+rawKeyChainCheater:
+	jp	rawKeyChain
+
+notRecalling:
+
+	in	a, (04)
+	bit	3, a
+	jp	nz, nonOnEditorButtons
+
+	ld	a, b
+	cp	kVars
+	jp	z, pullUpLblMan
+	cp	kAdd
+	jp	z, prgmCopy
+	cp	kEnter
+	jr	z, prgmPaste
+	ld	ix, undoBuf
+	cp	kExpon
+	jr	z, pasteCommon
+
+	cp	kDel
+	jr	z, quitNoSave
+	cp	kStore
+	jp	z, compileRightNow
+	cp	kZoom
+	jp	z, zoomTest
+	cp	kTrace
+	jp	z, traceTest
+	cp	kMul
+	jr	z, archiveEditing
+	jr	rawKeyChainCheater
+
+
+;######################
+archiveEditing:
+	bcall(_runIndicOn)
+	call	getCursorOffset
+	push	hl
+	call	stopEditingNow
+	call	z, arcUnarcSaveOp1
+	pop	hl
+	jp	suicideOpenEditor
+
+
+
+;######################
+quitNoSave:
+	bcall(_closeEditEqu)
+	ld	hl, varType
+	xor	a
+	call	isHLSpecial
+	ret	z
+	call	deleteHL
+	ld	(varType+1), a
+	ld	(varClass), a
+	ld	a, kError
+	ld	(cxCurApp), a
+	bcall(_jForceCMDNoChar)
+
+
+
+;######################
+prgmPaste:
+	ld	ix, copyBuf
+pasteCommon:
+#if	_84
+	ld	hl, pasteRunner
+	ld	de, $8000
+	ld	bc, pasteRunnerEnd-pasteRunner
+	ldir
+	call	$8000
+#else
+	call	pasteRunner
+#endif
+
+	jr	nc, recallIsGood
+
+	jr	z, retzzzz
+
+dispNotEnoughMemory:
+	ld	hl, notEnoughMemoryText
+	ld	e, 29
+	call	safeHomeMessage
+retzzzz:
+	xor	a
+	ret
+
+recallIsGood:
+	set	7, (iy + $0E)		;recall queue
+	res	2, (iy + $33)		;internal mode
+
+	ld	a, (iy + textFlags)
+	and	1 << textInsMode
+	ld	(promptIns), a
+	set	textInsMode, (iy + textFlags)
+
+	ld	hl, (editCursor)
+	ld	a, (hl)
+	ld	d, 0
+	bcall(_isA2ByteTok)
+	jr	nz, notA2ByteTok
+	ld	d, a
+	inc	hl
+	ld	a, (hl)
+notA2ByteTok:
+	ld	e, a
+	bcall(_tokToKey)
+	or	a
+	ret
+
+
+
+pasteRunner:
+	relocate($8000)
+#if	_84
+	in	a, (06)
+	push	af
+	ld	a, $83
+	out	(06), a
+#endif
+
+	ld	a, (ix-3)
+	cp	$69
+	jr	z, copyIsValid
+	xor	a
+	scf
+	jr	pasteRet
+copyIsValid:
+	ld	hl, (editTail)
+	ld	de, (editCursor)
+	or	a
+	sbc	hl, de
+	ld	b, (ix-1)
+	ld	c, (ix-2)
+	ld	a, b
+	or	c
+	scf
+	jr	z, pasteRet
+	
+	or	a
+	sbc	hl, bc
+	add	hl, bc
+	jr	c, pasteRet
+
+	push	ix
+	pop	hl
+	ldir
+	ld	(rclQueue), de
+
+
+pasteCleanRet:
+	or	a
+pasteRet:
+#if	_84
+	pop	bc
+	ld	a, b
+	out	(06), a
+#endif
+	ret
+
+
+	endRelocate()
+pasteRunnerEnd:
+
+
+
+
+;#######################
+prgmCopy:
+	ld	ix, copyBuf
+copyCommon:
+	push	ix
+#if	_84
+	ld	hl, copyRunner
+	ld	de, $8000
+	ld	bc, copyRunnerEnd-copyRunner
+	ldir
+	call	$8000
+#else
+	call	copyRunner
+#endif
+
+	ld	hl, notEnoughMemoryText
+	ld	e, 29
+	jr	c, wasOutOfSpace
+
+	ld	hl, copiedText
+	ld	e, 72
+wasOutOfSpace:
+	pop	af		;nz is set
+	ld	a, kClear
+#if	_84
+#else
+	bit	7, a
+#endif
+	ret	nc	
+	
+
+	call	safeHomeMessage
+	xor	a
+	ret	
+
+
+;############
+copyRunner:
+	relocate($8000)
+
+#if	_84
+	in	a, (06)
+	push	af
+	ld	a, $83
+	out	(06), a
+#endif
+
+	ld	hl, (editCursor)
+	ld	de, (editTop)
+	jr	findStartEntry
+findStartLoop:
+
+	dec	hl
+	ld	a, (hl)
+	cp	$3F		;this will cause a few errors, but oh well
+	jr	z, foundTheReturn
+
+findStartEntry:
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, findStartLoop
+	
+	dec	hl
+foundTheReturn:
+	inc	hl
+	push	hl
+
+	ld	hl, (editTail)
+	ld	de, (editBtm)
+	jr	findEndEntry
+findEndLoop:
+	ld	a, (hl)
+	cp	$3F
+	jr	z, foundtheEnd
+	inc	hl
+	bcall(_isA2ByteTok)
+	jr	nz, findEndEntry
+	inc	hl
+
+
+findEndEntry:
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, findEndLoop
+foundTheEnd:
+
+	pop	de
+	push	hl
+	ld	hl, (editCursor)
+	or	a
+	sbc	hl, de
+	ld	c, l
+	ld	b, h
+
+	pop	hl
+	push	hl
+	push	de
+	ld	de, (editTail)
+	or	a
+	sbc	hl, de
+	add	hl, bc
+#if	_84
+	ld	de, 2900
+#else
+	ld	de, 380
+#endif
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	c, notOversized
+
+	pop	hl
+	pop	de
+#if	_84
+	pop	af
+	out	(06), a
+#endif
+	scf
+	ret
+
+notOversized:
+	ld	(ix-1), h
+	ld	(ix-2), l
+	pop	hl
+	push	ix
+	pop	de
+	ld	a, b
+	or	c
+	jr	z, zerozSuck2
+	ldir
+zerozSuck2:
+	
+	pop	hl
+	push	de
+
+	ld	de, (editTail)
+	or	a
+	sbc	hl, de
+	ld	c, l
+	ld	b, h
+	ex	de, hl
+	pop	de
+	ld	a, b
+	or	c
+	jr	z, zerozSuck
+	ldir
+zerozSuck:
+	ld	(ix-3), $69
+#if	_84
+	pop	af
+	out	(06), a
+#endif
+	or	a
+	ret
+	
+
+
+	endRelocate()
+copyRunnerEnd:
+
+
+
+
+;#####################
+;lblsFound	equ	appBackUpScreen	;1
+;lblSelected	equ	lblsFound+1	;1
+;lblsScrolled	equ	lblSelected+1	;1
+;labelBuf	equ	lblsScrolled+1	;763
+
+labelBuf	equ	$8000		;252
+lblsFound	equ	$80FD		;1
+lblSelected	equ	$80FE		;1
+lblsScrolled	equ	$80FF		;1
+
+pullUpLblMan:
+	call	skiFastLosePass
+	ld	hl, (curRow)
+	ld	(textShadCur), hl
+	ld	a, (winTop)
+	ld	(textShadTop), a
+
+	ld	hl, (editCursor)
+	push	hl
+
+	ld	hl, (editBtm)
+	ld	de, (editTail)
+	or	a
+	sbc	hl, de
+	ld	b, h
+	ld	c, l
+	ex	de, hl
+	ld	de, (editCursor)
+	call	ldir0
+	ld	(editTail), hl
+	ld	(editCursor), de
+
+	ld	a, 2
+	ld	(lblsFound), a
+	ld	hl, labelBuf
+	ld	c, 252
+	call	clearMemSmall
+
+	ld	hl, $FFFF
+	ld	(labelBuf), hl
+
+	ld	hl, (editCursor)
+	ld	de, (editTop)
+	or	a
+	sbc	hl, de
+	ld	b, h
+	ld	c, l
+
+	ex	de, hl
+	ld	de, labelBuf+2
+	ld	ix, lblsFound
+
+findLblsLoop:
+	ld	a, b
+	or	c
+	jr	z, allLblsFound
+	ld	a, $D6
+	cpir
+	jr	nz, findLblsLoop
+
+	dec	hl
+	dec	hl
+	ld	a, (hl)
+	cp	$BB		;I don't care about the other 2 byte tokens
+	inc	hl
+	inc	hl
+	jr	z, findLblsLoop
+	dec	hl
+	ld	a, l
+	ld	(de), a
+	inc	de
+	ld	a, h
+	ld	(de), a
+	inc	de
+	inc	hl
+	inc	(ix)
+	ld	a, (ix)
+	cp	125
+	jr	z, allLblsFound
+	jr	findLblsLoop
+	
+allLblsFound:
+	
+
+	set	graphDraw, (iy + graphFlags)
+	ld	hl, 0
+	ld	(lblSelected), hl
+lblMenuLoop:					
+	set	textWrite, (iy + sGRFlags)	
+	bcall(_grBufClr)
+
+	ld	a, (lblsScrolled)
+	add	a, a
+	ld	l, a
+	ld	h, $80
+
+	ld	e, 5
+drawLblScreen:
+	ld	d, 1
+dispAColumn:
+
+	ld	b, 5
+	ld	a, (lblSelected)
+	cp	c
+	jr	nz, notThisSelectedz
+	ld	a, e
+	sub	b
+	ld	e, a
+	ld	a, b
+	call	myVPutCDE
+	add	a, e
+	ld	e, a
+notThisSelectedz:
+	
+	ld	(penCol), de
+
+	push	bc
+	push	de
+
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	inc	hl
+	push	hl
+	ex	de, hl
+
+	ld	a, h
+	or	l
+	jr	nz, notBtm
+	ld	hl, btmText-1
+notBtm:
+	inc	hl		;inc because of lbl token
+	ld	a, h
+	or	l
+	jr	nz, notToper
+	ld	hl, topText
+notToper:
+
+drawLabelNameLoop:
+	ld	a, (hl)
+	cp	$3E
+	jr	z, lblDone
+	cp	$3F
+	jr	z, lblDone
+	cp	$BB
+	jr	nz, notLowerLetter
+
+	inc	hl
+	ld	a, (hl)
+	sub	tLa-'a'+1
+	cp	'k'
+	adc	a, 0
+
+notLowerLetter:
+	call	myVPutC
+	inc	hl
+	djnz	drawLabelNameLoop
+lblDone:
+	pop	hl
+	pop	de
+	pop	bc
+
+	inc	c
+	ld	a, (lblsFound)
+	cp	c
+	jr	z, labelsBeenDrawn
+
+	ld	a, d
+	add	a, 7
+	ld	d, a
+	cp	58
+	jr	c, dispAColumn
+
+	ld	a, e
+	add	a, 24
+	ld	e, a
+	jp	p, drawLblScreen
+labelsBeenDrawn:
+
+	call	graphBufferCopy
+
+lblMenuKeyLoop:
+	bcall(_getCSC)
+	halt
+	or	a
+	jr	z, lblMenuKeyLoop
+
+	cp	skClear
+	jr	z, notPickingALbl
+	
+	cp	sk2nd
+	jr	z, pickThisOne
+
+	cp	skEnter
+	jr	z, pickThisOne
+
+	cp	skUp+1
+	jr	nc, lblMenuKeyLoop
+
+	ld	b, a
+	ld	a, (lblSelected)
+	djnz	notDjDown
+
+	inc	a
+notDjDown:
+	djnz	notDjLeft
+	
+	sub	9
+notDjLeft:
+	djnz	notDjRight
+
+	add	a, 9
+notDjRight:
+	djnz	notDjUp
+
+	dec	a
+notDjUp:
+	jp	p, notBeforeFirstLbl
+	xor	a
+notBeforeFirstLbl:
+	cp	(ix)			;lblsFound
+	jr	c, notAfterLastLbl
+	ld	a, (lblsFound)			
+	dec	a
+notAfterLastLbl:
+	ld	(lblSelected), a
+	ld	b, a	
+
+fixScrollingLoop:
+	ld	a, b
+	cp	(ix + 2)		;lblsScrolled
+	jr	nc, dontScrollLeft
+
+	ld	a, (lblsScrolled)
+	sub	9
+	ld	(lblsScrolled), a
+	jr	fixScrollingLoop
+
+dontScrollLeft:
+	sub	36
+	jr	c, shortcutToLoop
+	cp	(ix + 2)
+shortcutToLoop
+	jp	c, lblMenuLoop
+
+	ld	a, (lblsScrolled)
+	add	a, 9
+	ld	(lblsScrolled), a
+	jr	fixScrollingLoop
+
+pickThisOne:
+	ld	a, (lblSelected)
+	add	a, a
+	ld	l, a
+	ld	h, $80
+
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	ex	de, hl
+	ld	a, h
+	or	l
+	jr	nz, notEditCurzor
+	ld	hl, (editCursor)
+notEditCurzor:
+	inc	hl
+	ld	a, h
+	or	l
+	dec	hl
+	jr	nz, notEditTop
+	ld	hl, (editTop)
+notEditTop:
+	pop	af
+	jr	haveDaPosition
+
+notPickingALbl:
+	pop	hl
+haveDaPosition:
+	ld	de, (editTop)
+	or	a
+	sbc	hl, de
+
+	res	textWrite, (iy + sGRFlags)
+	set	curAble, (iy + curFlags)
+	res	curLock, (iy + curFlags)
+
+#if	_2Page
+	ld	a, (cxPage)
+	cp	8
+	jr	c, notMyEditor
+
+	bcall(bEditorToOffset)
+	xor	a
+	ret
+	
+#endif
+
+notMyEditor:
+	call	editorToOffset
+
+
+	bcall(_grBufClr)
+
+	ld	a, 3
+	ld	(menuCurrent), a
+	ld	a, kClear
+	or	a
+	ret
+
+
+
+topText:
+	.db	"Top  "
+btmText:
+	.db	"Btm  "
+
+
+;######################
+compileRightNow:
+	call	getCursorOffset
+	ld	(winTop), a
+	push	hl
+	call	stopEditingNow
+	call	z, arcUnarcSaveOp1
+	call	pushOp1
+	xor	a
+	call	compileOp1
+	call	popOp1
+	pop	hl
+	jr	c, suicideOpenEditor
+	bcall(_jForceCMDNoChar)
+
+
+;	ld	bc, 1
+;	jr	testCommon
+
+;###################################
+traceTest:
+	ld	bc, 0
+	jr	testCommon
+
+;###################################
+zoomTest:
+	ld	bc, 8*256+0
+testCommon:
+	call	getCursorOffset
+	ld	(winTop), a
+	push	hl
+	
+	push	bc
+	call	stopEditingNow
+	call	z, arcUnarcSaveOp1
+	pop	af
+	call	pushOP1
+	push	af
+	call	compileOp1
+	push	af
+	call	newScreen
+	bcall(_saveCMDShadow)
+	pop	af
+	jr	nz, cantBeRun
+	pop	af
+	call	nc, nicelyRunOp1	;apps won't return so...
+	push	af
+cantBeRun:
+	pop	af
+	call	popOp1
+	pop	hl
+suicideOpenEditor:
+	call	editProgramCustomOffset	;this only returns on errors
+	bcall(_jForceCMDNoChar)
+
+;###################################
+getCursorOffset:
+	ld	hl, (editCursor)
+	ld	de, (editTop)
+	xor	a		;a has to return zero
+	sbc	hl, de
+	ret
+
+
+
+;####################################
+nonOnEditorButtons:
+	ld	a, b
+
+	ld	ix, undoBuf
+	cp	kClear
+	jp	z, copyCommon
+	jp	rawKeyChain
+
+
+;###################################
+recallEnter:
+	ld	hl, nameBuff
+	ld	a, (hl)
+	cp	$5F
+	jp	nz, rawkeyChain
+	push	bc
+	rst	20h
+
+	ld	a, 5
+	ld	(op1), a
+	bcall(_chkFindSym)
+	jr	c, notProperRecall
+	pop	hl
+	ld	a, b
+	or	a
+	jp	nz, goodToGo
+notProperRecall:
+	ld	b, h
+	jp	rawKeyChain
+
+goodToGo:
+	call	findStartInRom
+	bcall(_loadDEIndPaged)
+	inc	hl
+	call	fast_bhl
+	ld	a, b
+	ld	(op6+1), a
+	push	hl
+	ld	hl, (promptTail)
+	ld	bc, (promptCursor)
+	or	a
+	sbc	hl, bc
+	sbc	hl, de
+	pop	hl
+	jp	c, dispNotEnoughMemory
+
+	ld	(op6+2), hl
+	ld	(op6+4), bc
+	ld	(op6+6), de
+	ld	hl, getCSCHookPtr
+	ld	de, op6+8
+	ld	bc, 3
+	ldir
+	ld	a, (iy + $34)
+	ld	(op6+11), a
+	
+	ld	hl, rclGetCSCHook1
+	in	a, (06)
+	bcall(_enableGetCSCHook)
+
+	ld	a, kClear
+	or	a
+	ret
+
+
+
+
+;############################
+editorToOffset:
+	push	hl		;the offset
+	ld	hl, (editBtm)
+	ld	de, (editTail)
+	or	a
+	sbc	hl, de
+	ld	c, l
+	ld	b, h
+	ex	de, hl
+	ld	de, (editCursor)
+	call	ldir0
+	dec	de
+
+	ld	hl, (editTop)
+	pop	bc		;the offset
+	push	de		;last byte of buffer
+	add	hl, bc
+	ld	(editCursor), hl
+	push	hl		;new editCursor
+	ex	de, hl
+	sbc	hl, de
+	inc	hl
+	ex	(sp), hl	;size after cursor in for editCursor
+	ld	a, b
+	or	c
+	jr	z, zeroOffset
+	dec	hl
+findTheReturn:
+	ld	a, $3F
+	cpdr
+	jr	nz, firstLineIGuess
+	jp	po, firstLineReturn
+	ld	a, (hl)
+	bcall(_isA2ByteTok)
+	jr	z, findTheReturn
+firstLineReturn:
+	inc	hl
+firstLineIGuess:
+	inc	hl
+zeroOffset:
+	
+	ld	a, 1
+	jr	thisLoopEntrys
+findTheCursor:
+	push	af		;current column
+	ld	a, (hl)
+	inc	hl
+	ld	d, 0
+	ld	e, a
+	bcall(_isA2ByteTok)
+	jr	nz, was1ByteTok
+	ld	d, e
+	ld	e, (hl)
+	inc	hl
+was1ByteTok:
+	push	hl		;buffer pos
+	bcall(_getTokLen)
+	pop	hl		;buffor pos
+	pop	bc		;current column
+	add	a, b
+thisLoopEntrys:
+	ld	de, (editCursor)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	c, findTheCursor
+	jr	z, notStupid2Byte
+	ld	(editCursor), hl
+	pop	de
+	dec	de
+	push	de
+notStupid2Byte:
+
+	and	15
+	ld	d, a
+	ld	e, 1
+	ld	(curRow), de
+	ld	(textShadCur), de
+	
+	push	de		;save curRow
+	ld	(iy + appFlags), $0A
+dispStartOfLine:
+	ld	de, (editTop)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, notTop
+	ld	a, ':'
+	ld	hl, curCol
+	dec	(hl)
+	bcall(_putMap)
+	jr	startDrawn
+notTop:
+	bcall(_putBPATBuf)
+	jr	c, dispStartOfLine
+startDrawn:
+	
+	pop	hl		;curRow
+	ld	(curRow), hl
+	pop	bc		;size after cursor
+	pop	hl
+	ld	de, (editBtm)
+	dec	de
+	ld	a, b
+	or	c
+	jr	z, stupeZero
+	lddr
+stupeZero:
+	inc	de
+	ld	(editTail), de
+
+	bcall(_dispEOW)
+
+	ld	a, $0E
+	ld	(flags + appFlags), a
+	ld	($85E3), a
+	ret
+
+
+
+
+;##############################
+stopEditingNow:
+	ld	hl, (editSym)
+	ld	de, -6
+	add	hl, de
+	ld	de, op1
+	ld	a, 5
+	ld	(de), a
+	inc	de
+	call	copyVatName
+	xor	a
+	ld	(de), a
+	call	closeEditEquSaveOp1
+	ld	a, (varClass)
+	cp	$69
+	ld	b, $46
+	jp	z, finishEditing
+	xor	a
+	ret
+
+
+
+;#####################
+rclGetCSCHook1:
+	add	a, e
+	ld	hl, rclGetCSCHook2
+	ld	(getCSCHookPtr), hl
+	ld	a, kClear
+	cp	a
+	ret
+
+
+
+
+;####################
+rclGetCSCHook2:
+	add	a, e
+
+#if 1
+	ld	hl, op6+8
+	ld	de, getCSCHookPtr
+	ld	bc, 3
+	ldir
+
+	ld	a, (op6+11)
+	ld	(iy + $34), a
+	
+	ld	hl, (op6+2)
+	ld	de, (op6+4)
+	ld	bc, (op6+6)
+	ld	a, b
+	or	c
+	jr	nz, notZeroLength
+	ld	a, $1A
+	or	a
+	ret
+notZeroLength: 
+	ld	a, (op6+1)
+
+	bcall(_flashToRam)
+	ld	(rclQueue), de
+	
+	call	recallIsGood
+	cp	a
+	ret
+
+#endif
+
+
+

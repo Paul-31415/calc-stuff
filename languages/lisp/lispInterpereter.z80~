@@ -1,0 +1,25 @@
+
+
+
+
+.db "string"
+.db 0x50,0x60
+	
+Start:
+	;comment
+	ld h,l
+	add hl,bc
+	ld a,(ix+4)
+
+	djnz Start
+
+	jr c, $+3
+
+	ret
+	
+#define data 30-4
+.db data
+.dw 41
+	b_call(foo)
+
+

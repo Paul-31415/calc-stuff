@@ -1,0 +1,38 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define hook_addr $A000
+#define _EnableHomescreenHook $4FAB
+#define saveSScreen $86EC
+.org        progStart-2
+.db         $BB,$6D
+
+Install_hook:
+  ld hl, hook_start
+  ld de, hook_addr
+  push de
+    ld bc, hook_end-hook_start
+    ldir
+  pop hl
+  bcall(_EnableHomescreenHook)
+  ret
+hook_start:
+  .db 83h
+  cp 3
+  jr nz,retz
+
+cp img:
+  ld hl,img - hook_start + hook_addr
+  ld c,$10
+
+  
+
+retz:
+  cp a
+  ret  
+img: 
+.db $C0,$00,$01,$06,$00,$8C,$01,$00,$54,$80
+.db $AC,$4C,$12,$25,$6A,$88,$95,$36,$15,$C0
+.db $CA,$AC,$2B,$06,$AA,$85,$55,$55,$55,$00
+.db $88,$49,$12,$24,$66,$4C,$8D,$35,$54,$C0
+  
+hook_end:

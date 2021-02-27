@@ -1,0 +1,11 @@
+from sympy import *
+
+class BitwiseNot(Function):
+    nargs = 1
+    @classmethod
+    def eval(cls,arg):
+        if isinstance(arg, Integer):
+            return -arg-1
+        if isinstance(arg, Symbol)
+                
+

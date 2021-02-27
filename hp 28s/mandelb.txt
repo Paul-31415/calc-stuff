@@ -1,0 +1,39 @@
+The following plots the Mandelbrot set (invented by IBM fellow
+Benoit B. _) on an HP28S.  The required positive integer saved as
+BntB is the number of iterations that define a point as being in
+the set.  Theory requires _infinity_; I think the _Sci_Amer_ articles
+used 1,000.  I suggest 20->100; plots can take HOURS of continuous
+computations, and new batteries will probably give you only a few
+plots.  Suggested CntrBBM starting coordinates nicely frame the
+entire set.  You then INS lower left & upper right corners to the
+stack, ATTN, PMIN & PMAX, et al., and restart with _ALPHA_ _NEXT_
+BntB Mndlbrt _ENTER_ or _new_param_ _NEXT_ Mndlbrt.  PPAR is
+automatically recomputed for the minimal 1:1 rectangle which frames
+& centers your PMIN/PMAX inputs.
+
+<< DUP TYPE 0 == << ABS IP 'BntB' STO PPAR 2 GET PPAR 1 GET - C->R
+/ 137 32 / / DUP 1 >= << *H >> << INV *W >> IFTE << X PPAR 1 GET
+IM PPAR 2 GET IM DUP2 SWAP - 31 / PPAR 4 GET * -> cR ym yM yi <<
+ym yM FOR cI cR cI R->C (0,0) 0 -> c z n << DO n 1 + 'n' STO z SQ
+c + 'z' STO UNTIL n BntB > z ABS 2 > OR END n BntB > << c PIXEL >>
+IFT >> yi STEP >> PPAR 5 GET IM >> STEP CLLCD DRAW { EQ } PURGE {
+PMIN PMAX RES CNTR *W *H BntB Mndlbrt } MENU DGTIZ >> IFT >>
+'Mndlbrt' STO
+
+<< { (-6.1015625,-1.25) (4.6015625,1.25) X 1 (9,9) } 'PPAR' STO >>
+'CntrBBM' STO
+
+*  _ALPHA_ CntrBBM 25 Mndlbrt _ENTER_
+*  _INS_ for diagonal corners, _ATTN_, PMIN/PMAX/RES/CNTR/*W/*H
+*  _ALPHA_ BntB Mndlbrt _ENTER_ ---or,_e.g.--- 40 Mndlbrt
+
+Question (I don't have the answer for this, but would like to know):
+Given that the 28S's mantissa is twelve digits, batteries won't
+support a BntB much bigger than 100, and letting CntrBBM be
+"one-power", just HOW much magnification is reasonable?  As the
+math always computes differences from numbers around _1_, it would
+seem reasonable that you can't go lower than 1E12 mag., but my
+error analysis isn't that sound....  Feel free to use e-mail, or
+even AT&T.
+						 Glen Kilpatrick
+						 (916)756-9321home

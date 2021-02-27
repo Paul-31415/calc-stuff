@@ -1,0 +1,60 @@
+
+
+decompress: ;decompresses hl into de
+	;each opcode: 
+    ;1nnn nnnn = n literals
+	;0nnn nnnn  dddd dddd ; substring len n dist d+1
+	;0000 0000 : end
+    
+    ld a,(hl)
+    inc hl
+    rlca
+    rrca
+    ld c,a
+    ld b,0
+    jr c,_decompress_literals
+	 or a
+     ret z ;return opcode
+	 ;substring
+     ld a,hl
+     inc hl
+     push hl
+     neg
+     ld l,a
+     ld h,-1
+     add hl,de
+     dec hl
+     ldir
+     pop hl
+	jr decompress
+_decompress_literals:
+	ldir
+	jr decompress
+
+
+findLevel: ;finds level b
+	ld hl,levels
+	ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+
+	ld a,b
+    or a
+    ret z
+_findLevelLoop:
+	add hl,de
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    djnz _findLevelLoop
+    ret 
+
+levels:
+.db 0
+
+
+
+
+

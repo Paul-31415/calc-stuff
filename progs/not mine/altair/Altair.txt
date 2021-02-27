@@ -1,0 +1,20 @@
+ALTAIR
+------
+for TI-84+
+written in Basic
+by Jaakko C
+====================
+
+Ungrouping ALTAIR group file: 2nd [MEM] 8:Group -> Ungroup
+After ungrouping, you will find ALTAIR in the program menu.
+
+How to play
+-------------
+Try to catch nine dots as fast as you can. Use arrow keys to accelerate in different directions.
+
+Planets Menu
+--------------
+You can play in different environments. There are six planets ready to play on, and you can also
+create your own by setting the acceleration of your vessel, the friction of the atmosphere,
+the gravity of the planet and the elasticity of the planet's surface.
+Press MODE to see planet info, DEL to delete planet and ENTER to take a flight on the chosen planet.

@@ -1,0 +1,240 @@
+-----
+
+                                 Crwth-Lisp 3.2
+                                 --------------
+
+                         A Lisp compiler for the HP28S
+
+                                       by
+
+                              Olle Gallmo (Crwth)
+
+                                 September 1988
+
+
+
+
+
+                      Preface (Changes since version 3.1)
+                      -----------------------------------
+
+DEFMAC has been added. You can now define macros in Crwth-Lisp.
+
+The bug in COND has been corrected. In Crwth-Lisp 3.1 you could not have a
+sequence of funcalls in the consequence-part of a COND.
+
+COND returns nothing if none of the tests were true. Crwth-Lisp 3.1 returned
+NIL. The reason Crwth-Lisp 3.1 did this was that I wanted COND always to
+return something, but I can't be sure of that anyway since it may call a
+HP28-code function that doesn't return anything.
+
+The HP28C-patch has been removed from the manual, since the compiler needs
+approx. 1.4 Kb and won't be any fun on a HP28C.
+
+                                1. Introduction
+                                ---------------
+
+The goal I wanted to achieve was to create a Lisp look-alike language for the
+HP28. I wanted it to be as small as possible and efficient enough to be more
+than a toy.
+
+First I made a small interpreter with which I could call most of the HP28's
+builtin functions as a Lisp expression (L-expr), but soon I discovered that
+a compiler would be easier to write and of course more efficient.
+
+What I have so far is a compiler that gives me *almost* total control over the
+HP28 and produces *almost* optimal HP28-code.
+
+                                 2. Description
+                                 --------------
+
+Crwth-Lisp differs somewhat from conventional Lisps. The main differences
+are the syntax, the representation of lists and the truthvalues.
+
+        A list is equivalent to the HP28's lists, i.e. a list is denoted by
+        curly brackets and there are no conses or dotted pairs.
+
+        NIL and {} are NOT equivalent!
+
+                {} is an empty list but NOT a truthvalue.
+
+                NIL is a truthvalue, equivalent to HP28's 0 (zero), NOT to the
+                empty list.
+
+        The atom T is compiled to HP28's 1 (one).
+
+I have chosen this representation of truthvalues because I want it to be easy
+to use HP28's predicates from Lisp and vice versa without having to convert
+between the different truthvalues.
+
+The HP28 screams "Syntax Error" if you try to push a list on the stack con-
+taining any atom in the BRANCH menu. Thus it is not possible to call these
+HP28-functions directly from Crwth-Lisp.
+
+The compiler is very small. It only has to know about a few special forms. It
+is not necessary to define FIRST, REST, CONCAT and so forth since that can be
+done in Crwth-Lisp itself by calling the HP28's builtin functions.
+
+The special forms currently defined in the compiler are QUOTE, DEFUN, DEFMAC,
+LET and COND.
+
+                                3. The compiler
+                                ---------------
+
+LISP   - Compiles an L-expr to a program block and evaluates it.
+COMP   - Compiles an L-expr to a string of HP28-instructions.
+CLIST  - Compiles a list.
+CATOM  - Compiles an atom.
+CFUN   - Compiles a funcall.
+CSEQ   - Compiles a sequence of funcalls.
+SPQ    - Compiles special form QUOTE.
+SPDEF  - Compiles special form DEFUN.
+SPMAC  - Compiles special form DEFMAC.
+CDEF   - Compiles a DEFUN or a DEFMAC without storing the result.
+SPLET  - Compiles special form LET.
+SPCOND - Compiles special form COND.
+SPA    - A list containing the Lisp names of the special forms.
+SPB    - A list containing the compiler function that compiles a special form.
+MACA   - A list containing the macro names.
+MACB   - A list containing the macro's definitions.
+->PROG - Puts program block delimiters around a HP28-code string.
+REST   - Returns the tail of a list.
+
+LISP is the only function you need to know anything about. It takes an L-expr
+as argument. If the L-expr is a DEFUN the function will be compiled to HP28-
+code and stored under a variable. If the L-expr is a DEFMAC the function will
+be compiled and stored in the MACA and MACB variables (see section 6). If the
+L-expr is something else, Crwth-Lisp will act like an interpreter, i.e. it
+will compile the L-expr to HP28-code and evaluate it immediately.
+
+                           4. Factorial -- an example
+                           --------------------------
+
+Push the definition of factorial on the stack.
+
+                {DEFUN FAC {X}
+                  {COND {{== X 0} 1}
+                        {T {* X {FAC {- X 1}}}}}}
+
+Now call LISP. After a while FAC will appear as a new variable in the menu,
+and LISP returned a 1 (which is the same as T, remember?).
+
+Visit FAC to see what it looks like.
+
+                << -> X
+                   <<
+                      IF X 0 == THEN
+                        1
+                      ELSE
+                        X X 1 - FAC *
+                      END
+                   >>
+                >>
+
+If you were to write a factorial in HP28-code you probably wouldn't name the
+argument -- you would rather operate directly on the stack (at least I would).
+One thing in common of all compiled Crwth-Lisp functions is that they always
+take the arguments they need from the stack and stores them in local variables
+instead of operating on the stack (though it is possible to operate on the
+stack in Crwth-Lisp, it is what I would call ugly programming).
+
+Now, if you want to calculate 5! you can do it in two ways:
+
+        As a HP28-function, by pushing 5 on the stack and then press FAC.
+
+        As a Crwth-Lisp call, by pushing {FAC 5} on the stack and
+        then press LISP.
+
+The latter will take somewhat longer since {FAC 5} will be compiled to HP28-
+code before execution.
+
+                               5. Local variables
+                               ------------------
+
+You can create local variables in Crwth-Lisp with the special form LET. It be-
+haves as the Common-Lisp LET.
+
+Ex.             {DEFUN FOO {X}
+                  {LET {{A 5}           ; A and B are local variables.
+                        {B 42}}
+                    {* {+ X B} A}}}
+
+
+The compiled code will use HP28's way of creating local variables:
+
+                << -> X
+                   << 5 42 -> A B
+                      << X B + A *
+                      >>
+                   >>
+                >>
+
+                                   6. Macros
+                                   ---------
+
+Equality is called '==' in HP28-code, but in Crwth-Lisp you would rather call
+it 'EQ'. You could of course define EQ with a DEFUN as:
+
+                {DEFUN EQ {X Y} {== X Y}}
+
+but this would make the HP28-code rather slow if you use EQ alot and whenever
+you move your compiled super-duper-program you'll have to take the small EQ-
+definition with you or it won't be found when EQ is called.
+
+Lets define EQ as a macro instead (with DEFMAC):
+
+                {DEFMAC EQ {X Y} {== X Y}}
+
+EQ won't be stored as a function but as a macro. The name EQ will be added to
+the MACA-list, and the compiled code will be added as a string to the MACB-
+list.
+
+Now, when you compile a program that calls EQ, the funcall will be substituted
+by the code in the MACB-list.
+
+Dirty hint: You can fool the compiler and define EQ as {DEFMAC EQ {} {==}}
+            instead, which will inhibit the naming of the parameters.
+
+Very short functions or HP28-code functions that you would like to call
+something else in Crwth-Lisp, could preferably be defined as macro's.
+
+If you define a macro in the same directory as the compiler, the compiler's
+MACA and MACB will be extended. The only way to get rid of a macro definition
+would be to edit the MACA- and MACB-list. But if you define your macros in
+a subdirectory instead, the extended MACA- and MACB-lists will be stored in
+the subdirectory. Then you can just purge them when you want to get rid of your
+macro's -- The global MACA- and MACB-lists will be untouched in the compiler-
+directory.
+
+Warning: Don't purge the MACA- or MACB-lists from the compiler directory -- the
+         compiler needs them!
+
+                                  7. Comments
+                                  -----------
+
+It is a good idea to create your Crwth-Lisp programs in a subdirectory
+to the compiler -- you don't want to accidently damage the compiler.
+I created a LISP-directory for the compiler which has a SRC- and a BIN-
+subdirectory.
+
+If a Crwth-Lisp function calls a HP28-code procedure that doesn't return
+anything (DISP for instance) the Crwth-Lisp function won't return anything
+either.
+
+Remember to treat NIL as a truthvalue and a truthvalue ONLY!
+
+This is an overview, not a complete manual.
+
+Crwth (pronounced 'croth') is an old celtic lyre.
+
+Have fun!
+-- 
+Olle Gallmo (Crwth)
+Email: crwth@kuling.UU.SE
+Real: Skyttevagen 68, 181 46  Lidingo, Sweden
+
+
+==================================================
+(end)
+
+

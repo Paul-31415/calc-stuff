@@ -1,0 +1,1417 @@
+.nolist
+	#include	"ti83plus.inc"
+.list
+
+.org	$9D93
+.db	$BB, $6D
+
+#define	DWAIT	in a, ($10) \ or a \ jp m, $-3
+
+
+#define	version	013
+
+;these can only be used when being run by OS
+
+selected	equ	appBackUpScreen	;1
+scrolled	equ	selected+1	;1
+scrollDown	equ	scrolled+1	;1
+
+
+
+	bcall(_runIndicOff)
+	ld	a, 3
+	out	($20), a
+
+	set	textWrite, (iy + sGRFlags)
+
+
+
+	ld	hl, (cxMain)
+	ld	de, $FF69
+	or	a
+	sbc	hl, de
+	jp	z, doingHelp
+
+
+mainMenu:
+	bcall(_grBufClr)
+
+	ld	hl, mainMenuText
+	jp	menu
+
+
+
+shortcutKeysMenu:
+	xor	a
+	ld	(selected), a
+	ld	(scrolled), a
+
+displayShortcutMenu:
+	bcall(_grBufClr)
+	ld	a, (scrolled)
+	call	searchForString
+	ld	a, (scrolled)
+	ld	b, a
+	ld	a, (selected)
+	ld	c, a
+	xor	a
+	ld	(penRow), a
+displayShortcutsLoop:
+	push	bc
+	ld	a, 1
+	ld	(penCol), a
+	ld	a, (hl)
+	inc	hl
+	dec	a
+	jr	z, displayShortcutLoop
+	dec	hl
+	push	hl
+	ld	a, b
+	cp	c
+	ld	a, 0
+	ld	(scrollDown), a
+	jr	nz, notInversing
+	inc	a
+	ld	(scrollDown), a
+	set	textInverse, (iy + textFlags)
+notInversing:
+	ld	hl, spaceHyphen
+	bcall(_vPutS)
+	res	textInverse, (iy + textFlags)
+	bcall(_vPutS)
+	pop	hl
+displayShortcutLoop:
+	ld	a, (hl)
+	inc	hl
+	or	a
+	jr	z, endOfString
+	cp	1
+	jr	z, newLineNoUpdate
+	cp	$20
+	jr	nz, notSpacey
+	ld	ix, penCol
+	inc	(ix)
+notSpacey:
+	bcall(_vPutMap)
+	jr	displayShortcutLoop
+
+endOfString:
+	inc	hl
+	inc	hl
+	pop	bc
+	inc	b
+	ld	a, b
+	cp	nShortcuts
+	jr	z, doneDrawingShortcuts
+	push	bc
+newLineNoUpdate:
+	pop	bc
+	ld	a, (penRow)
+	add	a, 7
+	ld	(penRow), a
+	cp	57
+	jr	c, displayShortcutsLoop
+doneDrawingShortcuts:
+	call	graphBufferCopy
+
+
+shortcutsKeyLoop:
+	bcall(_getCSC)
+	halt
+	or	a
+	jr	z, shortcutsKeyLoop
+	
+	ld	hl, selected
+
+	cp	skDown
+	jr	nz, notDownz
+
+	ld	a, (hl)
+	cp	nShortcuts-1
+	jr	z, notDownz
+	inc	(hl)
+	ld	a, (scrollDown)
+	or	a
+	jp	z, displayShortcutMenu
+	ld	a, (hl)
+	call	searchForString
+	ld	a, (hl)
+	ld	hl, scrolled
+	inc	(hl)
+	dec	a
+	jp	nz, displayShortcutMenu
+	inc	(hl)
+	jp	displayShortcutMenu
+notDownz:
+
+	cp	skUp
+	jr	nz, notUpz
+
+	ld	a, (hl)
+	or	a
+	jr	z, notUpz
+	ld	b, a
+	ld	a, (scrolled)
+	cp	b
+	jr	nz, notNeedScrollUp
+	dec	a
+	ld	(scrolled), a
+notNeedScrollUp:
+	dec	(hl)
+	jp	displayShortcutMenu
+notUpz:
+
+	cp	sk2nd
+	jr	z, _2ndShortcut
+
+	cp	skEnter
+	jr	nz, notShortcutEnter
+_2ndShortcut:
+	ld	a, (selected)
+	call	searchForString
+	ex	de, hl
+	call	doAnInfoScreen
+	jp	displayShortcutMenu
+
+notShortcutEnter:
+
+	cp	skClear
+	jr	nz, shortcutsKeyLoop
+
+	jp	mainMenu
+	
+
+	
+
+
+useZStartMenu:
+	ld	hl, useZStartText
+	call	doAnInfoScreen
+	jp	mainMenu
+
+aboutZstartMenu:
+	ld	hl, aboutZStart
+	call	doAnInfoScreen
+	jp	mainMenu
+
+
+quit:
+	bcall(_clrLCDFull)
+	bcall(_grBufClr)
+	bcall(_clrTxtShd)
+	bcall(_homeUp)
+	set	graphDraw, (iy + graphFlags)
+	ret
+
+
+
+
+
+
+
+
+
+
+doingHelp:
+	ld	(cxMain), hl
+	ld	bc, (cxSizeWind)
+	ld	hl, searchTable-3
+	ld	de, 3
+
+findThisOneLoop:
+	add	hl, de
+	ld	a, (hl)
+	or	a
+	jr	z, quitToApp
+	inc	hl
+	cp	b
+	jr	nz, findThisOneLoop
+	ld	a, (hl)
+	cp	c
+	jr	nz, findThisOneLoop
+
+	inc	hl
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	push	de
+
+	ld	hl, plotSScreen
+	ld	de, saveSScreen
+	ld	bc, 768
+	ldir
+	
+	pop	hl
+
+	call	doAnInfoScreen
+
+	ld	hl, saveSScreen
+	ld	de, plotSScreen
+	ld	bc, 768
+	ldir
+
+	call	graphBufferCopy
+
+quitToApp:
+	res	1, (iy + 5)
+	ret
+
+
+;#####################################
+searchForString:
+	ld	hl, shortcutKeysList
+	or	a
+	jr	z, getAddressForString
+	ld	b, a
+	xor	a
+findStringLoop:
+	push	bc
+	cpir
+	pop	bc
+	inc	hl
+	inc	hl
+	djnz	findStringLoop
+
+getAddressForString:
+	push	hl
+	dec	b
+	cpir
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	pop	hl
+	ret	
+
+
+;#####################################
+doAnInfoScreen:
+	push	hl
+	ld	hl, plotSScreen
+	ld	de, plotSScreen+1
+	ld	bc, 7*12-1
+	ld	(hl), $FF
+	ldir
+	
+	ldi
+	ld	(hl), 0
+	ld	bc, 57*12-1
+	ldir
+
+	set	3, (iy + 5)		;inverse
+
+	pop	hl
+	
+	ld	de, 47
+	call	centerText
+	
+	res	3, (iy + 5)		;inverse
+
+	ld	de, 8*256+2
+	ld	c, 5
+	
+	call	displayWIndentDE
+
+displayTheRestLoop:
+	ld	a, 2
+	ld	(penCol), a
+	ld	c, 9
+	ld	a, (hl)
+	or	a
+	jr	z, doneWithRest
+	call	displayWIndent
+	jr	displayTheRestLoop
+
+
+doneWithRest:
+	call	graphBufferCopy
+
+waitForKey:
+	bcall(_getCSC)
+	halt
+	or	a
+	jr	z, waitForKey
+
+	ret
+
+
+
+
+;#####################################
+;do a menu
+;input: hl = menu formatting start
+
+menu:
+	push	hl
+	ld	hl, plotSScreen
+	ld	de, plotSScreen+1
+	ld	bc, 7*12-1
+	ld	(hl), $FF
+	ldir
+	
+	set	3, (iy + 5)	;inverse
+
+	pop	hl	
+	
+	ld	e, (hl)
+	inc	hl
+	ld	d, 0
+	call	vPutSDE
+
+	res	3, (iy + 5)	;inverse
+
+doSelections:
+	ld	a, 1
+	ld	(selected), a	
+	ld	b, (hl)
+	inc	hl
+innerSelectionLoop:
+	set	1, (iy + 5)
+	ld	de, 8*256+0
+	ld	(penCol), de
+	push	hl
+	push	bc
+	ld	c, 1
+selectsLoop:
+	ld	a, (selected)
+	cp	c
+	jr	nz, notSelected
+	set	3, (iy + 5)	;inverse
+notSelected:
+	ld	a, ' '
+	bcall(_vPutMap)
+	ld	a, c
+	add	a, $30
+	bcall(_vPutMap)
+	ld	a, ':'
+	bcall(_vPutMap)
+	res	3, (iy + 5)	;inverse
+	ld	a, 10
+	ld	(penCol), a
+	bcall(_vPutS)
+	ld	a, (penRow)
+	add	a, 8
+	ld	(penRow), a
+	xor	a
+	ld	(penCol), a
+	inc	c
+	djnz	selectsLoop
+
+	res	1, (iy + 5)
+
+	push	hl
+	bcall(_grBufCpy)
+	pop	hl	
+
+	ei
+keyLoop:
+	halt
+	push	hl
+	bcall(_GetCSC)
+	pop	hl
+	or	a
+	jr	z, keyLoop
+
+	cp	skDown
+	jr	nz, notDown
+	ld	a, (selected)
+	pop	bc
+	push	bc
+	cp	b
+	jr	nz, notLast
+	xor	a
+notLast:
+	inc	a
+	ld	(selected), a
+keyFound:
+	pop	bc
+	pop	hl
+	jr	innerSelectionLoop
+notDown:
+
+	cp	skUp
+	jr	nz, notUp
+	ld	a, (selected)
+	dec	a
+	jr	nz, notFirst
+	pop	af
+	push	af
+notFirst:
+	ld	(selected), a
+	jr	keyFound
+notUp:
+
+	cp	sk2nd
+	jr	nz, not2nd
+_2nd:
+	ld	a, (selected)
+numberEntry:
+	pop	bc
+	push	bc
+	inc	b
+	cp	b
+	jr	nc, keyLoop
+	dec	a
+	rlca
+	ld	e, a
+	ld	d, 0
+	add	hl, de
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	ex	de, hl
+	pop	af
+	pop	af
+	jp	(hl)
+not2nd:
+
+	cp	skClear
+	jr	nz, notClear
+
+	pop	af
+	push	af
+	jr	numberEntry
+	
+notClear:
+	
+	cp	skEnter
+	jr	z, _2nd
+
+	sub	sk3
+	jr	c, keyLoop
+	cp	sk7+1
+	jr	nc, keyLoop
+	ld	e, a
+	ld	d, 0
+	push	hl
+	ld	hl, numChart
+	add	hl, de
+	ld	a, (hl)
+	pop	hl
+	or	a
+	jp	z, keyLoop
+	jr	numberEntry
+	
+	
+
+numChart:
+	.db	3, 6, 9, 0, 0, 0, 0, 0
+	.db	2, 5, 8, 0, 0, 0, 0, 0
+	.db	1, 4, 7
+
+
+
+
+;######################################
+displayWIndentDE:
+	ld	(penCol), de
+displayWIndent:
+	ld	a, (penCol)
+	ld	b, a
+	push	hl
+wordLoop:
+	ld	a, (hl)
+	inc	hl
+	or	a
+	jr	z, displayWord
+	cp	$20
+	jr	z, displayWord
+
+	push	hl
+	push	bc
+	ld	l, a
+	ld	h, 0
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	push	ix
+	bcall(_sFont_len)
+	ld	a, b
+	pop	ix
+	pop	bc
+	pop	hl
+	add	a, b
+	ld	b, a
+	cp	96
+	jr	c, wordLoop
+
+	ld	a, c
+	ld	(penCol), a
+	ld	a, (penRow)
+	add	a, 7
+	ld	(penRow), a
+	pop	hl
+	jr	displayWIndent
+
+displayWord:
+	pop	hl
+displayWordLoop:
+	ld	a, (hl)
+	or	a
+	jr	z, doneDisplaying
+	cp	$20
+	jr	z, doneDisplaying
+	push	ix
+	bcall(_vPutMap)
+	pop	ix
+	inc	hl
+	jr	displayWordLoop
+
+doneDisplaying:
+	ld	a, (penCol)
+	inc	a
+	inc	a
+	ld	(penCol), a
+
+	ld	a, (hl)
+	inc	hl
+	or	a
+	jr	nz, displayWIndent
+	ld	a, (penRow)
+	add	a, 7
+	ld	(penRow), a
+	ret
+
+;######################################
+saveScreen:
+	ld	hl, saveSScreen
+	ld	a, $80
+	out	($10), a
+	ld	c, $20
+saveColumn:
+	DWAIT
+	ld	a, c
+	out	($10), a
+	cp	$2C
+	ret	z
+	ld	b, 64
+	ld	de, 12
+	DWAIT
+	in	a, ($11)
+saveByte:
+	DWAIT
+	in	a, ($11)
+	ld	(hl), a
+	add	hl, de
+	djnz	saveByte
+	ld	de, -767
+	add	hl, de
+	inc	c
+	jr	saveColumn
+
+;########################################
+;graph buffer copy
+;input: none
+;output: none
+
+graphBufferCopy:
+	ld	a, $80
+	out	($10), a
+	ld	hl, plotSScreen
+	ld	c, $20
+dispColumn:
+	DWAIT
+	ld	a, c
+	out	($10), a
+	cp	$2C
+	ret	z
+	ld	b, 64
+	ld	de, 12
+dispByte:
+	DWAIT
+	ld	a, (hl)
+	out	($11), a
+	add	hl, de
+	djnz	dispByte
+	ld	de, -767
+	add	hl, de
+	inc	c
+	jr	dispColumn
+
+
+
+;#####################################
+centerText:
+	ld	b, 0
+	push	hl
+	push	de
+centerTextLoop:
+	ld	a, (hl)
+	or	a
+	jr	z, doneWithAlign
+	push	hl
+	push	bc
+	ld	l, a
+	ld	h, 0
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	push	ix
+	bcall(_sFont_Len)
+	ld	a, b
+	pop	ix
+	pop	bc
+	add	a, b
+	ld	b, a
+	pop	hl
+	inc	hl
+	jr	centerTextLoop
+
+doneWithAlign:
+	pop	de
+	ld	a, b
+	srl	a
+	sub	e
+	neg
+	ld	e, a
+	pop	hl
+;#####################################
+vPutSDE:
+	ld	(penCol), de
+	bcall(_vPutS)
+	ret
+
+
+
+
+
+
+searchTable:
+	.db	1, 1
+	.dw	tInstallMain
+	.db	1, 2
+	.dw	tSetPicture
+	.db	1, 3
+	.dw	tSetDefaults
+	.db	1, 4
+	.dw	tCatalogHelp
+	.db	1, 5
+	.dw	tOmnicalc
+	.db	1, 6
+	.dw	tNext
+	.db	1, 7
+	.dw	tQuit
+
+	.db	2, 1
+	.dw	tOnOffPic
+	.db	2, 2
+	.dw	tPictureContrast
+	.db	2, 3
+	.dw	tRefreshDelay
+	.db	2, 4
+	.dw	tFindPicture
+	.db	2, 5
+	.dw	tBack
+
+	.db	3, 1
+	.dw	tAnglez
+	.db	3, 2
+	.dw	tDiagnostic
+	.db	3, 3
+	.dw	tMathPrint
+	.db	3, 4
+	.dw	tKillPopUp
+	.db	3, 5
+	.dw	tStatWizards
+	.db	3, 6
+	.dw	tBack
+
+	.db	4, 1
+	.dw	tOnOffOmni
+	.db	4, 2
+	.dw	tSaveCurrentSettings
+	.db	4, 3
+	.dw	tBack
+
+	.db	5, 1
+	.dw	tHardware
+	.db	5, 2
+	.dw	tRunOnRamClear
+	.db	5, 3
+	.dw	tCustomFont
+	.db	5, 4
+	.dw	tProgramSettings
+	.db	5, 5
+	.dw	tAxeSettings
+	.db	5, 6
+	.dw	tBack
+
+	.db	6, 1
+	.dw	tSaveContrast
+	.db	6, 2
+	.dw	tGetDelay
+	.db	6, 3
+	.dw	tResetThose
+	.db	6, 4
+	.dw	tExecuteC000
+	.db	6, 5
+	.dw	tUseFastMemTimings
+	.db	6, 6
+	.dw	tBack
+
+	.db	7, 1
+	.dw	tInstallRam
+	.db	7, 2
+	.dw	tUninstall
+	.db	7, 3
+	.dw	tOldRamClear
+	.db	7, 4
+	.dw	tBack
+
+	.db	8, 1
+	.dw	tEnabled
+	.db	8, 2
+	.dw	tSelectFont
+	.db	8, 3
+	.dw	tNewFont
+	.db	8, 4
+	.dw	tEditFont
+	.db	8, 5
+	.dw	tBack
+
+	.db	9, 1
+	.dw	tShell
+	.db	9, 2
+	.dw	tTurningOn
+	.db	9, 3
+	.dw	tRamClears
+	.db	9, 4
+	.dw	tOnZStart
+	.db	9, 5
+	.dw	tParserChain
+	.db	9, 6
+	.dw	tRunFromHome
+	.db	9, 7
+	.dw	tBack
+
+	.db	10, 1
+	.dw	tEnableHook
+	.db	10, 2
+	.dw	tCompileFor
+	.db	10, 3
+	.dw	tBack
+
+	.db	0
+	
+
+
+
+tInstallMain:
+	.db	"Install", 0
+	.db	"This is the main on/off switch for the app", 0
+	.db	"- If this is off, the app will do nothing", 0
+	.db	0
+
+tSetPicture:
+	.db	"Set picture", 0
+	.db	"This allows you to display an 8-level grayscale picture when your calculator turns on", 0
+	.db	0
+
+tSetDefaults:
+	.db	"Set defaults", 0
+	.db	"This allows you to change some default settings on your calculator", 0
+	.db	0
+
+tCatalogHelp:
+	.db	"Catalog Help", 0
+	.db	"This makes zStart enable the CtlgHelp app", 0
+	.db	"- Get CtlgHelp at education.ti.com", 0
+	.db	"- Use it by pressing + in menus", 0
+	.db	0
+
+tOmnicalc:
+	.db	"Omnicalc", 0
+	.db	"This makes zStart enable Omnicalc", 0
+	.db	"- Get Omnicalc at ticalc.org", 0
+	.db	"- Omnicalc adds a lot more hooks", 0
+	.db	0
+
+tNext:
+	.db	"Next", 0
+	.db	"This goes to the next page where there are more cool options", 0
+	.db	"- You should definitely check the next page out at least once in your life", 0
+	.db	0
+
+tQuit:
+	.db	"Quit", 0
+	.db	"This goes back to the OS", 0
+	.db	"- Did you know zStart only saves the appvar if you make a change?", 0
+	.db	0
+
+tOnOffPic:
+	.db	"On / Off", 0
+	.db	"This is the On / Off switch for the 8-level grayscale pictures on startup", 0
+	.db	"- This hook uses OFFSCRPT", 0
+	.db	0
+
+tPictureContrast:
+	.db	"Picture Contrast", 0
+	.db	"This is the current contrast setting for your picture", 0
+	.db	"- + raises the contrast while viewing", 0
+	.db	"- - lowers the contrast while viewing", 0
+	.db	0
+
+tRefreshDelay:
+	.db	"Refresh Delay", 0
+	.db	"To make the grayscale perfect, you have to calibrate it", 0
+	.db	"- Press * and / until the scrolling glitch line remains stationary", 0
+	.db	"- Anything outside 155 - 185 is probably wrong", 0
+	.db	0
+
+tFindPicture:
+	.db	"Find Picture", 0
+	.db	"This lists all the zStart pictures on your calculator", 0
+	.db	"- Pictures can be either programs or appvars", 0
+	.db	"- To make pictures, find the zStart readme at ticalc.org", 0
+	.db	0
+
+tBack:
+	.db	"Back", 0
+	.db	"This goes back to the previous screen", 0
+	.db	"- Pressing CLEAR always selects the last option", 0
+	.db	0
+
+tAnglez:
+	.db	"Angle", 0
+	.db	"This lets you set the default angle system", 0
+	.db	"- Either degrees or radians", 0
+	.db	0
+
+tDiagnostic:
+	.db	"Diagnostic", 0
+	.db	"This lets you enable the stat diagnostics", 0
+	.db	"- This is r and r", $12, " in stat world", 0
+	.db	"- It is normally enabled with DiagnosticOn", 0
+	.db	0
+
+tMathPrint:
+	.db	"Math Print", 0
+	.db	"This lets you disable MathPrint", 0
+	.db	"- This only applies for OS's ", $19, "2.53", 0
+	.db	"- MathPrint is the devil", 0
+	.db	0
+
+tKillPopUp:
+	.db	"Kill pop up", 0
+	.db	"This disables the pop up window in MathPrint OS's", 0
+	.db	"- It's the one that reminds you about the new shortcut menus", 0
+	.db	"- This only applies for OS's ", $19, "2.53", 0
+	.db	0
+
+tStatWizards:
+	.db	"Stat Wizards", 0
+	.db	"This disables the stat wizards", 0
+	.db	"- This only applies for OS's ", $19, "2.55", 0
+	.db	0
+
+tOnOffOmni:
+	.db	"On / Off", 0
+	.db	"This is the On / Off switch for the Omnicalc settings", 0
+	.db	"- Be sure to actually save the settings you want", 0
+	.db	"- Get Omnicalc on ticalc.org", 0
+	.db	0
+
+tSaveCurrentSettings:
+	.db	"Save current settings", 0
+	.db	"This saves your Omnicalc settings", 0
+	.db	"- Set up Omnicalc to your liking then press this button", 0
+	.db	"- It doesn't save the font", 0
+	.db	0
+
+tHardware:
+	.db	"Hardware", 0
+	.db	"These are settings that apply to the calculator hardware", 0
+	.db	"- Most of these required a lot of research at one point", 0
+	.db	"- These all use ONSCRPT", 0
+	.db	0
+
+tRunOnRamClear:
+	.db	"Run on RAM Clear", 0
+	.db	"This is where you make zStart ", $22, "permanent", $22, 0
+	.db	"- Hold VARS during boot to abort", 0
+	.db	"- CLEAR also aborts, but that's an OS thing", 0
+	.db	0
+
+tCustomFont:
+	.db	"Custom Font", 0
+	.db	"This is where you manage your custom fonts", 0
+	.db	"- I spent a long time making these fonts run as fast as possible", 0
+	.db	0
+
+tProgramSettings:
+	.db	"Program settings", 0
+	.db	"zStart is actually a shell", 0
+	.db	"- These are the settings that relate to that kind of thing", 0
+	.db	0
+
+tAxeSettings:
+	.db	"Axe settings", 0
+	.db	"Axe is a programming language between asm and BASIC", 0
+	.db	"- Get it at omnimaga.org", 0
+	.db	"- There are quite a few features in this app for Axe", 0
+	.db	0
+
+tSaveContrast:
+	.db	"Save Contrast", 0
+	.db	"Set a new default contrast", 0
+	.db	"- This saves whatever is currently set", 0
+	.db	"- 23 is default", 0
+	.db	0
+
+tGetDelay:
+	.db	"Get Delay", 0
+	.db	"This sets a delay so that your screen doesn't garble during certain games", 0
+	.db	"- This option is equivalent to a permanent ALCDFIX", 0
+	.db	"- Blame TI for your crappy LCD driver", 0
+	.db	0
+
+tResetThose:
+	.db	"Reset those ^", 0
+	.db	"Press this if you don't want zStart to mess with your screen", 0
+	.db	"- Maybe you hate me, idk", 0
+	.db	0
+
+tUseFastMemTimings:
+	.db	"Use fast mem timings", 0
+	.db	"TI adds a delay to the cpu when it is executing flash", 0
+	.db	"- This gives a 14% speed increase to both the OS and apps (which are stored in flash)", 0
+	.db	0
+
+tExecuteC000:
+	.db	"Execute >C000", 0
+	.db	"TI won't let you run programs bigger than 8,811 bytes", 0
+	.db	"- This disables that protection", 0
+	.db	"- I discovered this fix :)", 0
+	.db	0
+
+tInstallRam:
+	.db	"Install", 0
+	.db	"This makes zStart run on RAM Clears", 0
+	.db	"- If this is enabled, you won't be able to send your OS to other people", 0
+	.db	"- This only works on OS 2.43, 2.53, 2.55, and 1.19", 0
+	.db	0
+
+tUninstall:
+	.db	"Uninstall", 0
+	.db	"This makes zStart not run on RAM Clears", 0
+	.db	"- Do this if you want to send your OS to someone else", 0
+	.db	"- Also do this if you are going to delete zStart", 0
+	.db	0
+
+tOldRamClear:
+	.db	"Old RAM Clear", 0
+	.db	"This restores the classic RAM Clear screen", 0
+	.db	"- This only applies for OS's ", $19, "2.53", 0
+	.db	"- The new one is too cluttered", 0
+	.db	0
+
+tEnabled:
+	.db	"Enabled", 0
+	.db	"This is the On / Off switch for the fonts", 0
+	.db	"- It's surprising how many places these fonts will show up", 0
+	.db	0
+	
+tSelectFont:
+	.db	"Select font", 0
+	.db	"This lists all the fonts for you to pick", 0
+	.db	"- Fonts can be either programs or appvars", 0
+	.db	"- 2nd previews", 0
+	.db	"- Enter selects", 0
+	.db	0
+
+tNewFont:
+	.db	"New font", 0
+	.db	"This opens a new font in the font editor", 0
+	.db	"- 2nd toggles pixels", 0
+	.db	"- Alpha pulls up the list", 0
+	.db	"- Math keys change letters", 0
+	.db	0
+
+tEditFont:
+	.db	"Edit font", 0
+	.db	"This opens a font in the font editor", 0
+	.db	"- 2nd previews", 0
+	.db	"- Enter selects", 0
+	.db	0
+
+tShell:
+	.db	"Shell", 0
+	.db	"zStart doesn't provide all of the routines of DCS or Mirage", 0
+	.db	"- Select the app to use as a shell", 0
+	.db	"- If you don't pick one, zStart has a few ion routines", 0
+	.db	0
+	
+tTurningOn:
+	.db	"Turning on", 0
+	.db	"This allows you to run a program when the calculator turns on", 0
+	.db	"- This uses OFFSCRPT", 0
+	.db	"- Check the readme for restrictions", 0
+	.db	0
+
+tRamClears
+	.db	"Ram Clears", 0
+	.db	"This allows you to run a program on RAM Clears", 0
+	.db	"- Use non-shell programs for best results", 0
+	.db	"- Check the readme for restrictions", 0
+	.db	0
+
+tOnZStart:
+	.db	"On zStart", 0
+	.db	"This allows you to run something whenever zStart runs", 0
+	.db	"- This actually has a lot of restrictions, you should definitely read the readme", 0
+	.db	0
+
+tParserChain:
+	.db	"Parser chain", 0
+	.db	"This allows you to chain a parser hook onto zStart", 0
+	.db	"- First set the parser hook, then run this option", 0
+	.db	"- The hook must be in an app", 0
+	.db	0
+
+tRunFromHome:
+	.db	"Run from home", 0
+	.db	"This allows you to run a lot of things from the homescreen", 0
+	.db	"- Archived programs", 0
+	.db	"- Asm programs", 0
+	.db	"- Even shell programs", 0
+	.db	"- This uses a parser hook", 0
+	.db	0
+
+tEnableHook:
+	.db	"Axe Settings", 0
+	.db	"This enables all of Axe's hooks", 0
+	.db	"- Be sure to thank Quigibo for giving me this ability", 0
+	.db	0
+	
+tCompileFor:
+	.db	"Compile for", 0
+	.db	"This is the same setting that's inside Axe", 0
+	.db	"- You can also change this with ON + /", 0
+	.db	0
+
+
+
+mainMenuText:
+	.db	23
+	.db	"zHelp  v1.3." 
+	.db	version/100+$30, version/10%10 + $30, version%10 + $30
+	.db	0
+	.db	4
+	.db	"Shortcut  keys", 0
+	.db	"Use  zHelp  in  zStart", 0
+	.db	"About  zStart" ,0
+	.db	"Quit", 0
+	.dw	shortcutKeysMenu
+	.dw	useZStartMenu
+	.dw	aboutZstartMenu
+	.dw	quit
+
+
+nShortcuts	equ	35
+
+
+shortcutKeysList:
+	.db	1, "Homescreen:", 1
+	.db	"ON + Y= - headphones", 0
+	.dw	sHeadphones
+	.db	"ON + STATS - APD", 0
+	.dw	sAPD
+	.db	"ON + MATH - MathPrint", 0
+	.dw	sMathPrint
+	.db	"ON + Apps - Run MirageOS", 0
+	.dw	sMirageOS
+	.db	"ON + Prgm - Run DCS", 0
+	.dw	sDCS
+	.db	"ON + VARS - archive all", 0
+	.dw	sArchiveAll
+	.db	"ON + CLEAR - restore", 0
+	.dw	sRestore
+	.db	"ON + SIN - swap angle", 0
+	.dw	sAnglez
+	.db	"ON + ^ - kill hooks", 0
+	.dw	sKillHooks
+	.db	"ON + num - shortcuts", 0
+	.dw	sShortcuts
+	.db	"ON + / - Axe compile for", 0
+	.dw	sAxeCompileFor
+	.db	"ON + + - Enable base conv", 0
+	.dw	sEnableBaseConv
+
+
+	.db	1, "PRGM EXEC menu:", 1
+	.db	"ON + num - set shortcut", 0
+	.dw	sSetProgShortcut
+	.db	"ON + * - archive prog", 0
+	.dw	sArchiveProg
+	.db	"ON + 0 - set run zStart", 0
+	.dw	sSetRunZStart
+	.db	"ON + . - set RAM clear", 0
+	.dw	sSetRamClear
+	.db	"ON + ", $1A, " - set turn on", 0
+	.dw	sSetTurnOn
+	.db	"ON + ENTER - run prog", 0
+	.dw	sRunProg
+
+	.db	1, "PRGM EDIT menu:", 1
+	.db	"num - edit archived", 0
+	.dw	sEditArchivedNum
+	.db	"ENTER - edit archived", 0
+	.dw	sEditArchived
+	.db	"ON + num - set shortcut", 0
+	.dw	sSetEditShortcut
+	.db	"ON + ENTER - axe compile", 0
+	.dw	sAxeCompile
+
+	.db	1, "APPS menu:", 1
+	.db	"ON + . - set RAM clear", 0
+	.dw	sSetRamClearApp
+	.db	"ON + ", $1A, " - set turn on", 0
+	.dw	sSetTurnOnApp
+
+	.db	1, "Any other menu:", 1
+	.db	"ON + num - set shortcut", 0
+	.dw	sSetTokenShortcut
+
+	.db	1, "Program editor", 1
+	.db	"CLEAR - save for undo", 0
+	.dw	sSaveForUndo
+	.db	"ON + ZOOM - zoom test", 0
+	.dw	sZoomTest
+	.db	"ON + TRACE - reg test", 0
+	.dw	sRegTest
+	.db	"ON + DEL - quit no save", 0
+	.dw	sQuitNoSave
+	.db	"ON + VARS - Lbl menu", 0
+	.dw	sLblMenu
+	.db	"ON + ^ - Undo", 0
+	.dw	sUndo
+	.db	"ON + * - archive this", 0
+	.dw	sArchiveThis
+	.db	"ON + STO - Axe compile", 0
+	.dw	sAxeCompileProg
+	.db	"ON + + - copy line", 0
+	.dw	sCopy
+	.db	"ON + ENTER - paste", 0
+	.dw	sPaste
+	
+
+
+sHeadphones:
+	.db	"ON + Y=", 0
+	.db	"Use this so that plugging in headphones doesn't freeze the calculator", 0
+	.db	0
+
+sAPD:
+	.db	"ON + STAT", 0
+	.db	"This instantly goes to APD", 0
+	.db	"- Good for keeping your current screen", 0
+	.db	0
+
+sMathPrint:
+	.db	"ON + MATH", 0
+	.db	"This toggles MathPrint", 0
+	.db	"- I hate MathPrint", 0
+	.db	"- 2.53+", 0
+	.db	0
+
+sMirageOS:
+	.db	"ON + APPS", 0
+	.db	"This runs MirageOS", 0
+	.db	"- Omnicalc also does this", 0
+	.db	0
+
+sDCS:
+	.db	"ON + PRGM", 0
+	.db	"This runs DoorsCS", 0
+	.db	"- This hook will work as long as DCS is named DooCSnum", 0
+	.db	0
+
+sArchiveAll:
+	.db	"ON + VARS", 0
+	.db	"This archives all of your programs and appvars", 0
+	.db	0
+
+sRestore:
+	.db	"ON + CLEAR", 0
+	.db	"This restores all of zStart's hooks", 0
+	.db	"- It is functionally equivalent to running and quitting zStart", 0
+	.db	0
+
+sAnglez:
+	.db	"ON + SIN", 0
+	.db	"This toggles between degrees and radians", 0
+	.db	0
+
+sKillHooks:
+	.db	"ON + ^", 0
+	.db	"This kills all of zStart's hooks", 0
+	.db	0
+
+sShortcuts:
+	.db	"ON + num", 0
+	.db	"This performs the certain shortcut assigned with this key", 0
+	.db	"- Press this in menus to set shorctuts", 0
+	.db	0
+ 
+sAxeCompileFor:
+	.db	"ON + /", 0
+	.db	"This changes what Axe is going to ", $22, "compile for", $22, 0
+	.db	0
+
+sEnableBaseConv:
+	.db	"ON + +", 0
+	.db	"This enables the base conversion hook", 0
+	.db	"- Append numbers with 'b' or 'h' to denote binary or hex", 0
+	.db	0
+
+sSetProgShortcut:
+	.db	"ON + num", 0
+	.db	"Set the current program as this shortcut", 0
+	.db	"- Remember to press it twice", 0
+	.db	0
+
+sArchiveProg:
+	.db	"ON + *", 0
+	.db	"Archives the current program", 0
+	.db	0
+
+sSetRunZStart:
+	.db	"ON + 0", 0
+	.db	"Sets the current program to run whenever zStart does", 0
+	.db	"- There are a lot of restrictions, check the readme", 0
+	.db	0
+
+sSetRamClear:
+	.db	"ON + .", 0
+	.db	"Sets the current program to run on RAM clears", 0
+	.db	"- The best thing to set here is a no-shell program", 0
+	.db	0
+
+sSetTurnOn:
+	.db	"ON + ", $1A, 0
+	.db	"Sets the current program to run on the calculator turns on", 0
+	.db	"- This uses OFFSCRPT", 0
+	.db	0
+
+sRunProg:
+	.db	"ON + ENTER", 0
+	.db	"This runs the current program", 0
+	.db	"- This runs just about anything, archived, basic, asm, etc", 0
+	.db	0
+
+sEditArchivedNum:
+	.db	"num", 0
+	.db	"Edits that program even if it's archived", 0
+	.db	"- Honestly, all your programs should be archived", 0
+	.db	0
+
+sEditArchived:
+	.db	"ENTER", 0
+	.db	"Edits the current program even if it's archived", 0
+	.db	"- Honestly, all your programs should be archived", 0
+	.db	0
+
+sSetEditShortcut:
+	.db	"ON + num", 0
+	.db	"Sets a shorcut to edit the current program", 0
+	.db	"- Use the shortcut on the homescreen", 0
+	.db	0
+
+sAxeCompile:
+	.db	"ON + ENTER", 0
+	.db	"Have axe compile the current program", 0
+	.db	0
+
+sSetRamClearApp:
+	.db	"ON + .", 0
+	.db	"Set the current app to run on RAM clears", 0
+	.db	"- You may have to temporarily disable Omnicalc and Mirage to enable this", 0
+	.db	0
+
+sSetTurnOnApp:
+	.db	"ON + ", $1A, 0
+	.db	"Set the current app to run when turning on", 0
+	.db	"- You may have to temporarily disable Omnicalc and Mirage to enable this", 0
+	.db	0
+
+sSetTokenShortcut:
+	.db	"ON + num", 0
+	.db	"Set the current token as a shortcut", 0
+	.db	"- Even works in catalog", 0
+	.db	0
+
+sSaveForUndo:
+	.db	"CLEAR", 0
+	.db	"Clears line and saves it to be restored with undo", 0
+	.db	0
+
+sZoomTest:
+	.db	"ON + ZOOM", 0
+	.db	"Compiles the current program with Axe under zoom and then runs it", 0
+	.db	0
+
+sRegTest:
+	.db	"ON + TRACE", 0
+	.db	"Compiles the current program with Axe and then runs it", 0
+	.db	0
+
+sQuitNoSave:
+	.db	"ON + DEL", 0
+	.db	"If the current program is archived, this quits without saving any changes", 0
+	.db	0
+
+sLblMenu:
+	.db	"ON + VARS", 0
+	.db	"Pulls up a list of labels that you can jump to to speed up editing", 0
+	.db	0
+
+sUndo:
+	.db	"ON + ^", 0
+	.db	"Pastes whatever was last cleared with clear", 0
+	.db	0
+
+sArchiveThis:
+	.db	"ON + *", 0
+	.db	"Archives the program you are editing", 0
+	.db	"- Stuff in the archive is a lot safer", 0
+	.db	0
+
+sAxeCompileProg:
+	.db	"ON + STO", 0
+	.db	"Compiles the current program with Axe and quits", 0
+	.db	0
+
+sCopy:
+	.db	"ON + +", 0
+	.db	"Saves the current line to be pasted", 0
+	.db	0
+
+sPaste:
+	.db	"ON + ENTER", 0
+	.db	"Pastes the currently saved line", 0
+	.db	0
+
+
+useZStartText:
+	.db	"Use  zHelp  in  zStart", 0
+	.db	"zStart works exactly like Catalog Help", 0
+	.db	"- Press + on an item in zStart to read info on it", 0
+	.db	0
+
+aboutZStart:
+	.db	"About  zStart", 0
+	.db	"By: Brian Coventry", 0
+	.db	"   aka thepenguin77", 0
+	.db	"- This app started as a replacement for Start-Up back in 2010", 0
+	.db	0
+
+
+spaceHyphen:
+	.db	" -", 0
+	.db	"  ", 0
+
+
+
+
+
+
+

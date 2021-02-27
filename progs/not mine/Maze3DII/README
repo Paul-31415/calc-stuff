@@ -1,0 +1,72 @@
+Maze 3D II
+(c) 2006 Kevin Harness <deep42thought42@yahoo.com>
+
+DESCRIPTION:
+
+Maze 3D II places the user in a 3D labyrinth,
+and the user seeks a goal hidden within the maze.
+
+REQUIREMENTS:
+
+TI-38+
+ION-compatible shell, e.g. MirageOS
+
+KEYS:
+
+left, right:           turn
+up, down:              move forward, back
+[VARS],[CLEAR]         sidestep
+[MODE]                 quit
+[ENTER]                follow right wall
+
+STRATEGIC NOTES:
+
+The goal is a floating smily face.
+You start in the northwest corner of the maze.
+The goal is at the southeast corner of the maze.
+Use the compass in the lower left corner to navigate.
+Sometimes you will see a map of the maze on a wall.
+You show up as a flickering dot on the map.
+
+MEMORY USAGE NOTES:
+
+In addition to the space it occupies on your calculator,
+Maze 3D II requires about 1500 bytes of free ram
+when it runs.  If there is insufficent memory, the
+program will terminate with an error message.
+Also, there must not be any variable or program on
+your calculator with the name "MACHMEM".
+
+MAZE 3D II, Evil Edition:
+
+This edition (`mazeevil.8xp') was accidentally tainted
+with evil.  A nightmarish creature lurks its halls,
+seeking fresh souls at every left turn.  Enter at your
+own risk.
+
+BUGS:
+
+If you find a bug, and you can fix it, send me your fix.
+If you cannot fix it, at least let me know about it.
+Please include as much information about it as you can
+in your bug report:
+1. Describe the bug's behavior as completely as possible
+2. Describe how to reproduce the bug
+   If I can't reproduce a bug, I can't fix it.
+3. If possible, indicate where the bug is in the code.
+Send all bug reports to deep42thought42@yahoo.com
+
+LICENSE:
+
+Maze 3D II and all the utilities written by Kevin Harness
+used in building it are released under the GPL.
+See the file "COPYING" for details.
+
+DEVELOPERS:
+
+The Mach3D engine, developed for use in Maze 3D II,
+is designed to be easily reusable.
+See the file "src/mach3D/README" for more information
+about writing programs that use the Mach3D engine.
+
+

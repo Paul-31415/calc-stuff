@@ -1,0 +1,615 @@
+.org $0000
+
+#include "notes.inc"
+
+title:	.db "Benny the Bouncer",0
+artist:	.db "Emerson Lake & Palmer",0
+album:	.db "Brain Salad Surgery",0
+
+
+song:
+
+tempo = 110
+	playsection(intro)
+	playsection(mainA)
+	playsection(mainA)
+	playsection(mainB)
+	playsection(mainA)
+	playsection(mainA)
+	playsection(mainB)
+	playsection(fight)
+	playsection(solo)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordA)
+	playsection(chordB)
+	playsection(fight)
+	playsection(mainA)
+	playsection(mainA)
+	playsection(mainB)
+	playsection(intro)
+	playsection(ending)
+	
+	endsong
+
+intro:
+	note(a1,d2,rest,rest,eighth)
+	note(d1,rest,rest,rest,eighth)
+	note(g1,b1,rest,rest,eighth)
+	note(fs1,a1,rest,rest,eighth)
+	note(b1,rest,rest,rest,sixteenth)
+	note(a1,rest,rest,rest,thirtysecond)
+	note(f1,rest,rest,rest,thirtysecond)
+	note(d1,rest,rest,rest,eighth)
+	note(b0,rest,rest,rest,eighth)
+	note(d1,rest,rest,rest,eighth)
+
+	note(a1,fs2,rest,rest,eighth)
+	note(ab1,f2,rest,rest,eighth)
+	note(g1,e2,rest,rest,eighth)
+	note(fs1,a1,d2,rest,eighth)
+	note(fs1,a1,d2,rest,half)
+
+	endsection
+
+mainA:
+	note(d1,rest,rest,d3,eighth)
+	note(d1,rest,rest,d3,eighth)
+	note(d1,a1,d2,c3,eighth)
+	note(d1,a1,d2,b2,eighth)
+	note(d1,g1,b1,a2,eighth)
+	note(d1,g1,b1,b2,eighth)
+	note(e1,b1,e2,e2,eighth)
+	note(e1,b1,e2,fs2,eighth)
+
+	note(e1,a1,cs2,a2,eighth)
+	note(e1,a1,cs2,g2,eighth)
+	note(a1,e2,a2,fs2,eighth)
+	note(a1,d2,fs2,d2,eighth)
+	note(a1,d2,fs2,d2,eighth)
+	note(a1,d2,fs2,d2,eighth)
+	note(a1,d2,fs2,rest,eighth)
+	note(a1,d2,fs2,c3,eighth)
+
+	endsection
+
+mainB:
+	note(rest,rest,rest,g3,eighth)
+	note(d2,rest,rest,g3,eighth)
+	note(cs2,bb2,rest,f3,eighth)
+	note(c2,a2,rest,e3,eighth)
+	note(b1,g2,rest,d3,eighth)
+	note(b1,g2,rest,g2,eighth)
+	note(c2,a2,rest,g2,eighth)
+	note(cs2,bb2,rest,g3,eighth)
+
+	note(d2,b2,rest,g3,eighth)
+	note(d2,b2,rest,g3,eighth)
+	note(cs2,bb2,rest,f3,eighth)
+	note(c2,a2,rest,e3,eighth)
+	note(b1,g2,rest,d3,eighth)
+	note(b1,g2,rest,b2,eighth)
+	note(a1,f2,rest,f3,eighth)
+	note(g1,e2,rest,f3,eighth)
+
+	; Drawn out note
+
+	note(d1,rest,rest,d3,eighth)
+	note(d1,rest,rest,d3,eighth)
+	note(d1,a1,d2,d3,eighth)
+	note(d1,a1,d2,d3,eighth)
+	note(d1,g1,b1,rest,eighth)
+	note(d1,g1,b1,rest,eighth)
+	note(e1,b1,e2,rest,eighth)
+
+	note(e1,a1,cs2,rest,eighth)
+	note(e1,a1,cs2,rest,eighth)
+	note(a1,e2,a2,rest,eighth)
+	note(a1,d2,fs2,rest,quarter)
+	note(a1,d2,fs2,rest,eighth)
+	note(a1,cs2,e2,rest,eighth)
+	note(a1,d2,fs2,d3,eighth)
+
+	note(a1,e2,rest,e3,eighth)
+	note(a1,e2,rest,d3,eighth)
+	note(g2,rest,rest,e3,eighth)
+	note(e2,rest,rest,d3,eighth)
+	note(d2,rest,rest,e3,eighth)
+	note(cs2,rest,rest,cs3,eighth)
+	note(a1,rest,rest,cs3,eighth)
+	note(a1,rest,rest,cs3,eighth)
+
+	note(ab1,rest,rest,f3,eighth)
+	note(d2,rest,rest,e3,eighth)
+	note(ab1,rest,rest,f3,eighth)
+	note(ab1,rest,rest,e3,eighth)
+	note(ab1,rest,rest,e3,eighth)
+	note(d2,rest,rest,fs3,eighth)
+	note(ab1,rest,rest,e3,eighth)
+	note(fs1,d1,rest,d3,eighth)
+
+	note(fs1,d1,rest,d3,eighth)
+	note(d1,rest,rest,d3,eighth)
+	note(d1,a1,d2,d3,eighth)
+	note(d1,a1,d2,d3,eighth)
+	note(d1,g1,b1,d3,eighth)
+	note(d1,g1,b1,d3,eighth)
+	note(e1,b1,e2,d3,eighth)
+	note(e1,b1,e2,d3,eighth)
+
+	note(e1,a1,cs2,rest,eighth)
+	note(e1,a1,cs2,rest,eighth)
+	note(a1,e2,a2,rest,eighth)
+	note(a1,d2,fs2,rest,quarter)
+	note(a1,d2,fs2,rest,eighth)
+	note(a1,cs2,e2,rest,eighth)
+	note(a1,d2,fs2,d3,eighth)
+
+	endsection
+
+fight:
+	; Oh, what a 
+	note(b1,f2,rest,g3,eighth)
+	note(b1,f2,rest,g3,eighth)
+	note(c2,rest,rest,g3,eighth)
+	note(d2,rest,rest,g3,eighth)
+	note(b1,f2,rest,f3,eighth)
+	note(b1,f2,rest,f3,eighth)
+	note(c2,rest,rest,e3,eighth)
+	note(d2,rest,rest,e3,eighth)
+
+	; terrible fight!
+	note(f1,c2,f2,d3,eighth)
+	note(f1,bb1,d2,d3,quarter)
+	note(c1,g1,c2,c3,eighth)
+	note(c1,f1,a1,c3,eighth)
+	note(c1,f1,a1,a2,eighth)
+	note(ab1,rest,rest,a2,eighth)
+	note(g1,rest,rest,a2,eighth)
+
+	; Dooo-dodododo-dooo-dodododo
+
+	note(cs1,rest,rest,d2,eighth)
+	note(d1,rest,rest,d2,eighth)
+	note(d1,rest,rest,d2,eighth)
+	note(d1,rest,rest,d2,eighth)
+	note(cs1,rest,rest,rest,eighth)
+	note(d1,rest,rest,rest,eighth)
+	note(d1,rest,rest,rest,eighth)
+	note(d1,rest,rest,rest,eighth)
+
+	note(cs1,rest,rest,rest,eighth)
+	note(d1,rest,rest,rest,eighth)
+	note(d1,rest,rest,rest,eighth)
+	note(cs1,rest,rest,rest,eighth)
+	note(d1,rest,rest,rest,eighth)
+	note(d1,rest,rest,rest,eighth)
+	note(cs1,rest,rest,rest,eighth)
+	note(d1,rest,rest,rest,eighth)
+
+	; The people
+	note(b1,f2,rest,g3,eighth)
+	note(b1,f2,rest,g3,eighth)
+	note(c2,rest,rest,g3,eighth)
+	note(d2,rest,rest,g3,eighth)
+	note(b1,f2,rest,f3,eighth)
+	note(b1,f2,rest,f3,eighth)
+	note(c2,rest,rest,e3,eighth)
+	note(d2,rest,rest,e3,eighth)
+
+	; watched with delight
+	note(f1,c2,f2,d3,eighth)
+	note(f1,bb1,d2,d3,quarter)
+	note(c1,g1,c2,c3,eighth)
+	note(c1,f1,a1,c3,quarter)
+	note(ab1,rest,rest,d3,eighth)
+	note(g1,rest,rest,a2,eighth)
+
+	; Doop DOOP
+	
+	note(a1,cs2,a2,a2,half)
+	note(a1,d2,a2,a2,quarter)
+	note(a1,d2,a2,a2,eighth)
+
+	; One
+	note(a1,d2,a2,e3,eighth)
+	; Hell of a fight!
+
+	note(a1,eb2,a2,g3,eighth)
+	note(a1,eb2,a2,e3,eighth)
+	note(a1,eb2,a2,cs3,eighth)
+	note(a1,eb2,a0,a2,eighth)
+	note(a1,e2,a0,a2,quarter)
+
+	note(g2,rest,rest,rest,quarter)
+
+	endsection
+
+solo:
+	note(ab2,f3,rest,rest,eighth)
+	note(a2,fs3,rest,rest,eighth)
+	note(ab2,f3,rest,rest,eighth)
+	note(g2,e3,rest,rest,eighth)
+	note(f2,d3,rest,rest,eighth)
+	note(d2,rest,rest,rest,eighth)
+	note(fs2,a2,rest,rest,eighth)
+	note(d2,a2,rest,rest,eighth)
+
+	note(fs3,rest,rest,rest,eighth)
+	note(a3,rest,rest,rest,eighth)
+	note(b3,rest,rest,rest,eighth)
+	note(d3,rest,rest,rest,eighth)
+
+	; Switch side
+
+	note(rest,rest,rest,rest,eighth)
+
+	note(rest,rest,d3,f3,sixteenth)
+	note(rest,rest,c3,rest,sixteenth)
+	note(rest,rest,a2,rest,sixteenth)
+	note(rest,rest,ab2,rest,sixteenth)
+	note(rest,rest,g2,rest,sixteenth)
+	note(rest,rest,f2,rest,sixteenth)
+
+	note(rest,rest,d2,rest,quarter)
+	note(rest,rest,f2,rest,sixteenth3)
+	note(rest,rest,d2,rest,sixteenth)
+	note(rest,rest,g2,b2,quarter)
+
+	; And back again... (both!)
+
+	note(rest,rest,rest,rest,eighth)
+
+	note(d2,rest,d2,rest,sixteenth)
+	note(f2,rest,f2,rest,sixteenth)
+
+	note(g2,b2,g2,b2,eighth)
+	note(g2,b2,g2,b2,sixteenth)
+	note(f2,rest,f2,rest,sixteenth)
+	note(d2,rest,d2,rest,sixteenth)
+	note(c2,rest,c2,rest,sixteenth)
+	note(a1,rest,a1,rest,sixteenth)
+	note(g1,rest,g1,rest,sixteenth)
+	note(fs1,rest,fs1,rest,sixteenth)
+	note(a1,rest,a1,rest,sixteenth)	
+	note(b1,rest,b1,rest,sixteenth)
+	note(cs2,rest,cs2,rest,sixteenth)
+	
+	note(e2,rest,e2,rest,sixteenth)
+	note(d2,rest,d2,rest,sixteenth)
+	note(cs2,rest,cs2,rest,sixteenth)
+	note(d2,rest,d2,rest,sixteenth)
+
+	; New bar
+
+	note(b1,f2,b1,f2,eighth)
+	note(b1,f2,b1,f2,eighth)
+	note(c2,f2,c2,f2,eighth)
+	note(cs2,f2,cs2,f2,eighth)
+	note(d2,f2,d2,f2,eighth)
+	note(g1,f2,g1,f2,eighth)
+
+	; Back to LEFT
+
+	note(rest,rest,rest,rest,eighth)
+
+	note(d3,rest,rest,rest,sixteenth)
+	note(e3,rest,rest,rest,sixteenth)
+
+	note(f3,rest,rest,rest,eighth)
+	note(g3,rest,rest,rest,sixteenth)
+	note(f3,rest,rest,rest,sixteenth)
+	note(e3,rest,rest,rest,sixteenth)
+	note(d3,rest,rest,rest,sixteenth)
+	note(cs3,rest,rest,rest,sixteenth)
+	note(e3,rest,rest,rest,sixteenth)
+	note(d3,rest,rest,rest,sixteenth)
+	note(b2,rest,rest,rest,sixteenth)
+	note(g2,rest,rest,rest,sixteenth)
+	note(d2,rest,rest,rest,sixteenth)
+
+	note(g2,d3,rest,rest,sixteenth)
+	note(ab2,rest,rest,rest,sixteenth)
+	note(g2,rest,rest,rest,sixteenth)
+	note(f2,rest,rest,rest,sixteenth)
+
+	note(d2,rest,rest,rest,eighth)
+	note(d2,rest,rest,rest,eighth)
+
+	;
+
+	note(rest,rest,rest,rest,eighth)
+	
+	; Bounce R-L-R-L...
+
+	note(rest,rest,d4,rest,sixteenth)
+	note(d3,rest,rest,rest,sixteenth)
+	note(rest,rest,d4,rest,sixteenth)
+	note(d3,rest,rest,rest,sixteenth)
+	note(rest,rest,d4,rest,sixteenth)
+	note(d3,rest,rest,rest,sixteenth)
+	note(rest,rest,d4,rest,sixteenth)
+	note(d3,rest,rest,rest,sixteenth)
+	note(rest,rest,d4,rest,sixteenth)
+	note(d3,rest,rest,rest,sixteenth)
+
+	note(c3,rest,c4,rest,eighth)
+	note(a2,rest,a3,rest,eighth)
+	note(g2,rest,g3,rest,eighth)
+	note(f2,rest,f3,rest,eighth)
+	note(f2,rest,f3,rest,eighth)
+
+	; Left
+
+	note(rest,rest,rest,rest,eighth)
+
+	note(g2,d3,rest,rest,quarter3)
+	note(ab2,rest,rest,rest,sixteenth)
+	note(g2,rest,rest,rest,sixteenth)
+	note(f2,rest,rest,rest,sixteenth)
+
+	note(g2,rest,rest,rest,eighth)
+	note(a2,d3,rest,rest,eighth)
+	note(f2,d3,rest,rest,eighth)
+	note(d2,rest,rest,rest,eighth)
+	note(c2,rest,rest,rest,eighth)
+	note(a1,rest,rest,rest,eighth)
+
+	note(ab1,rest,rest,rest,eighth)
+	note(d2,rest,rest,rest,eighth)
+	note(e2,rest,rest,rest,eighth)
+	note(d2,rest,rest,rest,eighth)
+	note(g1,f2,rest,rest,eighth)
+	note(d2,rest,rest,rest,sixteenth)
+	note(c2,rest,rest,rest,sixteenth)
+	note(a1,rest,rest,rest,eighth)
+	note(g1,rest,rest,rest,eighth)
+
+	note(f1,rest,rest,rest,eighth)
+	note(d2,rest,rest,rest,eighth)
+	note(a1,d2,rest,rest,eighth)
+	note(a1,d2,rest,rest,eighth)
+	note(g1,b1,rest,rest,eighth)
+	note(g1,b1,rest,rest,eighth)
+	note(b1,e2,rest,rest,eighth)
+	note(b1,e2,rest,rest,eighth)
+
+	note(cs2,e2,rest,rest,eighth)
+	note(cs2,e2,rest,rest,eighth)
+	note(e2,a2,rest,rest,eighth)
+	note(d2,fs2,rest,rest,eighth)
+
+	; Final bit (join)
+
+	note(rest,rest,rest,rest,eighth)
+	
+	note(a2,rest,a2,rest,sixteenth)
+	note(bb2,rest,bb2,rest,sixteenth)
+	note(b2,rest,b2,rest,sixteenth)
+	note(d3,rest,d3,rest,sixteenth)
+	note(e3,rest,e3,rest,sixteenth)
+	note(d3,rest,d3,rest,sixteenth)
+
+	note(a2,f3,a2,f3,sixteenth)
+	note(d3,rest,d3,rest,sixteenth)
+	note(e3,rest,e3,rest,eighth)
+	note(f2,d3,f2,d3,eighth)
+	note(d2,rest,d2,rest,sixteenth)
+	note(g2,b2,g2,b2,eighth)
+	note(f2,a2,f2,a2,sixteenth)
+	note(f2,a2,f2,a2,sixteenth)
+	note(d2,rest,d2,rest,eighth)
+	note(c2,rest,c2,rest,eighth)
+	note(a1,rest,a1,rest,eighth)
+
+	note(a1,f2,a1,f2,eighth)
+	note(d2,rest,d2,rest,eighth)
+	note(g1,e2,g1,e2,eighth)
+	note(cs2,rest,cs2,rest,eighth)
+	note(bb1,d2,bb1,d2,eighth+sixteenth)
+	note(a1,rest,a1,rest,sixteenth)
+	note(c2,rest,c2,rest,sixteenth)
+	note(d2,rest,d2,rest,sixteenth)
+	note(c2,rest,c2,rest,sixteenth)
+	note(b1,rest,b1,rest,sixteenth)
+
+; Whee
+
+	note(a1,rest,a1,rest,sixteenth)
+	note(g1,rest,g1,rest,sixteenth)
+	note(e1,rest,e1,rest,sixteenth)
+	note(f1,rest,f1,rest,sixteenth)
+	note(fs1,rest,fs1,rest,sixteenth)
+	note(a1,rest,a1,rest,sixteenth)
+	note(b1,rest,b1,rest,sixteenth)
+	note(cs2,rest,cs2,rest,sixteenth)
+	note(e2,rest,e2,rest,sixteenth)
+	note(cs2,rest,cs2,rest,sixteenth)
+	note(d2,rest,d2,rest,sixteenth)
+	note(e2,rest,e2,rest,sixteenth)
+	note(f2,rest,f2,rest,sixteenth)
+	note(fs2,rest,fs2,rest,sixteenth)
+	note(b2,rest,b2,rest,sixteenth)
+	note(bb2,rest,bb2,rest,sixteenth)
+	note(a2,rest,a2,rest,sixteenth)
+	note(b2,rest,b2,rest,sixteenth)
+	note(c3,rest,c3,rest,sixteenth)
+	note(d3,rest,d3,rest,sixteenth)
+	note(e3,rest,e3,rest,sixteenth)
+	note(f3,rest,f3,rest,sixteenth)
+	note(a3,rest,a3,rest,sixteenth)
+	note(g3,rest,g3,rest,sixteenth)
+	note(f3,rest,f3,rest,sixteenth)
+	note(e3,rest,e3,rest,sixteenth)
+	note(f3,rest,f3,rest,sixteenth)
+	note(d3,rest,d3,rest,sixteenth)
+	note(a2,rest,a2,rest,sixteenth)
+	note(bb2,rest,bb2,rest,sixteenth)
+	note(b2,rest,b2,rest,sixteenth)
+	note(d3,rest,d3,rest,sixteenth)
+	note(e3,rest,e3,rest,sixteenth)
+	note(d3,rest,d3,rest,sixteenth)
+	note(a3,rest,a3,rest,eighth)
+	note(fs3,rest,fs3,rest,sixteenth)
+	note(d3,rest,d3,rest,sixteenth)
+	note(b2,rest,b2,rest,thirtysecond)
+	note(cs3,rest,cs3,rest,sixteenth)
+	note(a2,rest,a2,rest,sixteenth)
+	note(c3,rest,c3,rest,sixteenth)
+	note(a2,rest,a2,rest,sixteenth)
+	note(b2,rest,b2,rest,sixteenth)
+	note(g3,rest,g3,rest,eighth)
+	note(g3,rest,g3,rest,eighth)
+	note(f3,rest,f3,rest,sixteenth)
+	note(g3,rest,g3,rest,sixteenth)
+	note(g3,d4,g3,d4,sixteenth)
+	note(ab3,rest,ab3,rest,sixteenth)
+	note(g3,rest,g3,rest,sixteenth)
+	note(f3,rest,f3,rest,sixteenth)
+	note(d3,rest,d3,rest,eighth)
+	note(g3,d4,g3,d4,sixteenth)
+	note(ab3,rest,ab3,rest,sixteenth)
+	note(g3,rest,g3,rest,sixteenth)
+	note(f3,rest,f3,rest,sixteenth)
+	note(d3,f3,d3,f3,sixteenth)
+	note(c3,rest,c3,rest,sixteenth)
+	note(a2,rest,a2,rest,sixteenth)
+	note(ab2,d3,ab2,d3,sixteenth)
+	note(g2,rest,g2,rest,sixteenth)
+	note(f2,rest,f2,rest,sixteenth)
+	note(d2,rest,d2,rest,sixteenth)
+	note(c2,rest,c2,rest,sixteenth)
+	note(a1,rest,a1,rest,sixteenth)
+	note(ab1,rest,ab1,rest,sixteenth)
+	note(g1,rest,g1,rest,sixteenth)
+	note(f1,rest,f1,rest,sixteenth)
+	note(d1,rest,d1,rest,sixteenth)
+	note(a1,rest,a1,rest,sixteenth)
+	note(f2,rest,f2,rest,thirtysecond)
+	note(a1,rest,a1,rest,thirtysecond)
+	note(f2,rest,f2,rest,thirtysecond)
+	note(a1,rest,a1,rest,thirtysecond)
+	
+
+	endsection
+
+chordA:
+	note(f2,rest,f3,rest,thirtysecond)
+	note(a1,rest,a2,rest,thirtysecond)
+	endsection
+
+chordB:
+	note(a3,f4,a3,f4,sixteenth)
+	note(f3,rest,f3,rest,sixteenth)
+	note(g3,e4,g3,e4,sixteenth)
+	note(e3,rest,e3,rest,sixteenth)
+
+	note(f3,d4,f3,d4,sixteenth)
+	note(d3,rest,d3,rest,sixteenth)
+	note(e3,c4,e3,c4,sixteenth)
+	note(c3,rest,c3,rest,sixteenth)
+
+	note(d3,b3,d3,b3,sixteenth)
+	note(b2,rest,b2,rest,sixteenth)
+	note(c3,a3,c3,a3,sixteenth)
+	note(a2,rest,a2,rest,sixteenth)
+
+	note(b2,g3,b2,g3,sixteenth)
+	note(g2,rest,g2,rest,sixteenth)
+	note(a2,f3,a2,f3,sixteenth)
+	note(f2,rest,f2,rest,sixteenth)
+
+	;
+
+	note(g2,e3,g2,e3,sixteenth)
+	note(e2,rest,e2,rest,sixteenth)
+	note(f2,d3,f2,d3,sixteenth)
+	note(d2,rest,d2,rest,sixteenth)
+
+	note(e2,c3,e2,c3,sixteenth)
+	note(cs2,rest,cs2,rest,sixteenth)
+	note(d2,b2,d2,b2,sixteenth)
+	note(b1,rest,b1,rest,sixteenth)
+
+	note(c2,a2,c2,a2,sixteenth)
+	note(a1,rest,a1,rest,sixteenth)
+	note(b1,g2,b1,g2,sixteenth)
+	note(g1,rest,g1,rest,sixteenth)
+
+	note(a1,f2,a1,f2,sixteenth)
+	note(f1,rest,f1,rest,sixteenth)
+	note(g1,e2,g1,e2,sixteenth)
+	note(e1,rest,e1,rest,sixteenth)
+
+	;
+
+	note(f1,d2,f1,d2,sixteenth)
+	note(d1,rest,d1,rest,sixteenth)
+	note(a1,d2,a1,d2,sixteenth)
+	note(a1,d2,a1,d2,sixteenth)
+	note(g1,b1,g1,b1,sixteenth)
+	note(g1,b1,g1,b1,sixteenth)
+	note(b1,e2,b1,e2,sixteenth)
+	note(b1,e2,b1,e2,sixteenth)
+
+
+	note(a1,cs2,a1,cs2,sixteenth)
+	note(a1,rest,a1,rest,sixteenth)
+	note(e2,a2,e2,a2,sixteenth)
+	note(d2,fs2,d2,fs2,eighth)
+	note(d2,fs2,d2,fs2,sixteenth)
+	note(c2,e2,c2,e2,sixteenth)
+	note(d2,fs2,d2,fs2,sixteenth)
+
+	endsection
+
+
+ending:
+	note(rest,rest,rest,rest,whole)
+
+	note(g2,b2,d3,g3,quarter3)
+	note(g2,b2,d3,g3,sixteenth)
+	note(f2,f3,f2,f3,eighth)
+	note(e2,e3,e2,e3,eighth)
+	note(d2,d3,d2,d3,eighth)
+	note(e2,e3,e2,e3,quarter)
+	note(a1,rest,a1,rest,eighth)
+
+	note(a1,a2,a1,a2,eighth)
+	note(ab1,ab2,ab1,ab2,eighth)
+	note(g1,g2,g1,g2,eighth)
+	note(fs1,fs2,fs1,fs2,half3)
+	note(d2,d3,d2,d3,quarter)
+
+	note(d2,d3,d2,d3,quarter3)
+	note(d2,d3,d2,d3,sixteenth)
+	note(b2,rest,b2,rest,eighth)
+	note(d2,d3,d2,d3,eighth)
+	note(e2,e3,e2,e3,eighth)
+	note(fs2,fs3,fs2,fs3,quarter)
+	note(d2,d3,d2,d3,quarter)
+
+	note(a1,a2,a1,a2,eighth)
+
+	note(cs1,g1,b1,cs1,quarter)
+	note(d1,fs1,d1,d1,quarter)
+
+	
+
+	endsection
+	
+
+.end

@@ -1,0 +1,196 @@
+ 
+; idea for lfsr rand: 3 bit lut lookahead
+    HaLt
+    jr c,$+10h
+	jr nc,$+0h
+	res 7,(iy+3),c
+    ld d,ixh
+    inc ixh
+    sll a
+	add c
+	ex af,af'
+	ret c
+	ret nc
+	ret p
+	ret m
+	ret pe
+	jp po,$
+	call z, $+3
+	im 0/1
+	in (c)
+	out (c),0
+	
+	
+	
+interrupt:
+	ex af,af'
+    jp nz,off_ring_then_tip
+; Demo idea:
+;  tracker composer where first you set up "hardware" with "points"
+;   hardware is modules that are jitted into the interrupt, they cost worst-case t-state execution time
+;   composers allocate points towards the modules they want to use and it displays an estimated
+;      cpu performance hit (in percent and 'feels like' units (effective cpu speed))
+;   (you are allowed to go above 100% but audio will have a bad time unless you are careful to not
+;    line up too many worst case execution times in your song data)
+;
+;  you add the modules in a graph/node like constructor and set up input channels (and their clock-logic)
+;
+;  modules:
+;    pulse wave
+;    saw wave (modulus thingy)
+;    triangle wave
+;    sample playback (256 byte samples probably (likely less are also allowed),
+;                      - this could be made out of a saw wave into a lookup module)
+;    noise (prng)
+;    twang? (sample playback + filter + writeback)
+;    
+;    integrator
+;    differentiator
+;    biquad (coeffs restricted to easy multiplies (probably just have 2^n and 1±2^n))
+;             (you can build this out of integrators and arithmetics)
+;    logical/arithmetic operations
+;    
+;    lookup and writeback modules
+;
+;  since several modules can be defined in terms of other modules, perhaps allow defining
+;   of complex modules and have some predefined (biquad, iir1, twang)
+;  maybe include an assembler for inline assembling?
+;
+
+
+;left and right need to be at least 11 t-states appart or at the same time
+;problem with doing right,left,silence is that right modulates left a bit
+
+;I might be able to get 8 bit per channel stereo if I do the
+;256 t-state interrupts frames thingy using a single timer
+;alternating left and right
+;perhaps just focus on getting 4 bit per channel stereo and 8 bit per channel mono?
+;4 bit is 24 db dynamic range (12 db voltage)
+;8 bit is 48 db dynamic range
+;4 bit sounds fine at a high enough sample rate with simple error prop dither
+
+
+;phases (single channel): ((val,0),0)
+; int 1: read timer and allign, setup timer to  v, set out
+; int 2: read timer and allign, setup timer to ~v, clear out
+; int 3: read timer and allign, setup timer to  k (trims sample rate)
+; min sr = 29khz, max sr = 58k
+;2 channel: ((r,0),(l,0),0)
+; int 1: read timer and allign, setup timer to  r, set R
+; int 2: read timer and allign, setup timer to ~r, clear R
+; int 3: read timer and allign, setup timer to  l, set L
+; int 4: read timer and allign, setup timer to ~l, clear L
+; int 5: read timer and allign, setup timer to  k (trims sample rate)
+; min sr = 19k, max sr = 29k
+
+
+; need differential delay from 1 to 29 (0-31)
+ 
+delay_a:
+	rra
+	jr c,$+3
+	 nop
+	;; 15,16
+	rrca
+	jr nc,$+4
+	 and 0x07
+	;; 16,18  - 31,34
+	cpl
+	and 0x07
+	ld ($+3+1),a
+	jr $+2
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	;; 36,64  - 67,98 
+	call 
+delay_a:
+	;; faster version, ASSERT a is 5 bits at most
+	or a						;zero carry 
+	
+	rra
+	jr c,$+3 
+	 nop
+	;; 15,16
+	rrca
+	jr nc,$+4
+	 and 0x07
+	;; 16,18  - 31,34
+	cpl
+	ld ($+3+1),a
+	jr $+2
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	;; 29,57  - 60,91
+
+delay_not_a:
+	rra
+	jr nc,$+3
+	 nop
+	;; 15,16
+	rrca
+	jr c,$+4
+	 and 0x07
+	;; 16,18  - 31,34
+	and 0x07
+	ld ($+3+1),a
+	jr $+2
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	;; 32,60  - 63,94
+	
+
+;maybe have a global volume adjust (from 11 to 32?)
+; probably not
+
+
+
+
+
+;;; ok... delay(a) is a+64ish t-states so 96ish overhead
+;;;  freqmax is then 16.7k for stereo, ~33k for mono
+;;;  looks like maybe we can do 8 bit mono (with 1 bit balance)
+;;;  and 4,4 bit stereo
+;;;  maybe even 6,2 (common,diff) stereo
+;;;    i1 set 3, i2 set 1 or 2 then 0 (lut of interrupts for the 4 values)
+
+; if I just ignore synchronization (allow program noise to seep in),
+;  I'll be able to do 8,8 stereo (with a noise floor of up to 23/256 = -20.9db)
+;   with a 256,256 timer thingy with 4 interrupts
+;
+;   another approach is to put out a square wave >20khz and do phase or freq modulation
+;    (and have the wave have a fixed duty time) instead of pulse width modulation.
+;        - not sure if it works nice for stereo 
+;    this could be acheived by running two timers and having the interrupt set the output based on what
+;     timer fired it, then just writing to the counters at the right time in the main program
+; 
+; an option for _fast_ 5 level (13.9db) stereo is a interrupt that just outputs and rotate2s a repeatedly
+;  the level is set by the number of ones in a'
+	
+
+interrupt:
+	ex af,af'
+    jp nz,off_ring_then_tip
+	
+    
+	
+off_tip_then_ring:
+	out (0),a  ;11
+    dec a      ;4
+    ex af,af'  ;4
+    ei         ;4
+   	ret        ;10 - 33

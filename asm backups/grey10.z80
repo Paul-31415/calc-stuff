@@ -1,0 +1,229 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	saveSScreen 86ECh
+.org        progStart-2
+.db         $BB,$6D
+
+	bcall(_ansName)
+    rst 10h
+    ex de,hl
+    rst 20h
+    bcall(_convOp1)
+    push af
+    
+    ld hl,picn
+    rst 20h
+    ld hl,picn+2
+    inc (hl)
+    
+	rst 10h
+    inc de
+    inc de
+    push de
+    
+    ld hl,picn
+    rst 20h
+    ld hl,picn+2
+    inc (hl)
+    
+    rst 10h
+    inc de
+    inc de
+    push de
+    
+    ld hl,picn
+    rst 20h
+    ld hl,picn+2
+    inc (hl)
+    
+    rst 10h
+    inc de
+    inc de
+    push de
+    
+    ld hl,picn
+    rst 20h
+    ld hl,picn+2
+    inc (hl)
+    
+    rst 10h
+    inc de
+    inc de
+    push de
+    
+    ld a,$40
+   out ($30),a
+   ld a,1        ; loop, no interrupt
+   out ($31),a
+   ld a,181
+   out ($32),a
+   
+    pop ix
+    pop hl
+    pop de
+    pop bc
+    pop af
+drawloop:
+	push bc
+    push de
+    push hl
+    push ix
+    push af
+	call drawToScreen
+    pop bc
+    pop ix
+    pop hl
+    pop de
+    
+longtimeLoop:
+    in a,(4)
+    bit 5,a       ;bit 5 tells if timer 1 is done
+   jr z,longtimeLoop
+   ld a,1        ; loop, no interrupt
+   out ($31),a
+    
+    in a,(4)
+    bit 3,a
+    ld a,b
+    pop bc
+    jr nz ,drawloop
+	xor a
+   out ($30),a   ;Turn off the timer.
+   out ($31),a
+    
+    
+
+picn:
+.db $07,$60,0,0,0,0,0,0,0,0
+
+
+
+
+;takes about 7.8 ms in slow mode  (128/60 fps or half duty)
+;
+drawToScreen: ;draws it greyscale to screen with buffs bc,de,hl,ix,mode is a
+	ld (b3+1),hl
+    and 3
+    ld hl,logopTable
+    add a,l
+    ld l,a
+    ld a,0
+    adc a,h
+    ld h,a
+    ld a,(hl)
+    ld (logop+1),a
+    
+    
+
+	ld a,1
+    out ($20),a;fast mode
+	ld (b1+1),bc
+    ld (b2+1),de
+    
+	ld (b4+1),ix
+	
+	di
+    
+    ld a,$05
+    out ($10),a
+
+r3mask:	;11011011
+		;00100100
+	ld hl,%1101101100100100	
+    bit 2,l 
+    jr z,r3NClm
+     scf
+r3NClm:
+    rl l
+    bit 2,h 
+    jr z,r3NChm
+     scf
+r3NChm:
+    rl h
+    ld (r3mask+1),hl
+    
+    ld a,$80
+    out ($10),a
+    
+	ex de,hl
+r4mask:
+    ld hl,%1010101000010001
+    rlc l
+    rlc h
+    ld (r4mask+1),hl
+    
+	ld c,$20
+    
+    ld b,12
+colLoop:
+    ld a,c
+    out ($10),a
+    push bc
+    ld b,64
+    push de
+    
+core:	;what to do at each byte
+b1:
+	ld de,0
+	ld a,(de)
+	inc de
+	ld (b1+1),de
+	and l
+    rlc l
+    ld c,a
+b2:
+	ld de,$300
+	ld a,(de)
+	inc de
+	ld (b2+1),de
+    and h
+    rlc h
+    or c
+    ld ixh,a
+    ex (sp),hl
+b3:
+	ld de,$600
+	ld a,(de)
+	inc de
+	ld (b3+1),de
+	and l
+    bit 2,l 
+    jr z,r3NCl
+     scf
+r3NCl:
+    rl l
+    ld c,a
+b4:
+	ld de,$900
+	ld a,(de)
+	inc de
+	ld (b4+1),de
+    and h
+    bit 2,h 
+    jr z,r3NCh
+     scf
+r3NCh:
+    rl h
+    or c
+logop:
+    or ixh
+    
+    out ($11),a
+    ex (sp),hl
+    
+	djnz core
+    pop de
+	pop bc
+    inc c
+    
+    
+	djnz colLoop
+    
+    
+    ret
+
+logopTable:
+	or h
+    xor h
+    and h
+	or h

@@ -1,0 +1,98 @@
+#uses pins X20 and X21A
+
+
+#    4    3    2    1
+#    -    D+   D-   +
+#   X22  X21  X20  X19
+import pyb
+
+
+class pin3():
+    def __init__(self,p):
+        self.pin = p
+        self.read = self.pin.value
+    def set(self,v):
+        if v == 0:
+            self.pin.init(mode=pyb.Pin.IN)
+        else:
+            self.pin.init(mode=pyb.Pin.OUT_PP)
+        self.pin.value(v!=-1)
+    
+
+
+class usb():
+    def __init__(self,Dm = pyb.Pin("X20"),Dp = pyb.Pin("X21")):
+        self.dm = Dm
+        self.dp = Dp
+        self.fullSpeed = false
+        
+        self.dm.init(pyb.Pin.IN,pull=pyb.Pin.PULL_DOWN)
+        self.dp.init(pyb.Pin.IN,pull=pyb.Pin.PULL_UP)
+        
+        self.bitTimer = pyb.Timer(1)
+        self.bitTimer.init(freq=15000000)
+
+        
+    def j(self):
+        if self.fullSpeed:
+            self.dp.init(pyb.Pin.OUT)
+            self.dp.value(1)
+            self.dm.init(pyb.Pin.IN,pull=pyb.Pin.PULL_DOWN)
+        else:
+            self.dm.init(pyb.Pin.OUT)
+            self.dm.value(1)
+            self.dp.init(pyb.Pin.IN,pull=pyb.Pin.PULL_DOWN)
+    def k(self):
+        if self.fullSpeed:
+            self.dm.init(pyb.Pin.OUT)
+            self.dm.value(1)
+            self.dp.init(pyb.Pin.IN,pull=pyb.Pin.PULL_DOWN)
+        else:
+            self.dp.init(pyb.Pin.OUT)
+            self.dp.value(1)
+            self.dm.init(pyb.Pin.IN,pull=pyb.Pin.PULL_DOWN)
+
+    def se0(self):
+        self.dm.init(pyb.Pin.OUT_OD)
+        self.dm.value(0)
+        self.dp.init(pyb.Pin.OUT_OD)
+        self.dm.value(0)
+        
+    def idle(self):
+        if self.fullSpeed:
+            self.dm.init(pyb.Pin.IN,pull=pyb.Pin.PULL_DOWN)
+            self.dp.init(pyb.Pin.IN,pull=pyb.Pin.PULL_UP)
+        else:
+            self.dp.init(pyb.Pin.IN,pull=pyb.Pin.PULL_DOWN)
+            self.dm.init(pyb.Pin.IN,pull=pyb.Pin.PULL_UP)
+            
+        
+    def sendReset(self):
+        self.se0()
+        pyb.delay(10)
+        self.idle()
+
+    def sendEOP(self):
+        self.seo()
+        pyb.udelay(self.bitTime<<1)
+        self.j()
+        pyb.udelay(self.bitTime)
+
+    #data fields are transmitted lsb first
+    def clockSync(self): #for low speed has to be about 83ns between each
+        self.k()
+        self.j()
+        self.k()
+        self.j()
+        self.k()
+        self.j()
+        self.k()
+        self.k()
+        
+    @micropython.asm_thumb
+    def sendByteArray(r0,r1,r2):
+        #r2 - buffer pointer
+        #r0 - D+
+        #r1 - D-
+        
+        

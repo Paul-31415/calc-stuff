@@ -1,0 +1,34 @@
+
+This program used to be part of zStart, but apparently, not everyone who
+ uses this app is studying Chemical Engineering...
+
+
+The best way to use this app with zStart is to have zStart use its "Parser hook chain"
+ to run zChem.
+
+Steps to install the "Parser Hook Chain" for zChem.
+
+	1. Run zChem
+	2. Go into zStart>Next>Program Settings>Parser Hook Chain and press enter
+	3. If all went well, quit
+
+	At this point, zChem will work just like the way you remembered it
+
+
+If you don't remember how zChem used to work:
+
+   zChem converts a chemical formula into it's molar mass. The syntax is pretty simple, 
+    just use ? to denote the beginning and end of the name.
+
+   So: ?CuSO4? = 159.61, ?Fe3(PO4)2? = 357.49
+
+   The ? act like quotes actually, so stuff like ?Ca is legal. Also, if you type something that isn't an 
+    element, it will give you a clever error message and point to the spot.
+
+
+
+
+
+
+
+

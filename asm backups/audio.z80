@@ -1,0 +1,537 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+.org        progStart-2
+.db         $BB,$6D
+
+
+
+
+
+	ld a,1
+    out ($20),a
+	di
+    
+    
+    
+    
+    
+    
+    
+    
+toneLoop:
+    
+    ld ix,waveBuf
+    ld de,waveBufEnd-waveBuf
+	;dddddlll
+    ld c,(ix)
+    ld a,c
+    and 7
+    ld l,a
+    xor c
+    rrca
+    rrca
+    rrca
+    inc a
+    ld b,a
+rleIX:
+	inc ix
+	ld c,(ix) ;19
+    
+loop:
+	;1
+	dec l			;4
+    ld a,l			;4
+    rlca			;4
+    rlca			;4
+    and 3			;7
+    xor 2			;7
+    out (0),a		;11 = 41
+    
+    ld a,c		;4
+    and 7		;7
+	ld h,a	;4 = 15
+    
+    ;2
+    dec l
+    ld a,l
+    rlca
+    rlca
+    and 3
+    xor 2
+    out (0),a
+    
+    ld a,h	;4
+    xor c	;4
+    ld iyh,a	;8
+    
+    ;3
+    dec l
+    ld a,l
+    rlca
+    rlca
+    and 3
+    xor 2
+    out (0),a
+    
+    ld a,iyh
+    rrca
+    ld iyh,a ; =20
+    
+    ;4
+	dec l
+    ld a,l
+    rlca
+    rlca
+    and 3
+    xor 2
+    out (0),a
+    
+    ld a,iyh
+    rrca
+    ld iyh,a ; =20
+    
+    ;5
+    dec l
+    ld a,l
+    rlca
+    rlca
+    and 3
+    xor 2
+    out (0),a
+    
+    ld a,iyh
+    rrca
+    ld iyh,a ; =20
+    
+    ;6
+    dec l
+    ld a,l
+    rlca
+    rlca
+    and 3
+    xor 2
+    out (0),a
+    
+    inc iyh		;8
+    ;7
+    dec l
+    ld a,l
+    rlca
+    rlca
+    and 3
+    xor 2
+    out (0),a
+	
+    ld a,7		;7
+    add a,l		;4
+    ld l,a		;4
+    
+	djnz loop	;13 = 28
+	
+    ld b,iyh      ;8
+    ld l,h		;4
+	dec de		;6
+    ld a,d		;4
+    or e		;4
+    jp nz,rleIX
+    
+    in a,(4)
+    bit 3,a
+	jp nz,toneLoop
+    
+	ld iy,flags
+    xor a
+    out (0),a
+    ret
+
+
+	;sine wave is -__-¯¯-
+    
+    
+    ;for base tone:
+    ;4 x 31
+    ;5 x 33
+    ;6 x 40
+    ;7 x 177
+
+	;7 x 32
+    ;6 x 7
+    ;5 x 6
+    ;4 x 5
+waveBuf:
+.db %00111001
+.db %00110010
+.db %00101011
+.db %00101100
+.db %00110101
+.db %00111110
+.db %11111111
+.db %00111110
+.db %00110101
+.db %00101100
+.db %00101011
+.db %00110010
+.db %00111001
+.db %11111000
+
+waveBufEnd:
+;
+	
+;    ld ix,0
+;    ld iy,16384
+;    ;do lllddddd unrolled
+;    
+;
+;	ld c,(ix)	;19
+;    
+;    ld a,c		;4
+;	and $1f		;7
+;    inc a		;4
+;    ld d,a		;4
+;    
+;    ld a,c		;4
+;    and $e0		;7
+;    ld l,a		;4
+;    rrca		;4
+;    rrca		;4
+;    rrca 		;4
+;    or l		;4
+;    rrca 		;4
+;    rrca 		;4
+;    ld h,a		;4
+;    ld a,l		;4
+;    rlca		;4
+;    and 1		;7
+;    add a,h		;4
+;    rlca		;4
+;    ld e,a		;4
+;    
+;    ld l,0		;7
+;rleIX:   
+;	ld b,d		;4
+;subloop:
+;	ld c,(ix)	;19
+;	ld a,$1f	;7
+;    and c		;4
+;    ld d,a		;4  = 34
+;    
+;;    ;sample 1    
+;    ld a,l		;4
+;    add a,e		;4 ;c should always be 0
+;    rla			;4
+;    ;now C is result 
+;    ld l,a		;4
+;    ld a,0		;7
+;    rra			;4
+;    rlca		;4
+;    ccf			;4
+;;    rla			;4
+ ;   srl l		;8 = 47
+ ;   out (0),a
+ ;   
+ ;   
+ ;   inc d		;4
+ ;   ld a,c		;4
+ ;   and $e0		;7
+ ;;   ld l,a		;4
+ ;   rrca		;4
+  ;  rrca		;4
+  ;  ld h,a		;4 = 31
+  ;  
+ ; ;  ;s2
+  ;  ld a,l		;4
+  ;  add a,e		;4 ;c should always be 0
+  ;  rla			;4
+  ;  ;now C is result 
+  ;  ld l,a		;4
+  ;;  ld a,0		;7
+  ;  rra			;4
+  ;  rlca		;4
+  ;  ccf			;4
+  ;  rla			;4
+  ;  srl l		;8 = 47
+  ;  out (0),a
+  ;;  
+  ;  
+;    ld a,h		;4
+;    rrca		;4
+;    or l		;4
+;    
+;    
+;    
+;    
+
+;    djnz subloop;13
+ ;   			;8
+;    inc ix		;10
+ ;   dec iy		;10
+ ;   ld a,iyh	;8
+ ;   or iyl		;8
+ ;   jr nz,rleIX	;12
+ ;   ld iy,flags
+ ;   xor a
+ ;   out (0),a
+ ;   ret
+    
+    
+    
+;rleHL:				
+;	ld a,(ix)	;taken as lllldddd : l = level, d = duration
+;    ld c,a
+;    and $f
+;    rlca
+;    inc a
+;    rlca
+;    rlca
+;    ld b,a
+;    ld a,c
+;    and $f0
+;    ld c,a
+;rleHLLoop:
+;	 ld a,c
+;     add a,l
+;     ld l,a
+;     inc l
+;     ld a,0
+;     rra
+;     rlca
+;     ccf
+;     rla
+;     out (0),a
+;	djnz rleHLLoop
+;    inc ix
+;    dec de
+;    ld a,d
+;    or e
+;    jr nz,rleHL
+;    
+;	xor a
+;    out (0),a
+;	ret
+;
+;
+;
+;
+;	bcall(_ansName)
+;    rst 10h
+;    ex de,hl
+;    rst 20h
+;    bcall(_convOp1)
+;    ld b,a
+;    ld c,0
+;
+;	di
+;	exx
+;    ld bc,1024
+;chordTest:
+;	xor a
+;    exx
+;	add hl,bc
+;    rla
+;	exx
+;	add hl,bc
+;    adc a,b
+;
+;    rrca
+;    rrca
+;    rrca
+;    ld d,a
+;	call rand
+;    srl a
+;    srl a
+;    add a,d
+;	
+;    rlca
+;    rlca
+;    and 3
+;    out (0),a
+;
+;	in a,(4)
+;    bit 3,a
+;	jp nz,chordTest
+;	xor a
+;    out (0),a
+;    ret
+;
+;
+;
+;
+;
+;
+testbuff2:	
+.db %11110001	;1x15
+.db %11110000	;0x15
+.db 0
+testbuff1:	
+.db %00010001	;1x5
+.db %00010001	;1
+.db %00010001	;1
+.db %00010001	;1
+.db %00010001	;1
+.db %00010010	;2x4
+.db %00010010	;2
+.db %00010010	;2
+.db %00010010	;2
+.db %00010011	;3x3
+.db %00010011	;3
+.db %00010011	;3
+.db %00010100	;4x3
+.db %00010100	;4
+.db %00010100	;4
+.db %00010101	;5x3
+.db %00010101	;5
+.db %00010101	;5
+.db %00010110	;6x3
+.db %00010110	;6
+.db %00010110	;6
+.db %00010111	;7x2
+.db %00010111	;7
+.db %00011000	;8x3
+.db %00011000	;8
+.db %00011000	;8
+.db %00011001	;9x3
+.db %00011001	;9
+.db %00011001	;9
+.db %00011010	;10x3
+.db %00011010	;10
+.db %00011010	;10
+.db %00011011	;11x3
+.db %00011011	;11
+.db %00011011	;11
+.db %00011100	;12x3
+.db %00011100	;12
+.db %00011100	;12
+.db %00011101	;13x4
+.db %00011101	;13
+.db %00011101	;13
+.db %00011101	;13
+.db %00011110	;14x6
+.db %00011110	;14
+.db %00011110	;14
+.db %00011110	;14
+.db %00011110	;14
+.db %00011110	;14
+.db %00011111	;15x15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011111	;15
+.db %00011110	;14x5
+.db %00011110	;14
+.db %00011110	;14
+.db %00011110	;14
+.db %00011110	;14
+.db %00011101	;13x4
+.db %00011101	;13
+.db %00011101	;13
+.db %00011101	;13
+.db %00011100	;12x3
+.db %00011100	;12
+.db %00011100	;12
+.db %00011011	;11x3
+.db %00011011	;11
+.db %00011011	;11
+.db %00011010	;10x3
+.db %00011010	;10
+.db %00011010	;10
+.db %00011001	;9x3
+.db %00011001	;9
+.db %00011001	;9
+.db %00011000	;8x3
+.db %00011000	;8
+.db %00011000	;8
+.db %00010111	;7x2
+.db %00010111	;7
+.db %00010110	;6x3
+.db %00010110	;6
+.db %00010110	;6
+.db %00010101	;5x3
+.db %00010101	;5
+.db %00010101	;5
+.db %00010100	;4x3
+.db %00010100	;4
+.db %00010100	;4
+.db %00010011	;3x3
+.db %00010011	;3
+.db %00010011	;3
+.db %00010010	;2x4
+.db %00010010	;2
+.db %00010010	;2
+.db %00010010	;2
+.db %00010001	;1x6
+.db %00010001	;1
+.db %00010001	;1
+.db %00010001	;1
+.db %00010001	;1
+.db %00010001	;1
+.db %00010000	;0x15
+.db %00010000	;0
+.db %00010000	;0
+.db %00010000	;0
+.db %00010000	;0
+.db %00010000	;0
+.db %00010000	;0
+.db %00010000	;0
+.db %00010000	;0
+.db %00010000	;0
+.db %00010000	;0
+.db %00010000	;0
+.db %00010000	;0
+.db %00010000	;0
+.db %00010000	;0
+.db 0
+
+
+testbuff:;[8, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 14, 14, 14, 14, 14, 14, 13, 13, 13, 13, 12, 12, 12, 11, 11, 11, 10, 10, 10, 9, 9, 9, 8, 8, 8, 7, 7, 6, 6, 6, 5, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7]
+.db %01010001	;1x5
+.db %01000010	;2x4
+.db %00110011	;3x3
+.db %00110100	;4x3
+.db %00110101	;5x3
+.db %00110110	;6x3
+.db %00100111	;7x2
+.db %00111000	;8x3
+.db %00111001	;9x3
+.db %00111010	;10x3
+.db %00111011	;11x3
+.db %00111100	;12x3
+.db %01001101	;13x4
+.db %01101110	;14x6
+.db %11111111	;15x15
+.db %01011110	;14x5
+.db %01001101	;13x4
+.db %00111100	;12x3
+.db %00111011	;11x3
+.db %00111010	;10x3
+.db %00111001	;9x3
+.db %00111000	;8x3
+.db %00100111	;7x2
+.db %00110110	;6x3
+.db %00110101	;5x3
+.db %00110100	;4x3
+.db %00110011	;3x3
+.db %01000010	;2x4
+.db %01100001	;1x6
+.db %11110000	;0x15
+.db 0
+
+;;time: 42/49
+;rand:
+;	ld a,r	;9
+;    rlca ;4
+;    jp p,randj	;10
+;randState1:	
+;     sub $72	;7	;36 is a good one also
+;randj:
+;	ld r,a			;9
+;    ret				;10    

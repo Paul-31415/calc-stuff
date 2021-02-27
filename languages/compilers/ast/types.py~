@@ -1,0 +1,8 @@
+class Type:
+    def __init__(self):
+
+class Byte(Type):
+    def __init__(self):
+        self.size = 1
+
+

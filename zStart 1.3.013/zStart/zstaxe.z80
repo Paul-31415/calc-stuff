@@ -1,0 +1,266 @@
+.nolist
+    #include      "ti83plus.inc"
+	#include	"Axe.inc"
+.list
+.db	$DE, $C0
+
+
+
+	
+
+	.dw	findZstartEnd-findZstart+1
+
+	.db	%00001111
+
+	.db	0, 0
+
+	.db	0
+
+	.db	0
+
+.org	0000
+findZstart:
+	push	hl
+	REP_NEXT
+	ld	hl, zStartName
+	rst	20h
+	bcall(_findApp)
+	pop	hl
+	ret	c
+	ld	d, a
+	ld	c, 6
+	in	b, (c)
+	out	(06), a
+	ld	a, ($408A)
+	out	(c), b
+	cp	$C3
+	ld	a, d
+	ret	z
+	scf
+	ret
+zStartName:
+	.db	appObj, "zStart", 0, 0
+findZstartEnd:
+
+
+
+
+	.dw	runProgEnd-runProg+1
+	
+	.db	%00001111
+
+	.db	$BB, $1E
+
+	.db	%00000001
+
+	.db	1
+
+.org	$0000
+runProg:
+	REP_NEXT
+	call	sub_Axiom1
+	rst	20h
+	ld	hl, 1		;ret 1 = error
+	ret	c
+	ld	($8002), a
+	ld	hl, $408D
+	ld	($8000), hl
+	bcall($C000)
+	sbc	hl, hl
+	ret			;ret 0 = homescreen
+				;ret FF = shell
+
+runProgEnd:
+
+
+	.dw	runProgEndz-runProgz+3
+	
+	.db	%00001111
+
+	.db	$BB, $1E
+
+	.db	%00000001
+
+	.db	2
+
+.org	$0000
+runProgz:
+	REP_NEXT
+	ld	(smc_offset+1), hl
+	REP_NEXT
+	call	sub_Axiom1
+	pop	hl
+	ex	(sp), hl
+	ld	de, appBackUpScreen+100
+	bcall(_mov9B)
+	ld	hl, 1		;ret 1 = error
+	ret	c
+	ld	hl, rawkeyHookPtr
+	ld	bc, 7
+	ldir
+	ld	hl, flags + $34
+	ldi
+	ex	de, hl
+	bcall(_enableGetCSCHook)
+	ex	de, hl
+	ld	hl, rawKeyhook-runner+appBackUpScreen+117
+	bcall(_enableRawKeyHook)
+	REP_NEXT
+	ld	hl, runner
+	ld	bc, runnerEnd-runner
+	ldir
+	ld	hl, 0
+	ret
+
+runner:
+	add	a, e
+	or	a
+	ret
+rawKeyHooK:				;leaving the getcsc hook causes problems
+	add	a, e
+	bcall(_closeEditEqu)
+	ld	hl, appBackUpScreen+100
+	rst	20h
+	ld	de, rawKeyHookPtr
+	ld	bc, 7
+	ldir
+	ld	de, flags+$34
+	ldi
+	
+smc_offset:
+	ld	hl, 0000
+	call	$4090			;zStart is swapped in
+	bcall(_jForceCMDNoChar)
+runnerEnd:
+
+
+
+runProgEndz:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	.dw	findZstartAppEnd-findZstartApp+1
+
+	.db	%00010001
+
+	.db	0, 0
+
+	.db	0
+
+	.db	0
+
+.org	0000
+findZstartApp:
+	push	hl
+	REP_NEXT
+	ld	hl, zStartNameApp
+	rst	20h
+	bcall(_findApp)
+	pop	hl
+	ret	c
+	ld	d, a
+	ld	c, 7
+	in	b, (c)
+	out	(07), a
+	ld	a, ($808A)
+	out	(c), b
+	cp	$C3
+	ld	a, d
+	ret	z
+	scf
+	ret
+zStartNameApp:
+	.db	appObj, "zStart", 0, 0
+
+findZstartAppEnd:
+
+
+	.dw	runAppEnd-runApp+1
+	
+	.db	%00010001
+
+	.db	$BB, $1E
+
+	.db	%00000001
+
+	.db	1
+
+.org	$0000
+runApp:
+	REP_NEXT
+	call	sub_Axiom4
+	rst	20h
+	ld	hl, 1		;ret 1 = error
+	ret	c
+	ld	($8002), a
+	ld	hl, $408D	;runOP1
+	ld	($8000), hl
+	bcall($C000)
+	sbc	hl, hl
+	ret			;ret 0 = homescreen
+				;ret FF = shell
+
+runAppEnd:
+
+	.dw	editAppEnd-editApp+1
+	
+	.db	%00010001
+
+	.db	$BB, $1E
+
+	.db	%00000001
+
+	.db	2
+
+.org	$0000
+editApp:
+	ld	(errOffset), hl
+	REP_NEXT
+	call	sub_Axiom4
+	pop	hl
+	ex	(sp), hl
+	rst	20h
+	ld	hl, 1		;ret 1 = error
+	ret	c
+	ld	($8002), a
+	ld	hl, $4090	;editOP1
+	ld	($8000), hl
+	ld	hl, (errOffset)
+	bcall($C000)
+	sbc	hl, hl
+	ret			;ret FF = shell
+
+editAppEnd:
+
+
+	.dw	0000
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

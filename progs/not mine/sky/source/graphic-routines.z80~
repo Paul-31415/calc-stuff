@@ -1,0 +1,193 @@
+.nolist
+;OR Sprite Routine
+;################################################
+;input
+;ix = Pointer to the Sprite
+;a  = X (0-11)
+;l  = Y (0-7)
+;output
+;ORs an aligned 8x8 sprite
+or_sprite:
+	ld      h,0
+	add     hl,hl	; x2
+	add     hl,hl	; x4
+	add     hl,hl	; x8
+	add     hl,hl	; x16
+	add     hl,hl	; x32
+	ld      b,h
+	ld      c,l
+	add     hl,hl	; x64
+	add     hl,bc	; x96
+	ld      c,a
+	ld      b,0
+	add     hl,bc
+	ld      bc,gbuf
+	add     hl,bc	; HL => Where to put the sprite
+	ld      b,8
+putASLoop:
+	ld      a,(ix)
+	ld      (hl),a
+	inc     ix
+	ld      de,12
+	add     hl,de
+	djnz    putASLoop
+	ret
+
+
+
+
+;#define gbuf 9340h
+;=======================
+;     > largesprite
+;=======================
+;Does:   Copy a sprite to the gbuf
+;Input:  ix=sprite address, a='x', l='y', b='height' (in pixels), c='width' (in bytes, e.g. 2 would be 16)
+;Output: The Sprite is copied to the gbuf
+;-----------------------
+_largesprite:
+   di
+   ex   af,af'
+                                      ;exchange af with af'     \
+   ld   a,c                           ;ld c in a (a = 'width')  | for not destroying a ('x')
+   push   af                          ;push a                   |
+      ex   af,af'
+                                      ;exchange back            | and 'width' is now in a' (saved)
+      ld   e,l                        ;e = 'y'
+      ld   h,$00                      ;h =  0
+      ld   d,h                        ;d =  0
+      add   hl,de                     ;'y' *2  \
+      add   hl,de                     ;    *3  | calculate 'y' *12 because 'y' is 'in rows'
+      add   hl,hl                     ;    *6  |   (screen is 12 bytes in length)
+      add   hl,hl                     ;    *12 /
+      ld   e,a                        ;e = 'x'
+      and   $07                       ;and %00000111
+      ld   c,a                        ;last 3 bits in c (amount of bits to shift all bytes)
+      srl   e                         ;e/2   | shifting e ('x') 3 bits to the right
+      srl   e                         ; /4   |   %11111111 becomes %00011111 for example
+      srl   e                         ; /8   /
+      add   hl,de                     ;hl = 'y'; de = 'x' (rounded) | add them
+      ld   de, gbuf
+                    ;de = the adress of graph buffer
+      add   hl,de                     ;add hl to the adress of the gbuf
+largeSpriteLoop1:
+      push   hl                       ;save adress
+largeSpriteLoop2:
+         ld   d,(ix)                  ;first sprite data in d
+         ld   e,$00                   ;e = 0
+         ld   a,c                     ;a = c (to not destroy c)
+         or   a                       ;is a = 0? (same as cp 0)
+         jr   z,largeSpriteSkip1      ;if theres nothing to shift (a = 0) loop it
+largeSpriteLoop3:
+         srl   d                      ;shift one bit to the right; put the destroyed bit in the carry flag
+         rr   e                       ;put the carry flag in e (%00000000 becomes %10000000 if carry flag = 1)
+         dec   a                      ;decrease counter (with was 'the amount of bits to shift')
+         jr   nz,largeSpriteLoop3     ;if the counter is not 0 loop back
+largeSpriteSkip1:
+         ld   a,(hl)                  ;graphbyte in a
+         xor   d                      ;xor first byte of sprite (that can be changed to 'or d' if you want a OR-routine)
+         ld   (hl),a                  ;back to buffer
+         inc   hl                     ;increase pointer
+         ld   a,(hl)                  ;graphbyte in a
+         xor   e                      ;xor with shifted sprite byte (change to 'or e' for OR-routine)
+         ld   (hl),a                  ;back to buffer
+         inc   ix                     ;increase sprite adress
+         ex   af,af'
+                                      ;exchange af with af' ( a is now the 'width' from the first line)
+         dec   a                      ;decrease 'width'
+         push   af                    ;push the 'width'
+            ex   af,af'
+                                      ;exchange back
+         pop   af                     ;pop the 'width'
+         jr   nz,largeSpriteLoop2     ;if a is not 0 (if a = 0 then we would be done) loop it
+      pop   hl                        ;pop gbuf adress (search the last push hl!)
+   pop   af                           ;pop  | to restore the real 'width'
+   push   af                          ;push /
+      ex   af,af'
+                                      ;af' must be the original 'width' when loop 'largeSpriteLoop1'
+      ld   de,$0C                     ;ld de,12
+      add   hl,de                     ;next line
+      djnz   largeSpriteLoop1         ;if not b = 0 loop (b = height of sprite)
+   pop   af                           ;pop because we dont want a stack problem :)
+   ret                                ;return
+;
+
+PutSprite:
+	ld	e,l
+	ld	h,$00
+	ld	d,h
+	add	hl,de
+	add	hl,de
+	add	hl,hl
+	add	hl,hl
+	ld    e,a
+	and	$07
+	ld	c,a
+	srl	e
+	srl	e
+	srl	e
+	add	hl,de
+	ld	de,gbuf
+	add	hl,de
+putSpriteLoop1:
+	ld    d,(ix)
+	ld    e,$00
+	ld    a,c
+	or    a
+	jr    z,putSpriteSkip1
+putSpriteLoop2:
+	srl    d
+	rr    e
+	dec    a
+	jr    nz,putSpriteLoop2
+putSpriteSkip1:
+	ld    a,(hl)
+	xor    d
+	ld    (hl),a
+	inc    hl
+	ld    a,(hl)
+	xor    e
+	ld    (hl),a
+	ld    de,$0B
+	add    hl,de
+	inc    ix
+	djnz    putSpriteLoop1
+	ret
+
+;=======================
+;     > fastcopy
+;=======================
+;Does:   Copy the gbuf to the screen (fast)
+;Input:  nothing
+;Output: graph buffer is copied to the screen
+;-----------------------
+fastcopy:
+ di
+ ld a,$80
+ out ($10),a
+ ld hl,gbuf-12-(-(12*64)+1)
+ ld a,$20
+ ld c,a
+ inc hl
+ dec hl
+fastCopyAgain:
+ ld b,64
+ inc c
+ ld de,-(12*64)+1
+ out ($10),a
+ add hl,de
+ ld de,10
+fastCopyLoop:
+ add hl,de
+ inc hl
+ inc hl
+ inc de
+ ld a,(hl)
+ out ($11),a
+ dec de
+ djnz fastCopyLoop
+ ld a,c
+ cp $2B+1
+ jr nz,fastCopyAgain
+ ret
+;
+.list

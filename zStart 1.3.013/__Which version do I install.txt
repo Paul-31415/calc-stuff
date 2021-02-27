@@ -1,0 +1,16 @@
+
+
+If you have an 83+ Silver Edition, an 84+ Basic Edition, or an 84+ Silver Edition:
+
+    Install zStart v1.3.013.8xk
+
+
+If you have an 83+ Basic Edition:
+
+    Install zStart v1.3.013_83.8xk
+
+
+
+
+
+If you install the wrong one, it will crash very quickly.

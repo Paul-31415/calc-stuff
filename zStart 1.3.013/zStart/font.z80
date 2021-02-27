@@ -1,0 +1,1009 @@
+
+;#################
+enableFont
+	bcall(_disableFontHook)
+#if	_84
+	toggle_(avbFont)
+#else
+	res_(avbFont)
+#endif
+	call	deleteFakeVar
+fontMenuReturn:
+	call	makeAVDirty
+;$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;#####################
+fontMenu:
+	bcall(_grBufClr)
+	bit_(avbFont)
+	call	yesOrNo8
+
+	ld	hl, avShadow+avFontName
+	call	dispName
+
+	ld	hl, fontText
+	jp	menu
+
+
+;#################
+selectFont:
+	call	userSelectFont
+	jr	c, fontMenu
+	ld	de, avShadow+avFontName
+	call	storeName
+
+	jr	fontMenuReturn
+
+
+
+;##########################
+newFont:
+	bcall(_clrLCDFull)
+	ld	hl, enterNameText
+	ld	de, 3*256
+	ld	(curRow), de
+	call	myPutS
+	call	typeName
+	jp	c, fontMenu
+	
+	ld	a, appVarObj
+	ld	(tempBuf), a
+	ld	hl, tempBuf
+	rst	20h
+
+	ld	hl, 8*256+4
+	bcall(_createAppVar)
+
+	inc	de
+	inc	de
+
+	ld	hl, fontTag
+	ld	bc, 4
+	ldir
+
+	push	de
+
+	ld	hl, getRealFont
+	ld	de, $8000
+	ld	bc, getRealEnd-getRealFont
+	ldir
+
+	pop	de
+	push	de
+
+	call	$8000
+
+	ld	hl, abridgeFont
+	ld	bc, 6*8
+	ldir
+
+	pop	de
+
+	jp	editor
+
+
+;##############
+getRealFont:
+	relocate($8000)
+	in	a, (06)
+	push	af
+	
+	ld	a, $7F
+	call	translatePage
+	out	(06), a
+
+	ld	hl, $4000
+
+findRealLoop:
+	ld	a, $16
+	ld	bc, $FFFF
+	cpir
+	ld	a, (hl)
+	cp	$09
+	jr	nz, findRealLoop
+	inc	a
+	ld	a, (hl)
+	cp	$09
+	jr	nz, findRealLoop
+
+	ld	bc, -11
+	add	hl, bc
+	
+	ld	bc, 8*$F2
+	ldir
+
+	pop	af
+	out	(06), a
+	ret
+	endRelocate()
+getRealEnd:
+
+
+
+abridgeFont:
+	.db	%00000100
+	.db	%00001111
+	.db	%00010100
+	.db	%00001110
+	.db	%00000101
+	.db	%00011110
+	.db	%00000100
+
+	.db	%00000101
+
+	.db	%00000100
+	.db	%00001110
+	.db	%00011111
+	.db	%00001110
+	.db	%00001110
+	.db	%00000000
+	.db	%00000000
+
+	.db	%00000101
+
+	.db	%00001100
+	.db	%00010010
+	.db	%00010010
+	.db	%00010110
+	.db	%00010001
+	.db	%00010001
+	.db	%00010110
+
+	.db	%00000101
+
+	.db	%00000000
+	.db	%00000000
+	.db	%00000000
+	.db	%00000000
+	.db	%00010001
+	.db	%00010001
+	.db	%00011111
+
+	.db	%00000101
+
+	.db	%00000000
+	.db	%00000001
+	.db	%00000011
+	.db	%00000110
+	.db	%00001100
+	.db	%00011000
+	.db	%00010000
+
+	.db	%00000101
+
+	.db	%00010101
+	.db	%00000000
+	.db	%00010001
+	.db	%00000000
+	.db	%00010001
+	.db	%00000000
+	.db	%00010101
+
+	.db	%00000101
+
+
+
+;##########################
+;font selected in OP1
+
+userSelectFont:
+	ld	hl, fontTag
+	call	findItems
+	call	newItemsMenu
+	jr	inTheFray2
+
+
+fontSelectLoop2:
+	call	itemsMenu
+inTheFray2:
+	jp	c, fontMenu
+	jr	z, selectedOne
+arrowPressed2:
+	call	displaySample
+	
+	call	menuButtonHand
+	jr	nc, notCarryz2
+	jr	nz, arrowPressed2
+	jp	fontMenu
+notCarryz2:
+	jr	nz, fontSelectLoop2
+
+selectedOne:
+	ld	a, (selected)
+	dec	a
+	ld	e, 9
+	bcall(_multAbyE)
+	ld	de, saveSScreen
+	add	hl, de
+
+	rst	20h
+	ret
+
+
+fontTag:
+	.db	"FONT", 0
+
+;##########################
+editfont:
+	call	userSelectFont
+	jp	c, fontMenu
+	
+	ld	hl, op1
+	ld	de, tempBuf
+	ld	bc, 9
+	ldir
+
+	bcall(_chkFindSym)
+	jp	c, fontMenu
+
+	ld	a, b
+	or	a
+	jr	z, notArchedz
+	rst	18h
+	push	ix
+	bcall(_arc_unarc)
+	pop	ix
+	bcall(_popRealO1)
+notArchedz:
+
+	bcall(_chkFindSym)
+
+	ld	hl, 6
+	add	hl, de
+	ex	de, hl
+;$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;#########################
+editor:
+	ld	(saveHL), de
+	xor	a
+	ld	(selected), a
+	ld	(cursY), a
+	ld	(cursX), a
+drawIt:
+	bcall(_grBufClr)
+
+	ld	a, (selected)
+	cp	$D6
+	jr	nz, noGlitch
+	inc	a
+	ld	(selected), a
+noGlitch:
+
+	ld	de, (saveHL)
+	ld	a, (selected)
+	ld	l, a
+	ld	h, 0
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, de
+	ld	(saveDE), hl
+
+	ld	hl, 16*12+4+plotSScreen
+	ld	de, 10
+	ld	c, 7
+	call	doAHoriz
+makeGridLoop:
+	ld	b, 3
+makeGridInner:
+	ld	(hl), $88
+	inc	hl
+	ld	(hl), $88
+	inc	hl
+	ld	(hl), $88
+	add	hl, de
+	djnz	makeGridInner
+
+	call	doAHoriz
+	dec	c
+	jr	nz, makeGridLoop
+	
+
+	ld	hl, 17*12+4+plotSScreen
+	ld	de, (saveDE)
+
+
+
+	ld	b, 7
+outerMapLoop:
+	push	bc
+	ld	a, (de)
+	rlca	
+	rlca	
+	rlca	
+	ld	c, a
+	
+
+
+	ld	b, 3
+mapLoop:
+	push	bc
+
+
+
+	ld	b, 2
+innerMapLoop:
+	ld	a, (hl)
+	sla	c
+	jr	nc, notPixed
+	or	$F0
+notPixed:
+	sla	c
+	jr	nc, notPixed2
+	or	$0F
+notPixed2:
+	ld	(hl), a
+	inc	hl
+	djnz	innerMapLoop
+
+
+
+	ld	a, (hl)
+	sla	c
+	jr	nc, notPixed3
+	or	$F0
+notPixed3:
+	ld	(hl), a
+
+	ld	bc, 10
+	add	hl, bc	
+	pop	bc
+	djnz	mapLoop
+
+
+
+
+	ld	bc, 12
+	add	hl, bc
+	inc	de
+	pop	bc
+	djnz	outerMapLoop
+
+
+
+	ld	a, (cursY)
+	rlca	
+	rlca	
+	add	a, 18
+	ld	l, a
+
+	ld	a, (cursX)
+	rlca	
+	rlca	
+	add	a, 34
+
+	call	getPixel
+
+	and	7
+	ld	b, a
+	ld	a, %10000000
+	jr	z, noShifting
+shiftLoopz:
+	rrca	
+	djnz	shiftLoopz
+noShifting:
+	
+	xor	(hl)
+	ld	(hl), a
+
+	bcall(_grBufCpy)
+
+
+	call	setTempFont2
+
+	ld	a, (selected)
+	ld	de, 0
+	ld	(curRow), de
+	bcall(_putC)
+
+	call	restoreFont
+
+	ld	de, 15*256
+	ld	(curRow), de
+	ld	a, (selected)
+	bcall(_putC)
+
+
+	ld	l, a
+	
+	ld	de, tempBuf2
+	call	LToHexString
+
+	ld	de, 14*256+7
+	ld	(curRow), de
+	ld	hl, tempBuf2
+
+	call	myPutS
+
+
+	ei
+editKey:
+	halt
+	bcall(_getCSC)
+	or	a
+	jr	z, editKey
+
+
+
+	cp	skClear
+	jr	nz, notzClear
+
+
+	ld	hl, tempBuf
+	rst	20h
+	push	ix
+	bcall(_arc_unarc)
+	pop	ix
+
+	jp	fontMenu
+
+
+
+notzClear:
+	cp	skEnter
+	jr	z, z2nd
+	
+	cp	sk2nd
+	jr	nz, notz2nd
+z2nd:
+	ld	a, (cursY)
+	ld	e, a
+	ld	d, 0
+
+	ld	hl, (saveDE)
+	add	hl, de
+
+	ld	a, (cursX)
+	ld	b, a
+	inc	b
+	ld	a, %00100000
+shiftzLoop:
+	rrca	
+	djnz	shiftzLoop
+
+	xor	(hl)
+	ld	(hl), a
+	jp	drawIt
+
+
+
+
+notz2nd:
+	cp	skMul
+	jr	nz, notzMul
+	
+	ld	b, 16
+moveEntry:
+	ld	a, (selected)
+	add	a, b
+	ld	(selected), a
+	cp	$D6
+	jp	nz, drawIt
+	add	a, b
+	ld	(selected), a
+	jp	drawIt
+
+notzMul:
+	ld	b, -16
+	cp	skDiv
+	jr	z, moveEntry
+
+	ld	b, -1
+	cp	skSub
+	jr	z, moveEntry
+
+	ld	b, 1
+	cp	skAdd
+	jr	z, moveEntry
+
+
+
+	cp	skLeft
+	jr	nz, notzLeft
+	ld	a, (cursX)
+	dec	a
+	jp	p, notWrap
+	ld	a, 4
+notWrap:
+	ld	(cursX), a
+	jp	drawIt
+
+notzLeft:
+	cp	skRight
+	jr	nz, notzRight
+	ld	a, (cursX)
+	inc	a
+	cp	5
+	jr	c, notWrap2
+	xor	a
+notWrap2:
+	ld	(cursX), a
+	jp	drawIt
+
+notzRight:
+	cp	skDown
+	jr	nz, notzDown
+	ld	a, (cursY)
+	inc	a
+	cp	7
+	jr	nz, not7
+	xor	a
+not7:
+	ld	(cursY), a
+	jp	drawIt
+
+notzDown:
+	cp	skUp
+	jr	nz, notzUp
+	ld	a, (cursY)
+	dec	a
+	jp	p, notNeggz
+	ld	a, 6
+notNeggz:
+	ld	(cursY), a
+	jp	drawIt
+
+
+
+notzUp:
+	cp	skAlpha
+	jp	nz, editKey
+
+	call	setTempFont2
+
+	ld	a, (selected)
+	ld	c, a
+	scf
+dispSelect:
+	jr	c, bigChange
+	jp	po, smallChange
+bigChange:
+	ld	a, 128
+	ld	b, a
+	and	c
+
+selectzLoop:
+	call	putAChar
+	inc	a
+	djnz	selectzLoop
+
+	jr	drawHighlight
+smallChange:
+	or	a
+	ld	a, b
+	call	putAChar
+	sub	1
+	jr	c, drawHighlight
+	call	po, putAChar
+drawHighlight:
+	scf
+	ld	a, c
+	call	putAChar
+	
+	ei
+selectzKey:
+	halt
+	bcall(_getCSC)
+	or	a
+	jr	z, selectzKey
+
+	cp	skEnter
+	jr	z, zz2nd
+	cp	sk2nd
+	jr	nz, znot2nd
+zz2nd:
+	ld	a, c
+	ld	(selected), a
+	jp	drawIt
+
+znot2nd:
+	cp	skClear
+	jp	z, drawIt
+	
+	ld	b, 16
+	cp	skDown
+	jr	nz, znotDown
+movezEntry:
+	ld	a, c
+	add	a, b
+	ld	b, c
+	ld	c, a
+	jp	dispSelect
+
+znotDown:
+	cp	skUp
+	jr	nz, zNotUp
+moveZSub:
+	ld	a, c
+	sub	b
+	ld	b, c
+	ld	c, a
+	jp	dispSelect
+
+zNotUp:
+	ld	b, 1
+	cp	skRight
+	jr	z, movezEntry
+
+	cp	skLeft
+	jr	z, movezSub
+	
+	jr	selectzKey
+
+
+
+
+
+;######
+doAHoriz:
+	ld	(hl), $FF
+	inc	hl
+	ld	(hl), $FF
+	inc	hl
+	ld	(hl), $F8
+	add	hl, de
+	ret
+	
+
+;#################################3
+putAChar:
+	jr	nc, notInversed
+	set	textInverse, (iy + textFlags)
+notInversed:
+	push	af
+	and	$7F
+	ld	hl, curRow
+	ld	(hl), a
+	xor	a
+	rrd	
+	inc	hl
+	ld	(hl), a
+	pop	af
+	bcall(_putMap)
+	res	textInverse, (iy + textFlags)
+	ret
+	
+	
+
+	
+;########################################
+fontHookEntry:
+	.db	$83
+	cp	1
+	jr	z, isMode1
+	cp	3
+	ret	nz
+isMode1:
+	di
+	in	a, (05)
+	or	a
+	ret	nz
+	in	a, (07)
+	cp	$81
+	ret	nz
+
+	push	bc
+	push	hl
+
+	ld	a, (menuCurrent)
+	cp	$FF
+	jr	nz, regularHook
+	
+	ld	a, (tempGood)
+	or	a
+	jr	z, tempIsGood
+
+findTempFont:
+	ld	hl, tempBuf
+	rst	20h
+
+	bcall(_chkFindSym)
+	jp	c, hookDone
+
+	ld	a, b
+	or	a
+	jr	z, ramzar
+
+	call	findStartInROM
+
+	inc	hl
+	inc	hl
+	call	fast_bhl
+	jr	foundzing
+	
+ramzar:
+	inc	de
+	inc	de
+	ex	de, hl
+foundzing:
+	ld	a, b
+	ld	(tempPage), a
+	ld	(tempAddr), hl
+	xor	a
+	ld	(tempGood), a
+tempIsGood:
+	
+	ld	a, (tempPage)
+	ld	b, a
+	ld	de, (tempAddr)
+	ld	c, 0
+	
+	jr	gotStart
+
+
+
+
+regularHook:
+	ld	c, fvFontPage
+	call	fakeVarOffset
+	jp	nz, hookDone
+
+	ld	b, (hl)
+	dec	hl
+	ld	d, (hl)
+	dec	hl
+	ld	e, (hl)
+
+
+gotStart:
+	ex	de, hl
+	ld	a, b
+	or	a
+	jr	nz, romzar
+
+	ld	a, (hl)
+	cp	'F'
+	jr	nz, itMoved
+	inc	hl
+	inc	hl
+	inc	hl
+	ld	a, (hl)
+	cp	'T'
+	jr	nz, itMoved
+	inc	hl
+	pop	de
+	add	hl, de
+	pop	bc
+	cp	a
+	ret
+		
+
+romzar:	
+	in	a, ($27)
+	push	af
+	ld	a, 4
+	out	($27), a	;keep stack
+	ld	a, 1
+	out	($05), a
+	ld	a, b
+	out	($07), a
+
+	ld	de, $4000
+	add	hl, de
+
+	ld	a, (hl)
+	cp	'F'
+	jr	nz, itMoved2
+	inc	hl
+	inc	hl
+	inc	hl
+	call	special_bhl
+	ld	a, b
+	out	($07), a
+	ld	a, (hl)
+	cp	'T'
+	jr	nz, itMoved2
+
+	inc	hl
+	
+	pop	af
+	pop	de
+	push	af
+	add	hl, de
+	call	special_bhl
+
+	ld	c, 7
+	ld	de, lFont_Record+1+$4000
+copyzLoop:
+	ld	a, b
+	out	($07), a
+	ldi
+
+	call	special_bhl
+	ld	a, c
+	or	a
+	jr	nz, copyzLoop
+
+	pop	af
+	out	($27), a
+	xor	a
+	out	($05), a
+	ld	a, $81
+	out	($07), a
+
+	ld	hl, lFont_Record+1
+
+	pop	bc
+	cp	a
+	ret
+
+
+
+itMoved2:
+	pop	af
+	out	($27), a
+	out	($05), a
+	ld	a, $81
+	out	($07), a
+
+itMoved:
+	ld	a, (menuCurrent)
+	cp	$FF
+	jp	z, findTempFont
+
+	call	pushOP1
+	
+	ld	hl, appVarName
+	rst	20h	
+	bcall(_chkFindSym)
+	jr	nc, notMissing
+
+hookOverAndRestore:
+	call	popOP1
+
+hookDone:
+	bcall($4FE7)	;disable font hook
+skipThisOne:
+	pop	hl
+	pop	bc
+	inc	c
+	ret
+
+notMissing:
+	ld	a, b
+	or	a
+	jr	z, tisInRam
+
+	call	findArcAppVar
+
+	ld	de, avFontName+2
+	add	hl, de
+	
+	call	fast_bhl
+
+	ld	a, b
+	jr	copyTheAppVar
+
+tisInRam:
+	ld	hl, avFontName+2
+	add	hl, de	
+
+copyTheAppVar:
+	ld	de, op1
+	ld	bc, 7
+	bcall(_flashToRam2)
+
+	call	pushOP1
+	ld	hl, 0
+	add	hl, sp
+	call	unpackName	;mad hacks
+
+	
+	bcall(_chkFindSym)
+	call	popOP1
+	jr	c, hookOverAndRestore
+
+	ld	a, b
+	or	a
+	jr	z, ramzar2
+
+	call	findStartInROM
+
+	inc	hl
+	inc	hl
+	call	fast_bhl
+	ex	de, hl
+	jr	foundzing2
+	
+ramzar2:
+	inc	de
+	inc	de
+foundzing2:
+	ld	c, fvFontPage
+	call	fakeVarOffset
+
+	ld	(hl), b
+	dec	hl
+	ld	(hl), d
+	dec	hl
+	ld	(hl), e
+	
+	call	popOP1
+	jp	gotStart
+
+;########################################
+;special bhl
+
+special_bhl:
+	ld	a, h
+	res	6, h
+	cp	h
+	ret	z
+	inc	b
+	ret
+
+
+
+
+;#####################
+setTempFont:
+	ld	de, tempBuf
+	ld	bc, 9
+	ldir
+setTempFont2:
+	ld	a, $FF
+	ld	(menuCurrent), a
+	ld	(tempGood), a
+	
+	ld	hl, fontHookEntry
+	in	a, (06)
+enableFontHookRet:
+	bcall(_enableFontHook)	
+
+	ret
+
+
+;####################
+;display a sample font
+;input: (selected)
+
+displaySample:
+	ld	a, (selected)
+	dec	a
+	ld	e, 9
+	bcall(_multAbyE)
+	ld	de, saveSScreen
+	add	hl, de
+
+	call	setTempFont
+	
+	bcall(_clrLCDFull)
+
+	ld	hl, 0
+	ld	(curRow), hl
+	ld	a, 'A'
+sampleLoop:
+	bcall(_putC)
+	inc	a
+	cp	'Z'+1
+	jr	nz, sampleLoop
+
+	ld	hl, 2
+	ld	(curRow), hl
+	ld	a, 'a'
+sampleLoop2:
+	bcall(_putC)
+	inc	a
+	cp	'z'+1
+	jr	nz, sampleLoop2
+
+	ld	hl, 4
+	ld	(curRow), hl
+	ld	a, '0'
+sampleLoop3:
+	bcall(_putC)
+	inc	a
+	cp	'9'+1
+	jr	nz, sampleLoop3
+
+;$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;#####################
+restoreFont:
+	xor	a
+	ld	(menuCurrent), a
+disableFontHookRet:
+	bcall(_disableFontHook)	
+	ret
+

@@ -1,0 +1,6 @@
+def compile(s,symbolTable=None):
+    if symbolTable == None:
+        symbolTable = {}
+    out = ''
+    
+    return out

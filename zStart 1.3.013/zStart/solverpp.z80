@@ -1,0 +1,1794 @@
+
+
+menuData	equ	$8080		;105
+solverSpot	equ	menuData-1	;1
+
+backupPage	equ	$8100		;1
+mode		equ	backupPage+1	;1
+penColBack	equ	mode+1		;1
+winTopShd	equ	penColBack+1	;1
+saveHLk		equ	winTopShd+1	;2
+letters		equ	saveHLk+2	;1
+letterBuf	equ	letters+1	;27
+letSelected	equ	letterBuf+27	;1
+letScrolled	equ	letSelected+1	;1
+realLetter	equ	letScrolled+1	;1
+tempNumber	equ	realLetter+1	;2
+
+
+
+
+
+solverpp:
+	ld	a, (appShadow+appSolverPP)
+	xor	1
+	ld	(appShadow+appSolverPP), a
+	ld	a, 1
+	ld	(appDirty), a
+	jp	title2
+
+
+
+menuHook:
+	add	a, e
+	push	af
+	ld	a, (menuCurrent)
+	cp	8
+	jp	z, correctMenu
+	pop	af
+	jp	retXor
+correctMenu:
+
+	pop	af
+	or	a
+	jp	nz, notZeroMenu
+
+	ld	a, 2
+	out	(05), a
+	ld	a, ($FFF5)
+	cp	$69
+	jr	nz, findTheMenu
+
+	ld	a, ($FFF8)
+	ld	hl, ($FFF6)
+
+	out	(07), a
+	ld	a, (hl)
+	cp	4
+	jr	z, menusFound
+
+findTheMenu:
+
+	ld	a, $69
+	ld	($FFF5), a
+
+	ld	a, $7B
+	out	(07), a
+
+	ld	a, (_pullDownChk+2 + $4000)
+	ld	($FFF8), a
+	out	(07), a
+	ld	hl, $8000
+
+
+findLoopza:
+	ld	bc, $FFFF
+	ld	a, $35
+	cpir
+
+	ld	de, checkBytes
+	ld	b, 7
+compareLoop:
+	ld	a, (de)
+	cp	(hl)
+	jr	nz, findLoopza
+	inc	hl
+	inc	de
+	djnz	compareLoop
+	
+	ld	de, -13
+	add	hl, de
+
+	ld	($FFF6), hl
+
+menusFound:
+
+	ld	a, 1
+	out	(05), a
+
+	ld	de, menuData+$4000
+	ld	bc, 100
+	ldir
+
+	ld	hl, menuData+$4000+1
+	ld	a, (hl)
+	dec	a
+	ld	(solverSpot+$4000), a
+	inc	(hl)
+
+	add	a, a
+	add	a, 8
+	add	a, l
+	ld	l, a
+	jr	nc, $+3
+	inc	h
+;$$
+	ld	(hl), 0
+	inc	hl
+	ld	(hl), kSolveRoot
+	inc	hl
+
+	ld	bc, 80
+	add	hl, bc
+	ld	e, l
+	ld	d, h
+	inc	de
+	inc	de
+	lddr
+	ld	(hl), 0
+	inc	hl
+	ld	(hl), kSolveRoot
+
+	xor	a
+	out	(05), a
+	ld	a, $81
+	out	(07), a
+
+	ld	hl, menuData
+	jr	retOr1
+
+	
+
+
+;math menu bytes
+;04 0c 0e 07 08 35 3b 25 43 00 c3 fe 18 fe 16 fe 17 fe 15
+
+
+
+
+checkBytes:
+	.db	$3B, $25, $43, 00, $C3, $FE, $18
+
+notZeroMenu:
+	push	af
+	ld	a, ($85DF)	;subMenu
+	or	a
+	jr	z, correctSubMenu
+	pop	af
+	jp	retXor
+correctSubMenu:
+
+	pop	af
+	dec	a
+	jr	z, itsOne
+	dec	a
+	dec	a
+	jr	z, itsThree
+retXor:
+	xor	a
+	ret
+
+itsOne:
+	ld	a, (solverSpot)
+	ld	b, a
+	ld	a, c
+	cp	b
+	jr	c, retXor
+
+	ld	hl, solveText
+	jr	z, itsSolve
+	ld	hl, solverppText
+itsSolve:
+	call	myPutS
+retOr1:
+	or	1
+	ret
+
+itsThree:
+	ld	a, (solverSpot)
+	ld	c, a
+	ld	a, ($85E0)	;currently selected item
+	cp	c
+	jr	c, retXor
+	ld	b, kSolveRoot
+	ret	z
+	
+settingUpApp:
+
+	xor	a
+	ld	(menuCurrent), a
+
+	bcall(_putAway)
+	bcall(_monReset)
+
+
+	bcall(_closeEditEqu)
+
+	ld	a, (cxPage)
+	ld	(backupPage), a
+
+
+	ld	hl, monVectors
+	bcall(_appInit)
+
+	
+
+	ld	a, kExtApps
+	ld	(cxCurApp), a
+	
+
+	or	a
+	ret
+
+
+
+
+
+
+
+
+
+monVectors:
+	.dw	mcxMain
+	.dw	mcxPPutAway
+	.dw	mcxPutAway
+	.dw	mcxRedisp
+	.dw	mcxErrorEP
+	.dw	mcxSizeWind
+	.db	$0E
+
+
+;########################################
+mcxMain:
+	cp	kQuit
+	jp	z, mcxPutAway
+
+	cp	kGraph
+	jp	z, mcxPutAway
+
+
+	cp	kExtApps
+	jr	nz, notInitializing
+
+
+	ld	hl, plotSScreen
+	ld	de, appBackUpScreen
+	ld	bc, 768
+	ldir
+
+	ld	hl, (penCol)
+	ld	(penColBack), hl
+
+	bcall(_forceFullScreen)
+
+	scf
+	call	createTemp
+	or	a
+	call	createTemp
+	or	a
+	call	openEdit
+
+	call	cursorToStart
+	
+	
+
+	xor	a
+	ld	(mode), a
+
+	call	createImage
+
+
+	ld	a, 1
+	ld	(winTop), a
+	ld	(winTopShd), a
+
+
+	set	appAllowContext, (iy + APIFlg)
+	set	appRunning, (iy + APIFlg)
+
+	bcall(_clrScrnFull)
+	
+
+	bcall(_homeUp)
+
+	call	mcxRedisp
+
+
+	ret
+
+notInitializing:
+
+
+	ld	b, a
+	ld	a, (mode)
+	cp	2
+	ld	a, b
+	jp	nc, secondScreen
+
+;everything below this point is reusable
+
+	ld	hl, finishKeys
+	push	hl
+
+	cp	kEnter
+	jr	nz, notEnterp
+	
+	call	appDown
+	ret
+
+notEnterp:
+	cp	kLeft
+	jr	nz, notLeftp
+	bcall(_cursorLeft)
+	ret
+
+notLeftp:
+	cp	kRight
+	jr	nz, notRightp
+cursorRight:
+	res	textInsMode, (iy + textFlags)
+	bcall(_bufRight)
+	jr	z, rightDone
+	res	textScrolled, (iy + textFlags)
+	bcall(_putTokString)
+	bit	textScrolled, (iy + textFlags)
+	jr	z, rightDone
+	ld	hl, (curRow)
+	push	hl
+	ld	hl, (editBtm)
+	ld	de, (editTail)
+	bcall(_dispForward)
+	pop	hl
+	ld	hl, (curRow)
+rightDone:
+	ret
+
+notRightp:
+	cp	kDown
+	jr	nz, notDownp
+	bcall(_isAtBtm)
+	jr	nz, notAtBtm
+	call	appDown
+	jr	cantGoDown	
+notAtBtm:
+	bcall(_cursorDown)
+cantGoDown:
+	ret
+
+notDownp:
+
+	cp	kUp
+	jr	nz, notUpp
+
+	res	textScrolled, (iy + textFlags)
+	res	textInsMode, (iy + textFlags)
+
+	bcall(_isAtTop)
+	jr	nz, notAtTop
+	
+	call	appUp
+	ret
+
+notAtTop:
+	ld	bc, (curRow)
+	dec	c
+	inc	b
+upALineLp:
+	push	bc
+	bcall(_cursorLeft)
+	bcall(_isAtTop)
+	pop	bc
+	jr	z, upDone
+	bit	textScrolled, (iy + textFlags)
+	jr	z, didntScroll
+	res	textScrolled, (iy + textFlags)
+	inc	c
+didntScroll:
+	
+	ld	a, (curRow)
+	cp	c
+	jr	c, upDone
+	jr	nz, upALineLp
+
+	ld	a, (curCol)
+	cp	b
+	jr	c, upDone
+	jr	upALineLp
+	
+upDone:
+	ret
+
+
+notUpp:
+
+
+	cp	kClear
+	jr	nz, notClearp
+
+	bcall(_canAlphIns)
+	bit	cmdVirgin, (iy + cmdFlags)
+;	ret	nz
+	bcall(_isEditEmpty)
+	jr	z, preErased
+	bcall(_dispHead)
+	bcall(_eraseEOW)
+	bcall(_bufClear)
+preErased:
+	set	cmdVirgin, (iy + cmdFlags)
+	ret
+
+
+notClearp:
+
+	cp	kDel
+	jr	nz, notDeletep
+	res	textInsMode, (iy + textFlags)
+	bcall(_bufDelete)
+	bcall(_isEditEmpty)
+	jr	nz, delNotEmpty
+	set	cmdVirgin, (iy + cmdFlags)
+delNotEmpty:
+	bcall(_dispEOW)
+	ret
+
+notDeletep:
+	cp	kIns
+	jr	nz, notInsp
+	ld	a, (flags+textFlags)
+	xor	10h
+	ld	(flags+textFlags), a
+	ret
+notInsp:
+
+	cp	kBOL
+	jr	nz, notBOL
+
+	res	textScrolled, (iy + textFlags)
+BOLLoop:
+	bcall(_isAtTop)
+	ret	z
+	bcall(_curSorLeft)
+	jr	BOLLoop
+notBOL:
+
+	cp	kEOL
+	jr	nz, notEOL
+
+	res	textScrolled, (iy + textFlags)
+EOLLoop:
+	bcall(_isAtBtm)
+	ret	z
+	call	cursorRight
+	jr	EOLLoop
+
+notEOL:
+
+
+	cp	kTrace+1
+	ret	c
+
+
+	res	cmdVirgin, (iy + cmdFlags)
+	bcall(_insDisp)
+	ret
+finishKeys:
+	ld	a, (mode)
+	dec	a
+	jr	nz, notMode1
+
+	ld	a, (winTop)
+	cp	1
+	jr	z, notMode1	;this means it's not coming back
+
+	push	af
+
+	ld	bc, (curRow)
+	ld	hl, (editCursor)
+	jr	notPreviousRow
+findTheTopLp:
+	call	getPrevTokenInfo
+	ld	e, a
+	ld	a, b
+	sub	e
+	ld	b, a
+	jr	nc, notPreviousRow
+	add	a, 16
+	ld	b, a
+	dec	c
+	jr	z, equNotVisible
+notPreviousRow:
+	
+	ld	de, (editTop)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, findTheTopLp
+
+	pop	af
+	cp	c
+	jr	z, notMode1
+
+	jr	skipThatGuy
+equNotVisible:
+	ld	c, 1
+skipThatGuy:
+	ld	a, c
+	ld	(winTop), a
+	ld	(winTopShd), a
+
+	call	mcxRedisp
+	ret
+
+notMode1:
+	call	dispEqu
+	ret
+
+
+;##############
+secondScreen:
+	bcall(_processBufKeys)
+	ret
+
+
+
+
+
+;###################################
+mcxPPutAway:
+	ret
+
+;53c
+;###################################
+mcxPutAway:
+
+	bcall(_canAlphIns)
+	
+	call 	closeEdit
+
+	bcall(_monReset)
+
+	ld	a, (backUpPage)
+	ld	(cxPage), a
+
+	xor	a
+	ld	(menuCurrent), a
+
+	ld	hl, (penColBack)
+	ld	(penCol), hl
+
+	ld	hl, appBackUpScreen
+	ld	de, plotSScreen
+	ld	bc, 768
+	ldir
+
+	res	graphDraw, (iy + graphFlags)
+
+
+	xor	a
+	ld	(iy + textFlags), a
+	bit	monAbandon, (iy + monFlags)
+	jr	nz, turningOff
+	bcall(_jForceCMDNoChar)
+turningOff:
+
+	bjump(_putAway)
+
+;####################################
+mcxRedisp:
+	ld	a, (mode)
+	cp	2
+	jr	nc, mode2
+	bcall(_clrLCDFull)
+
+	ld	a, (winTopShd)
+	ld	(winTop), a
+	ld	hl, (curRow)
+	push	hl
+
+	call	editToShad
+
+	ld	hl, 0
+	ld	(curRow), hl
+	res	appTextSave, (iy + appFlags)
+	ld	hl, solverTitle
+	call	myPutS
+	bcall(_homeUp)
+	ld	b, 127
+	ld	hl, textShadow
+mcxRedispLp:
+	ld	a, (hl)
+	bcall(_putC)
+	inc	hl
+	djnz	mcxRedispLp
+	ld	a, (hl)
+	bcall(_putMap)
+	pop	hl
+	ld	(curRow), hl
+	bcall(_cursorOn)
+	set	appTextSave, (iy + appFlags)
+	set	curAble, (iy + curFlags)
+	res	curLock, (iy + curFlags)
+	call	dispEqu
+	ret
+
+;#########
+mode2:
+	bcall(_clrLCDFull)
+	ld	hl, (curRow)
+	push	hl
+	res	appTextSave, (iy + appFlags)
+
+	ld	a, (letters)
+	or	a
+	jr	nz, thereAreLetters
+
+	ld	hl, 2*256
+	ld	(curRow), hl
+	ld	hl, noVariables
+	call	myPutS
+	pop	hl
+	bcall(_cursorOff)
+	ret
+
+thereAreLetters:
+	ld	hl, winTop
+	ld	de, $800A
+	ld	bc, 11
+	ldir
+
+
+
+	ld	hl, letterBuf
+	ld	c, 0
+	ld	a, (letScrolled)
+	call	forwardThisMany
+
+	ld	a, (letters)
+	cp	7
+	jr	c, goodLength
+	ld	a, 7
+goodLength:
+	ld	b, a
+	xor	a
+	ld	(curRow), a
+dispSecondLp:
+
+	ld	hl, 0
+	ld	(winAbove), hl
+	ld	(winLeft), hl
+	ld	hl, 7*256+0
+	ld	(winTop), hl
+	xor	a
+	ld	(winLeftEdge), a
+
+	ld	a, 1
+	ld	(curCol), a
+	ld	a, c
+	add	a, $41
+	bcall(_putC)
+	ld	a, '='
+	bcall(_putC)
+
+	push	bc
+	push	hl
+
+	ld	hl, (curRow)
+	push	hl
+
+	ld	h, 0
+	ld	(winRow), hl
+	ld	hl, 3
+	ld	(winCol), hl
+
+
+
+	ld	a, (letSelected)
+	cp	c
+	jr	z, thisIsSelected
+	ld	a, c
+	call	getLetterValue
+
+	ld	hl, op3
+	bcall(_wPutSEOL)
+	jr	doneDrawingLine
+
+	ld	hl, op3
+	ld	b, 12
+drawLineLoop:
+	ld	a, (hl)
+	or	a
+	jr	z, doneDrawingLine
+	bcall(_putC)
+	inc	hl
+	djnz	drawLineLoop
+	
+	ld	a, (hl)
+	or	a
+	jr	z, doneDrawingLine
+	ld	b, a
+	inc	hl
+	ld	a, (hl)
+	or	a
+	jr	z, allFitOnScreen
+	ld	b, $CE		;"..."
+allFitOnScreen:
+	ld	a, b
+	bcall(_putMap)
+	jr	doneDrawingLine
+thisIsSelected:
+	set	appTextSave, (iy + textFlags)
+	ld	a, c
+	call	getLetterValue
+
+	ld	hl, op3
+	bcall(_wPutSEOL)
+	res	appTextSave, (iy + textFlags)
+
+doneDrawingLine:
+
+	pop	hl
+	inc	l
+	ld	(curRow), hl
+	pop	hl
+	pop	bc
+
+	ld	a, 1
+	ld	d, b
+	call	forwardThisMany
+	ld	b, d
+
+	dec	b
+	jp	nz, dispSecondLp
+
+	ld	hl, $800A
+	ld	de, winTop
+	ld	bc, 11
+	ldir
+	
+
+	set	appTextSave, (iy + appFlags)
+	pop	hl
+	ld	(curRow), hl
+
+	bcall(_cursorOn)
+	ret
+
+;############################################
+mcxErrorEP:
+	ret
+
+;############################################
+mcxSizeWind:
+	ret
+
+
+
+;###########################################
+;c = 1, nc = 0
+whichName:
+	ld	hl, tempName0
+	ret	nc
+	ld	hl, tempName1
+	ret
+
+
+;###########################################
+;c = 1, nc = 0
+findTemp:
+	call	whichName
+	rst	20h
+	bcall(_chkFindSym)
+	ret
+
+
+;###########################################
+;c = 1, nc = 0
+createTemp:
+	call	whichName
+	push	hl
+	rst	20h
+	bcall(_chkFindSym)
+	jr	c, notExisting
+	pop	hl
+	ld	a, b
+	or	a
+	ret	z
+	bcall(_arc_unarc)
+	ret
+notExisting:
+
+	pop	hl
+	rst	20h
+	ld	hl, 0
+	bcall(_createProg)
+	ret
+
+
+;###########################################
+;c = 1, nc = 0
+openEdit:
+	call	findTemp
+	ret	c
+editSomething:
+	bcall(_editProg)
+	set	editOpen, (iy + editFlags)
+	ld	hl, (iMathPtr1)
+	inc	hl
+	inc	hl
+	ld	(editTop), hl
+	push	hl
+	ld	hl, (iMathPtr2)
+	ld	(editCursor), hl
+	push	hl
+	ex	de, hl
+	ld	hl, (iMathPtr3)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nc, dontSwap
+	ex	de, hl
+dontSwap:
+	ld	(editBtm), hl
+	ld	(editTail), hl
+	pop	hl
+	pop	de
+	or	a
+	sbc	hl, de
+	ret	z
+
+	ld	c, l
+	ld	b, h
+	ld	hl, (editCursor)
+	dec	hl
+	ld	de, (editTail)
+	dec	de
+	lddr
+	ret
+	
+;##########################################
+closeEdit:
+	bit	editOpen, (iy + editFlags)
+	ret	z
+	
+	ld	hl, (editBtm)
+	ld	de, (editTail)
+	ld	(editTail), hl
+	or	a
+	sbc	hl, de
+
+	ld	de, (editCursor)
+	add	hl, de
+	ld	(editCursor), hl
+
+	bcall(_closeEditEqu)
+	ret
+
+;##########################################
+;c = 1, nc = 0
+deleteTemp:
+	call	findTemp
+	ret	c
+	bcall(_delVarArc)
+	ret
+	
+;##########################################
+;c = 1, nc = 0
+createImage:
+	bcall(_grBufClr)
+	res	appTextSave, (iy + appFlags)
+	set	write_on_graph, (iy + sGrFlags) ; | needed to text only
+	set	textWrite, (iy + sGrFlags)	; | to buffer
+	set	fracDrawLFont, (iy + fontFlags)
+	set	4, (iy + 24h)			;full screen text draw?
+	set	fullScrnDraw, (iy + apiFlg4)	; |
+	set	bufferOnly, (iy + plotFlag3)	; | these make the lines
+	res	plotLoc, (iy + plotFlags)	; | draw right
+	ld	de, 0
+	ld	(penCol), de
+	ccf
+	push	af
+	call	findTemp
+	pop	af
+
+	jr	c, makingBottom
+
+	call	makeTokensTop
+	call	makeEqus
+	jr	imageCreated
+
+makingBottom:
+	call	makeEqus
+	call	makeTokensBottom
+imageCreated:
+
+	set	appTextSave, (iy + appFlags)
+	res	write_on_graph, (iy + sGrFlags)	; | needed to text
+	res	textWrite, (iy + sGrFlags)	; | only to buffer
+	res	fracDrawLFont, (iy + fontFlags)
+	res	4, (iy + 24h)			;full screen text draw?
+	res	fullScrnDraw, (iy + apiFlg4)	; |
+	res	bufferOnly, (iy + plotFlag3)	; | these make the lines
+	set	plotLoc, (iy + plotFlags)	; | draw right
+	ret
+
+
+makeEqus:
+	push	de
+	ld	a, 45
+	ld	(penCol), a
+	ld	a, '='
+	bcall(_vPutMap)
+
+	ld	a, (penRow)
+	sub	63
+	neg
+	ld	c, a
+	ld	e, a
+	ld	b, 0
+	ld	d, 95
+	ld	h, 1
+	bcall(_iLine)
+	ld	a, c
+	sub	6
+	ld	c, a
+	ld	e, c
+	bcall(_iLine)
+
+	res	textInverse, (iy + textFlags)
+	xor	a
+	ld	(penCol), a
+	ld	a, (penRow)
+	add	a, 8
+	ld	(penRow), a
+	pop	de
+	ret
+
+;###
+makeTokensBottom:
+	ex	de, hl
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	ld	a, d
+	or	e
+	ret	z
+	inc	hl
+	push	hl
+	add	hl, de
+	ex	de, hl
+	pop	hl
+	ld	bc, 5*256+16
+makeToksLoop:
+	call	getNextTokenInfo
+	push	hl			;token buf
+	push	bc			;curRow
+	ld	b, a
+	ld	hl, op3
+dispTokLoop:
+	ld	a, (hl)
+	push	de
+	bcall(_vPutMap)
+	pop	de
+	inc	hl
+	dec	c
+	jr	nz, notNextLine
+
+	xor	a
+	ld	(penCol), a
+	ld	a, (penRow)
+	add	a, 8
+	ld	(penRow), a
+	ld	a, b
+	pop	bc
+	dec	b
+	jr	nz, notDonezk
+	pop	hl
+	ret
+notDonezk:
+	push	bc
+	ld	c, 16
+	ld	b, a
+notNextLine:
+	
+	djnz	dispTokLoop
+
+	ld	a, c
+	pop	bc			;curRow
+	ld	c, a
+	pop	hl
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, makeToksLoop
+
+	ret
+
+;###
+makeTokensTop:
+	xor	a
+	call	findTemp
+	ex	de, hl
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	inc	hl
+	ld	(saveHLk), hl
+	ex	de, hl
+	add	hl, de
+	ex	de, hl
+	ld	b, 0
+	jr	enterAtBtm2
+findTheEndLp:			;move to end so we can see the alignment
+	call	getNextTokenInfo
+	add	a, b
+	ld	b, a
+enterAtBtm2:
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, findTheEndLp
+
+	push	de
+	ld	hl, $8000
+	ld	de, $8001
+	ld	bc, 16*5-1
+	ld	(hl), $20
+	ldir
+	pop	de
+
+	and	15
+	ld	hl, 16*4+$8000
+	add	a, l
+	ld	l, a
+	ld	(hl), 0
+	dec	hl
+	ex	de, hl
+	jr	enterAtBtm3
+drawOutText:
+	call	getPrevTokenInfo
+	push	hl
+	ld	hl, op3
+	ld	b, a
+	add	a, l
+	ld	l, a
+	jr	nc, $+3
+	inc	h
+;$$
+	dec	hl
+revCopyLoop:
+	ld	c, 255
+	ldd
+	djnz	revCopyLoop
+	pop	hl			;pop tok buf
+enterAtBtm3:
+	ld	bc, (saveHLk)
+	or	a
+	sbc	hl, bc
+	add	hl, bc
+	jr	z, reachedTopOfEdit
+
+	bit	7, d
+	jr	nz, drawOutText
+
+reachedTopOfEdit:
+	ld	hl, $8000
+	ld	c, 5
+actuallyDrawTxt:
+	ld	b, 16
+innerDrawLp:
+	ld	a, (hl)
+	or	a
+	jr	z, outOfHerez
+	bcall(_vPutMap)
+	inc	hl
+	djnz	innerDrawLp
+outOfHerez:
+	xor	a
+	ld	(penCol), a
+	ld	a, (penRow)
+	add	a, 8
+	ld	(penRow), a
+	dec	c
+	jr	nz, actuallyDrawTxt
+	ret
+	
+
+
+;##############################################
+;get info about the previous token
+;input: hl = buffer
+;output: a = length
+;	hl = buffer updated
+;	op3 = string
+;destroys: none
+
+getPrevTokenInfo:
+	push	de
+	call	getPrevToken
+	push	bc
+	bcall(_get_tok_strng)
+	pop	bc
+	pop	de
+	ret
+
+;##############################################
+getPrevToken:
+	push	af
+	dec	hl
+	ld	e, (hl)
+	dec	hl
+	ld	a, (hl)
+	bcall(_isA2ByteTok)
+	ld	d, a
+	jr	z, returnKKK
+	ld	d, 0
+	inc	hl
+returnKKK:
+	pop	af
+	ret
+
+;##############################################
+;get info about the next token
+;input: hl = buffer
+;output: a = length
+;	hl = buffer moved
+;	op3 = string
+;destroys: none
+
+getNextTokenInfo:
+	push	de	
+	push	bc
+	bcall(_get_tok_strng)
+	pop	bc
+	call	getNextToken
+	pop	de
+	ret
+
+;##############################################
+getNextToken:
+	push	af
+	ld	a, (hl)
+	bcall(_isA2ByteTok)
+	ld	d, 0
+	ld	e, a
+	inc	hl
+	jr	nz, returnKK
+
+	ld	d, a
+	ld	e, (hl)
+	inc	hl
+returnKK:
+	pop	af
+	ret
+
+
+;##############################################
+dispEqu:
+	ld	a, (mode)
+	or	a
+	jp	nz, displayingTop
+
+
+	ld	bc, (curRow)
+	ld	a, 7	;7 because if it enters the last row, we don't care
+	sub	c
+	ld	c, a
+	ld	a, 15
+	sub	b
+	ld	b, a	
+
+	ld	hl, (editBtm)
+	ld	de, (editTail)
+	or	a
+	sbc	hl, de
+	ld	de, (editCursor)
+	add	hl, de
+	ex	de, hl
+	ld	(saveHLk), de
+	jr	enterAtBtm6
+
+findEndOfEdit:
+	call	getNextTokenInfo
+
+	ld	d, a
+	ld	a, b
+	sub	d
+	ld	b, a
+	jr	nc, didntNextLine
+	
+	add	a, 16
+	ld	b, a
+	ld	a, c
+	sub	1
+	ld	c, a
+	ret	c
+didntNextLine:
+enterAtBtm6:
+	ld	de, (saveHLk)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, findEndOfEdit
+
+	push	bc
+	ld	de, (curRow)
+	ld	a, 7
+	sub	c
+	ld	c, a
+	ld	a, 15
+	sub	b
+	cp	15
+	jr	z, fullLastLine
+	ld	b, a
+	ld	(curRow), bc
+	pop	bc
+	push	bc
+	inc	b
+	dec	b
+	res	appTextSave, (iy + appFlags)
+	jr	z, onlyLast
+clearLineLoop:
+	ld	a, ' '
+	bcall(_putC)
+	djnz	clearLineLoop
+onlyLast:
+	bcall(_putMap)
+	set	appTextSave, (iy + appFlags)
+	ld	(curRow), de
+fullLastLine:
+	pop	bc
+
+	ld	a, c
+	or	a
+	ret	z
+
+
+
+
+	ld	a, 6
+	sub	c
+
+	ld	hl, plotSScreen
+
+	ld	a, 8
+	sub	c
+	add	a, a
+	add	a, a
+	add	a, a
+
+
+	add	a, $80
+topEntry:
+	ld	d, a
+
+	ld	b, c
+	sla	b
+	sla	b
+	sla	b
+	ld	e, $20
+outerDispEqu:
+	DWAIT
+	ld	a, e
+	cp	$2C
+	ret	z
+	out	($10), a
+	DWAIT
+	ld	a, d
+	out	($10), a
+	push	de
+	ld	de, 12
+	push	bc
+	push	hl
+innerDispEqu:
+	DWAIT
+	ld	a, (hl)
+	out	($11), a
+	add	hl, de
+	djnz	innerDispEqu
+	pop	hl
+	inc	hl
+	pop	bc
+	pop	de
+	inc	e
+	jr	outerDispEqu
+
+;###
+displayingTop:
+	dec	a
+	ret	nz
+	ld	a, (winTop)
+	ld	c, a
+	dec	c
+	ret	z
+
+	push	bc
+	sla	c
+	sla	c
+	sla	c
+	ld	b, 0
+	ld	l, c
+	ld	h, b
+	add	hl, bc
+	add	hl, bc
+	add	hl, hl
+	add	hl, hl
+	ex	de, hl
+	ld	hl, 6*8*12+plotSScreen
+	sbc	hl, de
+	pop	bc
+
+	ld	a, $88
+	jr	topEntry
+	
+	
+;############################################
+cursorToStart:
+	ld	hl, (editCursor)
+	ld	de, (editTop)
+	or	a
+	sbc	hl, de
+	ld	(editCursor), de
+	ex	de, hl
+	ld	hl, (editTail)
+	or	a
+	sbc	hl, de
+	ld	(editTail), hl
+	ret
+
+
+
+;#############################################
+;move the app downwards in funtion
+appDown:
+	ld	a, (mode)
+	or	a
+	jr	nz, notMode0
+
+	call	closeEdit
+	ld	a, (mode)
+	inc	a
+	ld	(mode), a
+
+	rra
+	push	af
+	call	openEdit
+	pop	af
+	call	createImage
+
+	call	cursorToStart
+
+
+	
+	xor	a
+	ld	(curCol), a
+	ld	a, (curRow)
+	add	a, 2
+	cp	8
+	jr	c, rowGood
+	ld	a, 7
+rowGood:
+	ld	(curRow), a
+
+	ld	(winTop), a
+	ld	(winTopShd), a
+
+	call	mcxRedisp
+	ret
+
+
+notMode0:
+	dec	a
+	jr	nz, notMod1
+
+	ld	a, 2
+	ld	(mode), a
+
+	call	closeEdit
+
+	xor	a
+	ld	(letSelected), a
+	ld	(letScrolled), a
+
+
+	call	countTheLetters
+
+	ld	a, (letters)	;initialize all the letters
+	or	a
+	jr	z, noneToInitialize
+	ld	b, a
+	ld	c, 0
+	ld	hl, letterBuf
+	xor	a
+initializeLp:
+	ld	d, b
+	call	forwardThisMany
+	ld	b, d
+	push	bc
+	push	hl
+	ld	a, c
+	call	getLetterValue
+	pop	hl
+	pop	bc
+	ld	a, 1
+	djnz	initializeLp
+noneToInitialize:
+
+	call	openLetter
+	
+	ld	hl, 3*256
+	ld	(curRow), hl
+
+	bcall(_setNumWindow)
+
+	call	mcxRedisp
+	ret
+
+notMod1:
+	ret
+	
+
+;#############################################
+editToShad:
+	bcall(_clrTxtShd)
+	ld	hl, (editCursor)
+	ld	bc, (curRow)
+	ld	a, 1
+	jr	enterAtBtm4
+backTrackLoop:
+	call	getPrevTokenInfo
+enterAtBtm4:
+	ld	e, a
+	ld	a, b
+	sub	e
+	ld	b, a
+	jr	nc, notNextRow
+
+	ld	a, (winTop)
+	cp	c
+	jr	z, topOfScreenReached
+	ld	a, b
+	add	a, 16
+	ld	b, a
+	dec	c
+notNextRow:
+	ld	de, (editTop)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, backTrackLoop
+
+topOfScreenReached:
+	push	hl
+	ld	hl, (editBtm)
+	ld	de, (editTail)
+	or	a
+	sbc	hl, de
+	ld	de, (editCursor)
+	add	hl, de
+	ld	(saveHLk), hl
+	pop	hl
+
+	ld	de, textShadow
+	ld	a, (winTop)
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, e
+	ld	e, a
+	jr	nc, $+3
+	inc	d
+;$$
+	jr	enterAtBtm5
+fillTextShadLp:
+	call	getNextTokenInfo
+	push	hl
+	ld	hl, op3
+	ld	b, a
+copyTokenLoop:
+	push	bc
+	ldi
+	ld	bc, textShadow+128
+	ex	de, hl
+	or	a
+	sbc	hl, bc
+	add	hl, bc
+	pop	bc
+	ex	de, hl
+	jr	nz, notFullDrawn
+	pop	hl
+	ret
+notFullDrawn:
+	djnz	copyTokenLoop
+
+	pop	hl
+enterAtBtm5:
+	ld	bc, (saveHLk)
+	or	a
+	sbc	hl, bc
+	add	hl, bc
+	jr	nz, fillTextShadLp
+	ret
+
+
+;###########################################
+appUp:
+	ld	a, (mode)
+	or	a
+	ret	z
+	dec	a
+	ret	nz
+
+	ld	(mode), a
+
+	call	closeEdit
+
+	or	a
+	call	openEdit
+	or	a
+	call	createImage
+
+	ld	hl, (editTop)
+	ld	de, (editCursor)
+	ld	b, 0
+	jr	startAtBtm7
+findMatchUpLoop:
+	call	getNextTokenInfo
+	add	a, b
+	ld	b, a
+startAtBtm7:
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, findMatchUpLoop
+
+	ld	a, b
+	and	15
+	ld	(curCol), a
+	ld	a, (curRow)
+	sub	2
+	jp	m, clearlyBad
+	jr	nz, clearlyGood
+clearlyBad:
+	ld	a, 1
+clearlyGood:
+	ld	(curRow), a
+
+	ld	a, 1
+	ld	(winTop), a
+	ld	(winTopShd), a
+
+	call	mcxRedisp
+	ret
+
+
+
+
+;##########################################
+countTheLetters:
+	xor	a
+	ld	(letters), a
+	ld	hl, letterBuf
+	ld	de, letterBuf+1
+	ld	bc, 26
+	ld	(hl), 0
+	ldir
+
+	xor	a
+	call	findTemp
+	call	countRoutine
+	scf
+	call	findTemp
+countRoutine:
+	ex	de, hl
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	inc	hl
+	ex	de, hl
+	add	hl, de
+	ex	de, hl
+	jr	enterAtBtm7
+countLoop:
+	push	de
+	call	getNextToken
+	ld	a, d
+	or	a
+	jr	nz, notLetterk
+	ld	a, e
+	sub	tA
+	jr	c, notLetterk
+	cp	tTheta-tA+1
+	jr	nc, notLetterk
+
+	ld	de, letterBuf
+	add	a, e
+	ld	e, a
+	jr	nc, $+3
+	inc	d
+;$$
+	ld	a, (de)
+	or	a
+	jr	nz, notLetterk
+	ld	a, 1
+	ld	(de), a
+	ld	a, (letters)
+	inc	a
+	ld	(letters), a
+notLetterk:
+	pop	de
+enterAtBtm7:
+	sbc	hl, de
+	add	hl, de
+	jr	nz, countLoop
+	ret
+
+
+;########################################
+openLetter:
+	ld	a, (letters)
+	or	a
+	ret	z
+	ld	a, (letSelected)
+	ld	c, 0
+	ld	hl, letterBuf
+	call	forwardThisMany
+
+	
+
+	ld	a, c
+	ld	(realLetter), a
+
+	call	getLetterValue
+
+	ld	h, b
+	ld	l, c
+	bcall(_createTempEqu)
+
+	inc	de
+	inc	de
+	push	de
+
+	ld	hl, (op1+1)
+	ld	(tempNumber), hl	
+
+	ld	a, (realLetter)
+	call	getLetterValue
+
+	ld	hl, op3
+	pop	de
+	ldir
+
+	call	findTempEqu
+	call	editSomething
+
+	call	cursorToStart
+
+	ret 
+
+
+;#######################################
+forwardThisMany:
+	ld	b, a
+	inc	b
+	dec	c
+	dec	hl
+forewardLoop:
+	inc	c
+	inc	hl
+	ld	a, (hl)
+	or	a
+	jr	z, forewardLoop
+	djnz	forewardLoop
+	ret
+
+
+
+;######################################
+;gets the value of a letter
+;input: a = letter
+;output: op3 = string of value
+;	bc = length
+;remarks: makes it if it doesn't exist
+getLetterValue:
+	add	a, $41
+	ld	(op1+1), a
+	ld	a, realObj
+	ld	(op1), a
+	xor	a
+	ld	(op1+2), a
+	ld	(op1+3), a
+
+	call	op1To8000
+
+reFindIt:
+	call	_8000ToOp1
+	bcall(_findSym)
+	jr	c, createIt
+	cp	realObj
+	jr	nz, deleteIt
+	ld	a, b
+	or	a
+	jr	z, foundItz	
+deleteIt:
+	bcall(_delVarArc)
+createIt:
+	call	_8000ToOp1
+	bcall(_createReal)
+	ld	hl, zeroVar
+	ld	bc, 9
+	ldir
+	jr	reFindit	
+	
+foundItz:
+	ex	de, hl
+	ld	de, op1
+	ld	bc, 9
+	ldir
+
+	ld	a, 18
+	bcall(_formEReal)
+	ret
+
+;#######################################
+op1To8000:
+	ld	hl, op1
+	ld	de, $8000
+	ld	bc, 9
+	ldir
+	ret
+
+;#######################################
+_8000ToOp1:
+	ld	hl, $8000
+	ld	de, op1
+	ld	bc, 9
+	ldir
+	ret
+
+;########################################
+findTempEqu:
+	ld	hl, $24*256+equObj
+	ld	(op1), hl
+	ld	hl, (tempNumber)
+	ld	(op1+2), hl
+	bcall(_chkFindSym)
+	ret
+
+
+
+zeroVar:
+	.db	00, $80, 00, 00, 00, 00, 00, 00, 00
+noVariables:
+	.db	"No variables", 0
+
+tempName0:
+	.db	progObj, "%slvr0", 0
+tempName1:
+	.db	progObj, "%slvr1", 0
+
+
+solverTitle:
+	.db	"=== SOLVER++ ===", 0
+
+solverppText:
+	.db	"Solver++", $CE, 0
+solveText:
+	.db	"Solver", $CE, 0
+hookEnd:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,699 @@
+;Sky by Robert Kuhfß
+
+;includes and defines
+#include lib.z80
+#define prgmname "Sky by Robert Kuhfss"
+
+;options
+;#define skip_alpha
+#define cheat 0
+
+;variables in ram
+	clr()
+	varloc(sram)
+	var(2, "levelpointer")
+	var(1, "difficulty")
+	var(1, "levelnr")
+	varfree("level_data")
+	var(1, "done")
+	varfree("player1")
+	var(1, "player1_y")
+	var(1, "player1_x")
+	varfree("player2")
+	var(1, "player2_y")
+	var(1, "player2_x")
+	varfree("player3")
+	var(1, "player3_y")
+	var(1, "player3_x")
+	var(12*8, "level")
+	varfree("coords")
+	var(1, "coords_y")
+	var(1, "coords_x")
+	var(1, "direction")
+	var(3, "temp")
+	run()
+
+	.ion
+	.asmprgm
+	
+	ld	hl, levels_easy
+	ld	(levelpointer), hl
+	ld	a, 1
+	ld	(difficulty), a
+	ld	a, 1
+	ld	(levelnr), a
+reset
+	call	init
+gameloop
+	getkey()
+	cp	skClear
+	jp	z, walkback
+	cp	skMode
+	jr	z, reset
+	#ifdef skip_alpha
+		cp	skAlpha
+		jr	z, skiplevel
+	#endif
+	cp	skUp
+	jr	z, move_up
+	cp	skDown
+	jr	z, move_down
+	cp	skRight
+	jr	z, move_right
+	cp	skLeft
+	jr	z, move_left
+	jr	gameloop
+
+quit
+	.quit
+
+#ifdef skip_alpha
+skiplevel
+	ld	a, (done)
+	or	a
+	jp	nz, win
+	jp	gameloop
+#endif
+
+move_up
+	ld	a, up
+	jp	move
+move_down
+	ld	a, down
+	jp	move
+move_right
+	ld	a, right
+	jp	move
+move_left
+	ld	a, left
+	jp	move
+
+init
+	call	intro
+	call	load_level
+	call	insert_startlocations
+refresh
+	clrgbuf()
+	call	draw_map
+	call	draw_player
+	call	fastcopy
+	ret
+
+win
+	ld	hl, (levelpointer)
+	ld	(hl), 1	;check
+	ld	de, levelsize
+	add	hl, de
+	ld	a, (hl)
+	cp	255
+	jr	nz, _
+	ld	a, (difficulty)
+	cp	3
+	jp	z, quit;winall	;TOTALY OWN THIS GAME
+	inc	a
+	ld	(difficulty), a
+	xor	a
+	ld	(levelnr), a
+	inc	hl
+_
+	ld	(levelpointer), hl
+	ld	hl, levelnr
+	inc	(hl)
+	jp	reset
+
+margin = 0
+
+intro
+	ld	a, 2
+	ld	(temp+2), a
+intro_refresh
+	ld	hl, gbuf
+	ld	(hl), 255
+	ld	de, gbuf +1
+	ld	bc, 768 -1
+	ldir
+	textinverse.on
+	textonbuf.on
+	line(7, 0)
+	pen(0,15)
+	ld	hl, txt_author
+	bcall(_vputs)
+	pen(margin+18,12)
+	ld	hl, txt_level
+	bcall(_vputs)
+	pen(margin+26,12)
+	ld	hl, txt_difficulty
+	bcall(_vputs)
+	pen(margin+34,12)
+	ld	hl, txt_complete
+	bcall(_vputs)
+	pen(margin+18,69)
+	ld	a, (levelnr)
+	call	display_a_2
+	pen(margin+26,54)
+	ld	a, (difficulty)
+	cp	1
+	jr	nz, _
+	ld	hl, txt_easy
+_
+	cp	2
+	jr	nz, _
+	ld	hl, txt_middle
+_
+	cp	3
+	jr	nz, _
+	ld	hl, txt_hard
+_
+	bcall(_vputs)
+	pen(margin+34,66)
+	ld	a, (levelnr)
+	call	getcomplete
+	cp	0
+	jr	nz, _
+	ld	hl, txt_no
+_
+	cp	1
+	jr	nz, _
+	ld	hl, txt_yes
+_
+	bcall(_vputs)
+	pen(margin+42,59)
+	ld	hl, txt_2nd
+	bcall(_vputs)
+	textonbuf.off
+	textinverse.off
+	call	cursor
+	
+intro_loop
+	getkey()
+	cp	skMode
+	jr	z, quitpop
+	cp	skStore
+	jp	z, resetlevelsaves
+	cp	sk2nd
+	ret	z
+	cp	skRight
+	jr	z, intro_right
+	cp	skLeft
+	jr	z, intro_left
+	cp	skDown
+	jr	nz, _
+	ld	a, 3
+	ld	(temp+2), a
+	call	cursor
+_
+	cp	skUp
+	jr	nz, _
+	ld	a, 2
+	ld	(temp+2), a
+	call	cursor
+_
+	jr	intro_loop
+
+quitpop
+	pop	hl
+	pop	hl
+	jp	quit
+
+intro_right
+	ld	a, (temp+2)
+	cp	2
+	jr	z, _
+	ld	a, (difficulty)
+	cp	3
+	jr	z, intro_loop
+	inc	a
+	ld	(difficulty), a
+	ld	a, 1
+	ld	(levelnr), a
+	jp	intro_refresh
+_
+	ld	a, (levelnr)
+	inc	a
+	call	getcomplete
+	cp	255
+	jp	z, intro_loop
+	ld	a, (levelnr)
+	call	getcomplete
+	or	a
+	jp	z, intro_loop
+	ld	a, (levelnr)
+	inc	a
+	ld	(levelnr), a
+	jp	intro_refresh
+
+intro_left
+	ld	a, (temp+2)
+	cp	2
+	jr	z, _
+	ld	a, (difficulty)
+	cp	1
+	jp	z, intro_loop
+	dec	a
+	ld	(difficulty), a
+	ld	a, 1
+	ld	(levelnr), a
+	jp	intro_refresh
+_
+	ld	a, (levelnr)
+	cp	1
+	jp	z, intro_loop
+	dec	a
+	ld	(levelnr), a
+	jp	intro_refresh
+
+resetlevelsaves
+	ld	b, 1
+	ld	hl, levels_easy
+	ld	de, levelsize
+resetlevelsaves_loop
+	ld	a, (hl)
+	cp	255
+	jr	nz, ++_
+	ld	a, b
+	cp	3
+	jr	nz, _
+	pop	hl
+	pop	hl
+	jp	start
+_
+	inc	b
+	inc	hl
+_
+	ld	(hl), 0
+	add	hl, de
+	jr	resetlevelsaves_loop
+
+getcomplete
+	ld	b, a
+	ld	a, (difficulty)
+	cp	1
+	jr	nz, _
+	ld	hl, levels_easy -levelsize
+_
+	cp	2
+	jr	nz, _
+	ld	hl, levels_middle -levelsize
+_
+	cp	3
+	jr	nz, _
+	ld	hl, levels_hard -levelsize
+_
+	ld	de, levelsize
+_
+	add	hl, de
+	djnz	-_
+	ld	a, (hl)
+	ret
+
+cursor
+	ld	a, (temp+2)
+	ld	l, a
+	ld	a, 10
+	ld	ix, arrows
+	call	or_sprite
+	call	fastcopy
+	ld	a, (temp+2)
+	xor	1
+	ld	l, a
+	ld	a, 10
+	ld	ix, black
+	call	or_sprite
+	call	fastcopy
+	ret
+
+txt_level		.db "level", 0
+txt_difficulty	.db "difficulty", 0
+txt_complete	.db "complete", 0
+txt_easy		.db "        easy", 0
+txt_middle		.db "middle", 0
+txt_hard		.db "       hard", 0
+txt_no		.db "   no", 0
+txt_yes		.db "yes", 0
+txt_2nd		.db 193, "2nd]", 0
+txt_author		.db "Sky by Robert Kuhfss", 0
+
+arrows
+	.db %11111111
+	.db %11111111
+	.db %11111111
+	.db %11011011
+	.db %10011001
+	.db %00011000
+	.db %10011001
+	.db %11011011
+
+black
+	.db %11111111
+	.db %11111111
+	.db %11111111
+	.db %11111111
+	.db %11111111
+	.db %11111111
+	.db %11111111
+	.db %11111111
+
+insert_startlocations
+	ld	a, (difficulty)
+	ld	b, a
+	ld	de, player1
+_
+	push	bc
+		push	de
+			call	locate_de
+			ld	(hl), end
+		pop	de
+		inc	de
+		inc	de
+	pop	bc
+	djnz	-_
+	ret
+
+move
+;	a = direction
+	ld	(direction), a
+	ld	hl, player1
+	ld	(temp), hl
+	ld	a, (difficulty)
+	ld	b, a
+_
+	push	bc
+		ld	hl, (temp)
+		ld	a, (direction)
+		call	next_coords
+		cp	empty
+		jr	nz, _
+		;coords are good
+		ld	hl, coords
+		ld	de, (temp)
+		ld	bc, 2
+		ldir
+		;copy direction into new "head"-position
+		ld	de, (temp)
+		call	locate_de
+		ld	a, (direction)
+		ld	(hl), a
+_
+	pop	bc
+	ld	hl, (temp)
+	inc	hl
+	inc	hl
+	ld	(temp), hl
+	djnz	--_
+move_done
+	ld	a, (difficulty)
+	cp	1
+	jr	z, move_done_1
+	cp	2
+	jr	z, move_done_2
+move_done_3
+	ld	hl, player3
+	ld	de, temp
+	ld	bc, 2
+	ldir
+	call	wallz
+	jr	z, _
+move_done_2
+	ld	hl, player2
+	ld	de, temp
+	ld	bc, 2
+	ldir
+	call	wallz
+	jr	z, _
+move_done_1
+	ld	hl, player1
+	ld	de, temp
+	ld	bc, 2
+	ldir
+	call	wallz
+	jr	z, _
+	call	check_complete
+	jp	nz, walkback
+	jp	win
+_
+	call	refresh
+	call	fastcopy
+	jp	gameloop
+
+wallz
+; temp = player coords
+; z-flag if able to walk
+	ld	a, up
+	ld	hl, temp
+	call	next_coords
+	cp	empty
+	ret	z
+	ld	a, down
+	ld	hl, temp
+	call	next_coords
+	cp	empty
+	ret	z
+	ld	a, right
+	ld	hl, temp
+	call	next_coords
+	cp	empty
+	ret	z
+	ld	a, left
+	ld	hl, temp
+	call	next_coords
+	cp	empty
+	ret
+
+next_coords
+;	hl = player
+;	a  = direction
+	ld	(temp+2), a
+	ld	de, coords
+	ld	bc, 2
+	ldir
+
+	cp	up
+	jr	nz, _
+	ld	a, (coords_y)
+	cp	0
+	jr	z, _
+	dec	a
+	ld	(coords_y), a
+_
+	ld	a, (temp+2)
+	cp	down
+	jr	nz, _
+	ld	a, (coords_y)
+	cp	7
+	jr	z, _
+	inc	a
+	ld	(coords_y), a
+_
+	ld	a, (temp+2)
+	cp	right
+	jr	nz, _
+	ld	a, (coords_x)
+	cp	11
+	jr	z, _
+	inc	a
+	ld	(coords_x), a
+_
+	ld	a, (temp+2)
+	cp	left
+	jr	nz, _
+	ld	a, (coords_x)
+	cp	0
+	jr	z, _
+	dec	a
+	ld	(coords_x), a
+_
+	ld	de, coords
+	call	locate_de
+	ld	a, (hl)
+	ret
+
+load_level
+	ld	a, (levelnr)
+	call	getcomplete
+	ld	(levelpointer), hl
+	;ld	hl, (levelpointer)
+	ld	de, level_data
+	ld	bc, levelsize
+	ldir
+	ret
+
+draw_map
+	ld	hl, level
+	ld	c, 8
+draw_map_outer
+	ld	b, 12
+draw_map_inner
+	push	bc
+		push	hl
+			ld	de, 8
+			ld	ix, tiles
+			ld	a, (hl)
+			
+			cp	1
+			jr	c, _
+			add	ix, de
+_
+			cp	players
+			jr	c, _
+			add	ix, de
+_
+			cp	directions
+			jr	c, _;++_
+; 			push	bc
+; 				ld	ix, tiles_part -8
+; 				sub	directions -1
+; 				ld	b, a
+; _
+				add	ix, de
+; 				djnz	-_
+; 			pop	bc
+_
+			ld	a, 8
+			sub	c
+			ld	l, a
+			ld	a, 12
+			sub	b
+			call	or_sprite
+		pop	hl
+		inc	hl
+	pop	bc
+	djnz	draw_map_inner
+	dec	c
+	ld	a, c
+	or	a
+	jr	nz, draw_map_outer
+	ret
+
+draw_player
+	ld	a, (difficulty)
+	ld	b, a
+	ld	de, player1
+_
+	push	bc
+		push	de
+			ld	a, (de)
+			ld	l, a
+			inc	de
+			ld	a, (de)
+			ld	ix, tiles_player
+			call	or_sprite
+		pop	de
+		inc	de
+		inc	de
+	pop	bc
+	djnz	-_
+	ret
+
+print_move
+;	c = move
+;	a = player
+	ld	b, a
+	ld	de, level_data -2
+_
+	inc	de
+	inc	de
+	djnz	-_
+
+	call	locate_de
+	ld	a, c
+ 	ld	(hl), a
+	ret
+
+locate_de
+;destroys:	b, de, hl
+	ld	hl, level
+	ld	a, (de)
+	ld	b, a
+	or	a
+	jr	z, ++_
+	push	de
+		ld	de, 12
+_
+		add	hl, de
+		djnz	-_
+	pop	de
+_
+	inc	de
+	ld	a, (de)
+	ld	d, 0 
+	ld	e, a
+	add	hl, de
+	ret
+
+wait
+	getkey()
+	cp	sk2nd
+	jr	nz, wait
+	ret
+
+check_complete
+; z-flag if level complete
+	ld	hl, level
+	ld	b, 12*8
+	ld	c, 0
+_
+	ld	a, (hl)
+	or	a
+	jr	nz, _
+	inc	c
+_
+	inc	hl
+	djnz	--_
+	ld	a, c
+	cp	0
+	ret
+
+walkback
+	xor	a
+	ld	(temp+2), a
+	ld	hl, player3
+	ld	(temp), hl
+	;ld	a, (difficulty)
+	ld	b, 3
+_
+	push	bc
+		ld	a, (difficulty)
+		cp	b
+		jr	c, _
+		ld	de, (temp)
+		call	locate_de
+		ld	a, (hl)
+		cp	end
+		jr	z, _
+		xor	1	;reverse direction
+		ld	(hl), 0
+		ld	hl, (temp)
+		call	next_coords
+		ld	hl, coords
+		ld	de, (temp)
+		ld	bc, 2
+		ldir
+		ld	hl, temp+2
+		inc	(hl)
+_
+	pop	bc
+	ld	hl, (temp)
+	dec	hl
+	dec	hl
+	ld	(temp), hl
+	djnz	--_
+	ld	a, (temp+2)
+	or	a
+	jp	z, gameloop
+	call	refresh
+	ei
+	halt
+	halt
+	halt
+	halt
+	halt
+	halt
+	halt
+	jp	walkback
+
+
+	#include tiles.z80
+	#include graphic-routines.z80
+	#include dispa.z80
+	#include levels.z80
+	size()

@@ -1,0 +1,356 @@
+;
+
+org 0
+trim: ;163 (0) is 23khz, 170 (7) is 22khz, 178 (15) is 21khz, 187 (24) is 20khz
+
+org $9d95-2
+db  $BB,$6D
+
+
+b_call: macro addr
+    rst 28h
+dw addr
+endm	
+
+
+	
+main:
+	b_call $4540 ;ClrLCDFull
+	
+    di        
+	;b_call $4B52 ;ansname
+    ;rst 10h
+    ;ret c ;abort if not found
+    ; and $1f ;only accepts string types as input
+    ;cp 4;StrngObj
+    ;ret nz
+
+	;xor a
+    ;or b
+    ;ret nz ;in ram
+
+	;inc de
+    ;inc de
+    ;push de ;save data term
+    
+    
+    
+	ld a,$fe
+    out (1),a
+
+	;exx
+	;ld de,1238
+	;exx
+
+	ld hl,sine_table
+	ld de,$8000
+	ld bc,$0100
+	ldir ;copy sine-table somewhere alligned
+
+	
+    call setup_sound_engine
+
+	ld de,$0101
+	ld b,0
+mainloop:
+	in a,(1)
+	ld c,a
+	;check for falling edge of bits (= ~(t) & (t_-1)
+	cpl
+	and b
+	ld b,c
+	push bc
+	rra
+	call c, down
+    rra
+	call c, left
+    rra
+	call c, right
+    rra
+	call c, up
+	
+    ld a,$fe
+    out (1),a
+	ei
+	add hl,de
+	ld b,$80
+	ld c,h
+	ld a,(bc)
+	call set_sample_right
+	ld c,l
+	ld a,(bc)
+	call set_sample_left
+	pop bc
+	
+no_sample_yet:
+	
+	in a,(4)
+	and 8
+	jr nz,mainloop
+    jp cleanup_sound_engine
+down:
+	push hl
+    push af
+	dec e
+    ld c,e
+	ld hl,$0101
+	call putbin
+	ei
+	pop af
+    pop hl
+    ret
+left:
+	push hl
+    push af
+	dec d
+    ld c,d
+	ld hl,$0103
+	call putbin
+	ei
+	pop af
+    pop hl
+    ret
+up:
+	push hl
+    push af
+	inc e
+    ld c,e
+	ld hl,$0101
+	call putbin
+	ei
+	pop af
+    pop hl
+    ret
+right:
+	push hl
+    push af
+	inc d
+    ld c,d
+	ld hl,$0103
+	call putbin
+	ei
+	pop af
+    pop hl
+    ret
+
+;magic numbers gotten by measurement
+; max range, colisions,  approx middle
+;l: 08 - 6C, 41  1C   ,     0A
+;r: 5E - 04, 17  34   ,     55
+;this means:
+;  l has range 100
+;  r has range 90     
+;  r is 42 wide
+;  l is 24 wide
+;  l≤r-24 for optimal stereo operation then
+;  so, going up from endpoints,
+;    l = x+8
+;    r = 94-x
+;    l = r-24
+;    x+8 = 94-x-24
+;    2x = 94-24-8 = 62
+;	 x = 31 (wow, barely 5 bits)
+;  thus: l in [8,39], r in [63,94]
+;thus:
+set_sample: ;sample r,l in a,b
+	and 31
+	sub 94+trim+1
+	cpl ;neg = cpl, inc = dec, cpl = sub 1, cpl
+	ld (smc_r-stereo_3t_int+$9a9b),a
+	ld a,31
+	and b
+	add a,8 ;18+13 = 31 t between
+	ld (smc_l-stereo_3t_int+$9a9b),a
+	ret
+set_sample_right: ;sample r in a
+	and 31
+	sub 94+trim+1
+	cpl ;neg = cpl, inc = dec, cpl = sub 1, cpl
+	ld (smc_r-stereo_3t_int+$9a9b),a
+	ret
+set_sample_left: ;sample l in a
+	and 31
+	add a,8 ;18+13 = 31 t between
+	ld (smc_l-stereo_3t_int+$9a9b),a
+	ret
+	
+putbin: ;puts c at hl
+	ld b,8
+putbin_loop:
+	xor a
+	rlc c
+	adc a,"0"
+	ld ($844B),hl;currow,curcol (h -> col)
+	inc h
+	b_call $4501 ;PutMap
+	djnz putbin_loop
+	ret
+	
+
+	
+int_chain:
+	ex af,af'
+	;call cleanup_sound_engine
+	xor a
+	out (3),a
+	ld a,0xe0
+	out (3),a
+	ex af,af'
+	ei
+	ret
+;get_sample:
+	;[8000,8230) is free (and can fit 2 alligned 256 byte samples in it, or 8x 64 byte samples)
+	;[9872,9b72) is appbackupscreen
+	;  [9872,9900) is free
+	;  (9a01,9a9a) is free
+	;[86ec,89ec) is savesscreen
+sine_table:
+db 0x10,0x10,0x10,0x11,0x11,0x11,0x12,0x12,0x13,0x13,0x13,0x14,0x14,0x14,0x15,0x15,0x15,0x16,0x16,0x16,0x17,0x17,0x17,0x18,0x18,0x18,0x19,0x19,0x19,0x1a,0x1a,0x1a,0x1a,0x1b,0x1b,0x1b,0x1b,0x1c,0x1c,0x1c,0x1c,0x1d,0x1d,0x1d,0x1d,0x1d,0x1e,0x1e,0x1e,0x1e,0x1e,0x1e,0x1e,0x1e,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1e,0x1e,0x1e,0x1e,0x1e,0x1e,0x1e,0x1e,0x1d,0x1d,0x1d,0x1d,0x1d,0x1c,0x1c,0x1c,0x1c,0x1b,0x1b,0x1b,0x1b,0x1a,0x1a,0x1a,0x1a,0x19,0x19,0x19,0x18,0x18,0x18,0x17,0x17,0x17,0x16,0x16,0x16,0x15,0x15,0x15,0x14,0x14,0x14,0x13,0x13,0x13,0x12,0x12,0x11,0x11,0x11,0x10,0x10,0x10,0xf,0xf,0xe,0xe,0xe,0xd,0xd,0xc,0xc,0xc,0xb,0xb,0xb,0xa,0xa,0xa,0x9,0x9,0x9,0x8,0x8,0x8,0x7,0x7,0x7,0x6,0x6,0x6,0x5,0x5,0x5,0x5,0x4,0x4,0x4,0x4,0x3,0x3,0x3,0x3,0x2,0x2,0x2,0x2,0x2,0x1,0x1,0x1,0x1,0x1,0x1,0x1,0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x1,0x1,0x1,0x1,0x1,0x1,0x1,0x1,0x2,0x2,0x2,0x2,0x2,0x3,0x3,0x3,0x3,0x4,0x4,0x4,0x4,0x5,0x5,0x5,0x5,0x6,0x6,0x6,0x7,0x7,0x7,0x8,0x8,0x8,0x9,0x9,0x9,0xa,0xa,0xa,0xb,0xb,0xb,0xc,0xc,0xc,0xd,0xd,0xe,0xe,0xe,0xf,0xf
+	;frame count
+;	ld a,(smc_n-stereo_3t_int+$9a9b)
+;	exx
+;	sub c
+;	exx
+;	cp b
+;	ret c
+;	exx
+;	add a,c
+;	jr nc,$+3
+;	 inc b  ;bc' tracks samples, b' updates at 91 hz and lasts 2.8 seconds before rolling over
+;   ld c,a  ;b' is probably gonna be the tempo controller
+;	;what should de' and hl' be?
+;	;
+;	;for sine test, de' is freq and hl' is phase
+;	add hl,de
+;	ld a,h
+;	exx
+;	ld hl,sine_table
+;	ld d,0
+;	and 0x7f
+;	ld e,a
+;	add hl,de
+;	ld h,(hl)
+;	ld l,h
+	;ld hl,0x1010;you know, ix isn't that much slower than hl for add
+	            ;we could do left in hl and right in ix (this could allow for easy dithery stuff)
+                ; but i'm probably gonna use ix for the song pointer
+;	ret
+
+;sine_table:
+;db 0x10,0x10,0x11,0x12,0x13,0x13,0x14,0x15,0x15,0x16,0x17,0x17,0x18,0x19,0x19,0x1a,0x1a,0x1b,0x1b,0x1c,0x1c,0x1d,0x1d,0x1e,0x1e,0x1e,0x1e,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1e,0x1e,0x1e,0x1e,0x1d,0x1d,0x1c,0x1c,0x1b,0x1b,0x1a,0x1a,0x19,0x19,0x18,0x17,0x17,0x16,0x15,0x15,0x14,0x13,0x13,0x12,0x11,0x10,0x10,0xf,0xe,0xd,0xc,0xc,0xb,0xa,0xa,0x9,0x8,0x8,0x7,0x6,0x6,0x5,0x5,0x4,0x4,0x3,0x3,0x2,0x2,0x1,0x1,0x1,0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x1,0x1,0x1,0x1,0x2,0x2,0x3,0x3,0x4,0x4,0x5,0x5,0x6,0x6,0x7,0x8,0x8,0x9,0xa,0xa,0xb,0xc,0xc,0xd,0xe,0xf
+
+	
+setup_sound_engine:
+	;setup isr and sample timer
+    di
+    ;xor a
+    ;out ($2e),a
+    ld hl,$9900 ;vec table in appbackupscreen
+    ld de,$9901
+    ld (hl),$9a
+	ld bc,256
+	ldir
+    
+    ld a,$99
+    ld i,a
+    
+    im 2
+	
+	;copy interrupt into appbackupscreen also
+    ld hl,stereo_3t_int
+	ld de,$9a9a
+	ld bc,int_end-stereo_3t_int
+	ldir
+	
+    ;set fast mode
+    ld a,1
+    out ($20),a
+    
+    ;disable interrupts from other sources
+    ld a,$e0
+    out (3),a
+    
+
+    ;setup speeds of other timers
+    ld a,$82 ;/4
+    out ($30),a
+    out ($33),a
+    ;setup sample timer at 23.4khz
+    ;ld a,$82 ;/4
+    out ($36),a
+    ld a,3
+    out ($37),a
+	dec a
+	out ($34),a;set other timers to not loop
+    out ($31),a;
+
+    ld a,163+trim
+    out ($38),a
+    ei
+    ret	
+cleanup_sound_engine:
+	di
+   
+    ;turn off all timers' interrupts
+    xor a
+    out ($31),a
+	out ($34),a
+    out ($37),a
+    out (0),a
+
+    ld a,$0b
+    out (3),a
+    
+    im 1
+    ret
+
+
+stereo_3t_int:
+	ex af,af'
+    in a,(4)
+    rlca ;check timer 3, the sample timer
+    jr nc,stereo_3t_int_not_timer_3
+	;reset
+	ld a,3
+	out (37h),a
+	dec a
+	out (0),a
+;	ld a,0xe0
+;	out (3),a ; adds 18 t-states but hopefully prevents linkport-based freezing ; down to 5.8 MHz (i'm moving this)
+smc_l:
+	ld a,63
+	out (35h),a ; timer2 happens 36 before ret, with /4 do 9+v
+smc_r:
+	ld a,196
+	out (32h),a ; timer1 happens 18 before ret, with /4 do 5+((size-38)-v)
+	ex af,af'
+	ei
+	ret ;131 ;38*4
+stereo_3t_int_not_timer_3:
+	rlca ; timer 2
+	jr nc,stereo_3t_int_not_timer_2
+	ld a,2
+	out (34h),a
+	xor a
+	out (0),a
+	ex af,af'
+	ei
+	ret ;93 ;28*4 this is the clearence needed between l and r
+stereo_3t_int_not_timer_2:
+	rlca ; timer 1, the path with the issue
+	jr nc,stereo_3t_int_not_timer_1 ;add 11 t-states, but allows chaining
+	ld a,2
+	out (31h),a
+	dec a
+	out (0),a
+smc_n:
+    add a,0
+    ld (smc_n-stereo_3t_int+$9a9b),a
+	 ;adds 20 t-states and tracks number of samples  (and exx is free for the audio engine to use)
+	ex af,af'
+	ei
+	ret;118 ;35*4
+stereo_3t_int_not_timer_1:
+	ex af,af'
+	jp int_chain
+int_end:

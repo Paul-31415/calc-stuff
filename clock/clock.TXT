@@ -1,0 +1,41 @@
+CPU Clock Tool
+4 Augest 2008
+Dr. D'nar
+
+    The TI-83+SE and the TI-84s have a set of three quartz crystal timers that
+can be used for accurate timing purposes.  This program uses those timers to
+calculate the effective CPU clock speed of the unit in four different modes:
+ - 6 MHz
+ - 15 MHz
+ - 15 MHz modes 2 and 3
+According to Michael Vincent, the second and third modes were ment for 20 and
+25MHz modes, but this functionality was removed before production began.
+Nevertheless, they seem to have a slight effect on the CPU speed and are tested
+here. The calculator's operating system itself only uses the mode 1 15 MHz mode.
+
+    This program is not a BASIC program, nor is it an Ion/MirageOS program.  You
+must run this program from the homescreen using a special syntax.  First, press
+2nd+0 and select the Asm( token.  Press ENTER to paste it to the homescreen. 
+Then select the program CLOCK from the PRGM menu.  You should see the following:
+Asm(prgmCLOCK
+Run this command, and wait for the test to run.  The tests take several seconds.
+
+    This program will refuse to run on a TI-83+.  It will only run on a
+TI-83+SE, TI-84+, or TI-84+SE. 
+
+    Jim_E's own program revealed the following values for CPU speed:
+Mode	Speed
+0	~6.089 MHz
+1	~14.965 MHz
+2	~14.980 MHz
+3	~14.990 MHz
+On my unit with this program I got:
+Mode	Speed
+0	~6.480 MHz
+1	~15.395 MHz
+2	~15.405 MHz
+3	~15.415 MHz
+It is possible---even likely---that CPU speed will vary with battery power level
+and from unit to unit, and it is known to vary slightly from test to test.  It
+is also possible that one of us made an error in our programs that led to the
+~3% difference. 

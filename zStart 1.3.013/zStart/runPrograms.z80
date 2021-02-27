@@ -1,0 +1,1667 @@
+
+omniParser	equ	$4D10
+
+
+
+
+
+
+;#################################
+turningOnMenu:
+	ld	hl, 0
+	ld	(avShadow+avOnProg), hl
+	
+	call	killOffScrpt
+
+	ld	a, $1A
+	jr	runProgZero
+
+;###################################
+ramClearProgmenu:
+	ld	hl, 0
+	ld	(avShadow+avRCProg), hl
+
+	ld	a, '.'
+	jr	runProgZero
+
+;###################################
+zStartProgMenu:
+	ld	hl, 0
+	ld	(avShadow+avZStartProg), hl
+
+	ld	a, '0'
+runProgZero:
+	push	af
+	bcall(_grBufClr)
+	call	makeAvDirty
+	pop	af
+
+	ld	hl, usageText
+	ld	de, 57*256+19
+	call	myVPutSDE
+	call	myVPutC
+	call	myVPutS
+	jr	programSettingsNoClear
+
+
+;##############################
+shellMenu:
+	ld	hl, saveSScreen
+	ld	bc, 768
+	call	clearMem
+
+	ld	hl, noneText
+	ld	de, saveSScreen+1
+	ld	bc, 4
+	ldir
+
+	ld	de, saveSScreen+9
+	ld	a, 1
+	ld	(itemsFound), a
+	bcall(_zeroOp1)
+
+findTheApps:
+	push	de
+	bcall(_findAppUp)
+	pop	de
+	jr	c, allAreFound
+
+	ld	hl, op1
+	ld	bc, 9
+	ldir
+	ld	a, (itemsFound)
+	inc	a
+	ld	(itemsFound), a
+	cp	69
+	jr	nz, findTheApps
+
+allAreFound:
+	call	newItemsMenu
+	jp	c, programSettings
+
+
+
+	ld	a, (selected)
+	dec	a
+	jr	nz, notNonez
+
+	xor	a
+	ld	(avShadow+avShell), a
+	jp	programSettings
+notNonez:
+	ld	e, 9
+	bcall(_multAbyE)
+	ld	de, saveSScreen
+	add	hl, de
+	rst	20h
+	ld	de, avShadow+avShell
+	push	de
+saveAppNameCommon:
+	ld	de, op1		;this only works when storing
+	call	storeName
+
+	ld	hl, op1+1
+	pop	de
+	ld	bc, 6
+	ldir
+programSettingsReturn:
+	call	makeAvDirty
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;###############################
+programSettings:
+	bcall(_grBufClr)
+programSettingsNoClear:
+	
+	ld	hl, avShadow+avShell
+	ld	d, 8
+	call	makeAppName
+	call	dispName
+
+
+	ld	hl, avShadow+avOnProg
+	call	dispName
+
+	ld	hl, avShadow+avRCProg
+	call	dispName
+
+	ld	hl, avShadow+avZStartProg
+	call	dispName
+
+	ld	hl, avShadow+avParserName
+	call	makeAppName
+	call	dispName
+
+	bit_(avbParser)
+	call	yesOrNo
+		
+	ld	hl, programsMenu
+	jp	menu
+
+
+;##############################
+toggleParserHook:
+	toggle_(avbParser)
+	bit_(avbParser)
+	jr	nz, programSettingsReturn
+	xor	a
+	ld	(avShadow+avParserName), a
+	jr	programSettingsReturn
+
+
+;####################################
+turningOnDoProgram:
+	call	findArcAppvar
+	ld	de, avOnProg+2
+	add	hl, de
+	call	fast_bhl
+	ld	de, $8000
+	ld	a, b
+	ld	bc, 7
+	bcall(_flashToRam)
+	ld	hl, $8000
+	call	unpackName
+
+	ld	a, (op1)
+	cp	5
+	jp	z, runAHomeProg
+	cp	6
+	jp	z, runAHomeProg
+	cp	appObj
+	jp	z, runAnApp
+
+
+
+offScrptQuit:
+	ld	a, $40
+	cp	a
+	ret
+
+
+
+
+;#################################
+;run op1 with cleanups
+nicelyRunOp1:
+	ld	a, (op1)
+	xor	appObj		;clever, I know
+	call	z, runOp1
+	ret	c
+
+	bcall(_chkFindSym)
+	ret	c
+
+	ld	a, $40
+	bcall(_pullDownChk)
+	ld	a, $58
+	ld	(cxCurApp), a
+	ld	hl, (textShadCur)
+	ld	(curRow), hl
+	ld	a, h
+	or	a
+	jr	z, dontNeedNewLine
+	bcall(_newLine)
+dontNeedNewLine:
+	bcall(_resetStacks)
+
+	call	runOp1
+
+	bit	5, (iy + $44)
+	jr	z, notMathPrintCleanup
+	call	clrForMathPrint
+	bcall(_homeUp)
+	bcall(_grBufClr)
+	bcall($5125)
+	jr	leftStuffAtHome
+
+notMathPrintCleanup:
+	jr	nc, doesntNeedShellCleanup
+	bcall(_grBufClr)
+	bcall(_clrTxtShd)
+	set	graphDraw, (iy + graphFlags)
+doesntNeedShellCleanup:
+	ld	hl, textShadow
+	ld	b, 128
+	ld	a, $20
+isTextShadClearLp:
+	cp	(hl)
+	inc	hl
+	jr	nz, leftStuffAtHome
+	djnz	isTextShadClearLp
+	bcall(_homeUp)
+
+leftStuffAtHome:
+
+	bcall(_enableAPD)
+	bcall(_fillBasePageTable)
+
+	xor	a
+	ld	(menuCurrent), a
+	ret
+
+
+
+
+
+;#################################
+;run a program in op1
+;output: c = needs shell cleanup
+runOp1:
+	set	6, (iy + $0C)		;this turns off adding quotes around stuff in basic
+	ld	a, (op1)
+	cp	appObj
+	jr	nz, notAppSilly
+	call	findAppRestore14
+	ret	c
+	ld	hl, op1+1
+	ld	de, progToEdit
+	bcall(_mov8B)
+	bcall(_executeApp)
+notAppSilly:
+	bcall(_chkFindSym)
+	ret	c
+
+.echo $
+
+	push	bc
+	push	hl
+	call	takesAWhile
+	pop	hl
+	pop	bc
+
+	ld	a, b
+	or	a
+	jr	z, progInRam
+
+	call	findStartInRom
+	bcall(_loadDEIndPaged)
+	ld	a, d
+	or	e
+	ret	z
+	inc	hl
+	call	fast_bhl
+	ex	de, hl
+	push	hl		;size
+;	dec	hl
+;	dec	hl	;basic prog
+	push	hl		;size
+	push	de		;loc
+	push	bc		;page
+	bcall(_enoughMem)
+	pop	bc		;page
+	jr	nc, thereIsEnoughMem
+	ld	a, E_memory & $7F
+	bcall(_JError)
+thereIsEnoughMem:
+	pop	hl		;loc
+	push	bc		;page
+	push	hl		;loc
+	bcall(_loadCIndPaged)
+	ld	a, c
+	cp	$BB
+	jp	nz, basicFlash
+	inc	hl
+	call	fast_bhl
+	bcall(_loadCIndPaged)
+	ld	a, c
+	cp	$6C
+	jp	z, squishFlash
+	cp	$6D
+	jp	nz, basicFlash
+	
+	pop	af
+	pop	af
+	
+	inc	hl
+	call	fast_bhl
+	ex	(sp), hl
+	ld	de, $9D95
+	push	bc
+	push	hl
+	bcall(_insertMem)
+	pop	bc
+	pop	af
+	pop	hl
+	ld	de, $9D95
+	bcall(_flashToRam)
+
+	pop	bc
+	push	bc
+	dec	bc
+	dec	bc
+	call	checksumProgram
+	ex	(sp), hl
+	push	hl
+
+
+	
+	jr	programInPlace
+
+progInRam:
+	ex	de, hl
+	ld	c, (hl)
+	inc	hl
+	ld	b, (hl)
+	push	bc
+	inc	hl
+	ld	a, (hl)
+	cp	$BB
+	jp	nz, basicRam
+	inc	hl
+	ld	a, (hl)
+	cp	$6C
+	jp	z, squishRam
+	cp	$6D
+	jp	nz, basicRam
+
+	push	hl
+	dec	hl
+	dec	hl
+	ld	(hl), 2		;zero size
+	dec	hl		;idk, maybe it will help
+	ld	(hl), 0
+	pop	hl
+
+	inc	hl
+	dec	bc
+	dec	bc
+	ld	de, $9D95
+	call	moveMemory
+programInPlace:
+	ld	hl, $9D95
+	ld	a, (hl)
+	ld	de, $9D97
+	ld	b, 1
+	cp	$AA		;DCS
+	jr	z, foundEntryPointz
+
+	ld	de, $9D95
+	cp	$AF		;ion homescreen	;apparently, this still needs shell calls
+	jr	z, foundEntryPointz
+
+	ld	b, 0
+	cp	$C9		;mirage / ion
+	jr	nz, foundEntryPointz
+
+	inc	hl
+	ld	a, (hl)
+	ld	de, $9D96
+	ld	b, 1
+	cp	$30		;ion shell
+	jr	z, foundentryPointz
+
+	ld	de, $9D95+2+30
+	cp	1
+	jr	z, MOSSearch
+	inc	de
+	inc	de
+	cp	3
+	jr	z, MOSSearch
+	ld	de, $9D95
+	jr	foundEntryPointz	;not a very useful program
+
+MOSSearch:
+	ld	a, (de)
+	inc	de
+	or	a
+	jr	nz, MOSSearch
+foundEntryPointz:
+
+	push	bc
+
+	call	makeTheProgJump
+
+	pop	bc
+	push	bc
+	bit	0, b
+	jr	z, doesntNeedShell
+
+	jr	nc, shellActuallyFound
+
+
+
+	ld	b, 8
+	ld	hl, cmdShadow+80
+makeVectorsLoop:
+	ld	(hl), $CD
+	inc	hl
+	ld	(hl), cmdShadow&255
+	inc	hl
+	ld	(hl), cmdShadow>>8
+	inc	hl
+	djnz	makeVectorsLoop
+	
+	ld	hl, ionFaker
+	ld	de, cmdShadow
+	ld	bc, ionFakerEnd-ionFaker
+	ldir
+
+	in	a, (06)
+	ld	(smc_ionFaker-ionFaker+cmdShadow+1), a
+	jr	ionVectorsDone
+
+shellActuallyFound:
+
+
+	ld	hl, ionVectors
+	ld	de, $96BE
+	ld	bc, 24
+	ldir
+	
+
+
+ionVectorsDone:
+	bcall(_grBufClr)
+	bcall(_runIndicOff)
+doesntNeedShell:
+
+
+
+
+	call	pushOP1
+
+	xor	a
+	out	($20), a
+	set	appTextSave, (iy + appFlags)
+	res	textWrite, (iy + sGRFlags)
+	res	curAble, (iy + curFlags)
+	im	1
+
+	errHandOn(programRet)
+
+	di
+	call	translate7B
+	out	(07), a
+	ld	hl, ($4000+_JErrorNo)	;location of _JErrorNo
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+	out	(07), a
+	xor	a
+	ld	(errNo), a		;no error condition
+	
+	push	hl			;return to _JErrorNo
+	ei
+	jp	$8000			;call program and swap in shell
+
+programRet:
+	ld	($8000), a
+	ld	a, 3
+	out	($20), a
+
+	call	popOP1
+
+	bcall(_runIndicOff)
+
+	bcall(_chkFindSym)
+	ld	a, b
+	or	a
+	pop	hl
+	pop	bc			;size
+	jr	nz, writeBackProgram		
+
+	ex	de, hl
+	ld	(hl), c
+	inc	hl
+	ld	(hl), b
+	inc	hl
+	inc	hl
+	inc	hl
+	dec	bc
+	dec	bc
+	ex	de, hl
+	push	hl
+	ld	hl, $9D95
+	call	moveMemory
+checkError:
+	ld	a, ($8000)
+	or	a
+	jr	z, notError
+	bjump(_jError)
+notError:
+	pop	af
+	rrca
+	ret
+
+writeBackProgram:
+	ex	(sp), hl
+	push	hl
+	push	bc
+	dec	bc
+	dec	bc
+	call	checksumProgram
+	pop	bc
+	pop	de
+	or	a
+	sbc	hl, de
+	jr	nz, programChanged
+
+	ld	hl, $9D95
+;	dec	bc
+;	dec	bc
+	ld	d, b
+	ld	e, c
+	bcall(_delMem)
+	jr	checkError
+
+programChanged:
+	push	bc
+	call	deleteOp1
+
+	rst	18h
+	ld	a, (op1)
+	ld	hl, 2
+	bcall(_createVar)
+	pop	bc
+	ex	de, hl
+	ld	(hl), c
+	inc	hl
+	ld	(hl), b
+	inc	hl
+	ld	(hl), $BB
+	inc	hl
+	ld	(hl), $6D
+	inc	hl
+	ex	de, hl
+	ld	hl, $9D95
+	dec	bc
+	dec	bc
+	call	moveMemory
+	bcall(_popRealO1)
+	bcall(_arc_unarc)
+	jr	checkError
+
+
+
+;#####
+basicRam:
+	pop	bc
+	call	finalizeRunBasic
+	or	a
+	ret
+
+
+;######
+basicFlash:
+	ld	hl, op1
+	call	getLastLetter
+	set	7, (hl)
+	pop	de
+	pop	bc
+	pop	hl
+	push	hl
+	push	bc
+	push	de
+
+	call	deleteOp1
+
+	call	pushOp1
+	bcall(_createProg)
+	call	popOp1
+
+	pop	hl
+	pop	af
+	pop	bc
+	inc	de
+	inc	de
+	bcall(_flashToRam)
+
+	pop	af
+
+	call	finalizeRunBasic
+
+	call	deleteOp1
+	or	a
+	ret
+
+
+basicError:
+	bcall(_disableAppChangeHook)
+	call	popOp1
+	ld	hl, op1
+	ld	de, varType
+	bcall(_mov9B)
+	ld	hl, errorAppChangeHook
+	in	a, (06)
+	bcall(_enableAppChangeHook)
+bJumpJErrorNo:
+	bjump(_jErrorNO)
+	
+
+;#######################	
+finalizeRunBasic:
+	ld	a, $40
+	ld	(cxCurApp), a
+	in	a, (06)
+	ld	hl, basicAppChangeHook
+	bcall(_enableAppChangeHook)
+	call	pushOp1
+	errHandOn(basicError)
+	set	1, (iy + 8)
+	ld	hl, op1
+	ld	de, varType
+	bcall(_mov9B)
+	bcall(_parseInp)
+	errHandOff()
+	bcall(_disableAppChangeHook)
+	jp	popOp1Ret
+
+
+;########################
+basicAppChangeHook:
+	add	a, e
+	or	a
+	jr	nz, killAppChange
+dontKillAppChange:
+	ld	a, b
+	cp	$50
+	jr	z, isQuittingInput
+	cp	$40
+	ret	z
+killAppChange:
+	bcall(_disableAppChangeHook)
+	ret
+isQuittingInput:
+	ld	a, ($8444)
+	cp	$40
+	ret	nz
+	bcall(_disableAppChangeHook)
+	ld	hl, varType
+	call	deleteHL
+	bcall(_jForceCMDNoChar)
+	
+
+
+;############
+squishRam:
+	rst	18h
+	call	makeTempSquish
+	push	de
+	bcall(_popRealO1)
+	bcall(_chkFindSym)
+	pop	hl
+	pop	bc
+	inc	de
+	inc	de
+	inc	de
+	inc	de
+	dec	bc
+	dec	bc
+	jr	squishRamEntry
+
+squishRamLoop:
+	call	rotateInNibbleRam
+	jp	c, unsquishErrSyntax
+	inc	hl
+squishRamEntry:
+	call	rotateInNibbleRam
+	jp	nc, squishRamLoop
+	jr	finishSquishProgram
+
+
+
+;#############
+squishFlash:
+	ld	hl, myLoadAIndPaged
+	ld	de, $8000
+	ld	bc, myLoadAIndPagedEnd-myLoadAIndPaged
+	ldir
+
+	call	makeTempSquish
+	pop	hl
+	inc	hl
+	inc	hl
+	pop	af
+	im	1
+	ld	i, a
+	pop	bc
+	pop	bc
+	dec	bc
+	dec	bc	
+	ex	de, hl
+	jr	squishFlashEntry
+
+squishFlashLoop:
+	call	rotateInNibbleFlash
+	jp	c, unsquishErrSyntax
+	inc	hl
+squishFlashEntry:
+	call	rotateInNibbleFlash
+	jr	nc, squishFlashLoop
+
+
+finishSquishProgram:
+	call	closeThisEdit
+	ld	hl, squishTemp
+	rst	20h
+	
+	res	6, (iy + $33)		;delete temps
+	call	runOp1
+
+	push	af
+	bcall(_deleteTempPrograms)
+	pop	af
+	ret
+
+
+
+
+
+myLoadAIndPaged:
+	push	bc
+	ld	c, 6
+	in	b, (c)
+	ld	a, i
+	out	(06), a
+	ld	a, (de)
+	out	(c), b
+	pop	bc
+	ret
+myLoadAIndPagedEnd:
+
+
+squishTemp:
+	.db	$16, "SQ%", 0
+
+;##################################
+closeThisEdit:
+	ld	(iMathPtr2), hl
+	ld	de, (iMathPtr1)
+	inc	de
+	inc	de
+	or	a
+	sbc	hl, de
+	ex	de, hl
+	dec	hl
+	ld	(hl), d
+	dec	hl
+	ld	(hl), e
+closeProgRet:
+	bcall(_closeProg)
+	ret
+
+
+;##################################
+makeTempSquish:
+	ld	hl, squishTemp
+	rst	20h
+	ld	hl, 0
+	bcall(_createProg)
+	ld	(hl), $16
+
+	bcall(_editProg)
+
+	ld	de, (iMathPtr2)
+	ld	a, $BB
+	ld	(de), a
+	inc	de
+	ld	a, $6D
+	ld	(de), a	
+	inc	de
+
+	ret
+
+
+
+;############################
+rotateInNibbleRam:
+	ld	a, b
+	or	c
+	scf
+	ret	z
+
+	dec	bc
+	ld	a, (de)
+	inc	de
+	cp	$3F
+	jr	z, rotateInNibbleRam
+endsTheSame:
+	call	translateToHex
+	rld
+	or	a
+	ret
+
+
+;############################
+rotateInNibbleFlash:
+	ld	a, b
+	or	c
+	scf
+	ret	z
+
+	call	$8000
+	inc	de
+	call	checkIDE
+	cp	$3F
+	dec	bc
+	jr	z, rotateInNibbleFlash
+	jr	endsTheSame
+
+
+
+
+
+;###############################
+checkIDE:
+	bit	7, d
+	ret	z
+	set	6, d
+	res	7, d
+	push	af
+	ld	a, i
+	inc	a
+	ld	i, a
+	pop	af
+	ret
+
+;#################################
+translateToHex:
+	sub	$30
+	jr	c, unsquishErrSyntax
+	cp	9+1
+	ret	c
+	sub	$41-$30
+	jr	c, unsquishErrSyntax
+	add	a, 10
+	cp	$10
+	ret	c
+unsquishErrSyntax:
+	inc	hl
+	call	closeThisEdit
+	res	6, (iy + $33)		;delete temps
+	bcall(_deleteTempPrograms)
+errorSyntax: 
+	ld	a, E_Syntax & %01111111
+	jp	bJumpJError	
+
+
+;#############################
+errorAppChangeHook:
+	add	a, e
+	push	af
+	push	bc
+	push	hl
+	or	a
+	jr	z, startNextHook
+	ld	c, a
+	ld	a, b
+	cp	$52
+	jr	nz, retzzz
+
+notEditable:
+	bcall(_disableAppChangeHook)
+
+
+	ld	hl, varType
+	rst	20h
+	call	isOp1Special
+	call	nz, deleteOp1
+retzzz:
+	pop	hl
+	pop	bc
+	pop	af
+	cp	a
+	ret
+
+startNextHook:
+	ld	a, (varType)
+	cp	5
+	jr	nz, notEditable
+
+	ld	hl, varType
+	rst	20h
+
+	bcall(_disableAppChangeHook)
+	ld	hl, (errOffset)
+	jp	suicideOpenEditor
+	
+	
+
+
+;#################################
+checksumProgram:
+	ld	hl, $9D95
+checksumSomethingRam:
+	xor	a
+	ld	d, a
+	ld	e, a
+checkSumLooop:
+	ld	a, e
+	add	a, (hl)
+	jr	nc, didntCarry
+	inc	d
+didntCarry:
+	ld	e, a
+	inc	hl
+	dec	bc
+	ld	a, b
+	or	c
+	jr	nz, checkSumLooop
+	ex	de, hl
+	ret
+
+
+;#################################
+moveMemory:
+	push	hl
+	push	de
+	ld	h, b
+	ld	l, c
+	ld	de, $300
+	bcall(_divHLbyDE)
+	ld	b, e
+	pop	de
+	ex	(sp), hl
+	
+	inc	b
+	jr	bigMoveEntry
+
+bigMoveLp:
+	push	bc
+	ld	bc, $300
+	call	moveSmallMem
+
+	pop	bc
+bigMoveEntry:
+	djnz	bigMoveLp
+
+	pop	bc
+	ld	a, b
+	or	c
+	call	nz, moveSmallMem
+	ret
+
+;###################################
+;move memory <=$300
+;it works exactly like ldir
+
+moveSmallMem:
+	xor	a
+	sbc	hl, de
+	add	hl, de
+	jr	c, destinationBigger
+	inc	a
+destinationBigger:
+
+	push	de		;dest
+	push	hl		;sourc
+	ld	de, saveSScreen
+	push	bc		;size
+	ldir
+	pop	de		;size
+	ex	(sp), hl	;new sourc in for old sourc
+	push	de		;size
+	push	af
+	bcall(_delMem)
+	pop	af
+	pop	de		;size
+
+	pop	hl		;sourc
+
+	or	a
+	jr	nz, sourcIsBigger2
+	sbc	hl, de
+sourcIsBigger2:
+
+	ex	(sp), hl	;sourc in for dest
+
+	or	a
+	jr	nz, sourcIsBigger
+	sbc	hl, de
+sourcIsBigger:
+
+	push	hl		;dest
+	ex	de, hl
+	push	hl		;size
+	bcall(_insertMem)
+	pop	bc		;size
+	pop	de		;dest
+	ld	hl, saveSScreen
+	ldir
+	
+	pop	hl		;sourc
+	ret
+
+
+;##################################
+makeTheProgJump:
+	call	pushOP1
+	push	de
+	call	findArcAppvar
+	ld	de, avShell+2
+	add	hl, de
+	call	fast_bhl
+	ld	de, $8001
+	ld	a, b
+	ld	bc, 6
+	bcall(_flashToRam)
+	ld	hl, $8000
+	ld	(hl), appObj
+	call	unpackName
+
+	ld	a, (op1+1)
+	or	a
+	ld	a, $82			;page 82 provides a swift crash
+	jr	z, noShellSelected	;  if shell call is attempted
+	bcall(_findApp)
+	jr	nc, noShellSelected
+	ld	a, $82
+noShellSelected:
+	push	af
+	ld	h, a
+	ld	l, $3E
+	ld	($8000), hl
+	ld	hl, $06D3
+	ld	($8002), hl
+	ld	a, $C3
+	ld	($8004), a
+	pop	af
+	pop	hl
+	ld	($8005), hl		;program entry point
+	cp	$82
+	ccf
+popOp1Ret:
+	call	popOp1	
+	ret
+
+
+;#################################
+deleteHL:
+	rst	20h
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;#################################
+deleteOp1:
+	call	pushOP1
+	push	hl
+	bcall(_chkFindSym)
+	jr	c, notHereToDelete
+	bcall(_delVarArc)
+notHereToDelete:
+	pop	hl
+	jr	popOp1Ret
+
+
+;##################################
+findOffPageJump:
+	call	translate7B
+	ld	d, a
+	ld	a, i
+	jp	pe, alreadyOn
+	ld	a, i
+alreadyOn:
+	di
+	ld	a, d
+	out	(07), a
+	ld	de, (_offPageJump+$4000)
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+	out	(07), a
+	ret	po
+	ei
+	ret
+
+
+;#####################################
+ionVectors:
+	jp	$4083
+	jp	$4086
+	jp	$4089
+	jp	$408C
+	jp	$408F
+	jp	$4092
+	jp	$4095
+	jp	$4098
+
+;####################################
+myIonVectors:
+	jp	ionVersion
+	jp	ionRandom
+	jp	ionPutSprite
+	jp	ionLargeSprite		
+	jp	ionGetPixel
+	jp	ionFastCopy
+	jp	0000			;sucks to be you
+	jp	0000
+
+;###################################
+ionFaker:
+	ex	(sp), hl
+	push	de
+	ld	de, cmdShadow+80+3
+	or	a
+	sbc	hl, de
+	ld	de, myIonVectors
+	add	hl, de
+	push	af
+smc_ionFaker:
+	ld	a, 00
+	out	(06), a
+	pop	af
+	pop	de
+	ex	(sp), hl
+	ret
+ionRet:
+	push	af
+	ld	a, $C2
+	out	(06), a
+	pop	af
+	ret
+
+ionFakerEnd:
+
+
+
+;####################################
+ionPutSprite:
+	ld	de, $9340
+	ld	($FE79), de
+	ld	e, l
+	ld	h, 00
+	ld	d, h
+	add	hl, de
+	add	hl, de
+	add	hl, hl
+	add	hl, hl
+	ld	e, a
+	and	7
+	ld	c, a
+	srl	e
+	srl	e
+	srl	e
+	add	hl, de
+	ld	de, ($FE79)
+	add	hl, de
+ionPutSpriteLp2:
+	ld	d, (ix+0)
+	ld	e, 00
+	ld	a, c
+	or	a
+	jr	z, ionNoShiftNeeded
+ionPutSpriteLp:
+	srl	d
+	rr	e
+	dec	a
+	jr	nz, ionPutSpriteLp
+ionNoShiftNeeded:
+	ld	a, (hl)
+	xor	d
+	ld	(hl), a
+	inc	hl
+	ld	a, (hl)
+	xor	e
+	ld	(hl), a
+	ld	de, $0B
+	add	hl, de
+	inc	ix
+	djnz	ionPutSpriteLp2
+	jp	ionRet-ionFaker+cmdShadow
+
+
+;####################################
+ionLargeSprite:
+	di
+	ex	af,af'
+	ld	a, c
+	push	af
+	ex	af, af'
+	ld	e, l
+	ld	h, 0
+	ld	d, h
+	add	hl, de
+	add	hl, de
+	add	hl, hl
+	add	hl, hl
+	ld	e, a
+	and	7
+	ld	c, a
+	srl	e
+	srl	e
+	srl	e
+	add	hl, de
+	ld	de, $9340
+	add	hl, de
+largerLoop:
+	push	hl
+largeLoop:
+	ld	d, (ix+0)
+	ld	e, 00
+	ld	a, c
+	or	a
+	jr	z, largeNoShift
+largeShift:
+	srl	d
+	rr	e
+	dec	a
+	jr	nz, largeShift
+largeNoShift:
+	ld	a, (hl)
+	xor	d
+	ld	(hl), a
+	inc	hl
+	ld	a, (hl)
+	xor	e
+	ld	(hl), a
+	inc	ix
+	ex	af, af'
+	dec	a
+	push	af
+	ex	af, af'
+	pop	af
+	jr	nz, largeLoop
+	pop	hl
+	pop	af
+	push	af
+	ex	af, af'
+	ld	de, $0C
+	add	hl, de
+	djnz	largerLoop
+	pop	af
+	ei
+	jp	ionRet-ionFaker+cmdShadow
+
+
+;####################################
+ionFastCopy:
+	call	graphBufferCopy
+	jp	ionRet-ionFaker+cmdShadow
+
+
+;####################################
+ionGetPixel:
+	push	af
+	ld	l, e
+	call	getPixel
+	pop	bc
+	inc	b
+	ld	a, 1
+getPixelLp:
+	rrca
+	djnz	getPixelLp
+	jp	ionRet-ionFaker+cmdShadow
+
+
+;####################################
+ionRandom:
+	push	hl
+	push	de
+	ld	hl, ($FE8D)
+	ld	a, r
+	ld	d, a
+	ld	e, (hl)
+	add	hl, de
+	add	a, l
+	xor	h
+	ld	($FE8D), a
+	ld	hl, 0
+	ld	e, a
+	ld	d, h
+iRandomLp:
+	add	hl, de
+	djnz	iRandomLp
+	ld	a, h
+	pop	de
+	pop	hl
+	jp	ionRet-ionFaker+cmdShadow
+
+
+;####################################
+ionVersion:
+	ld	hl, 0
+	ld	de, 0
+	ld	bc, 0
+	xor	a
+	ei
+	jp	ionRet-ionFaker+cmdShadow
+
+
+
+
+
+;###################################
+parserHook:
+	add	a, e
+	or	a
+	jr	nz, parserChain
+
+	ld	a, (cxCurApp)
+	cp	$40
+	jr	nz, notRunningProg
+
+	ld	hl, (basic_start)
+parserReloop:			;easter egg, put as many asm( as you want
+	ld	a, (hl)
+	cp	$5F		;prgm
+	jr	z, haveTheName
+
+	ld	a, (hl)
+	cp	$BB
+	jr	nz, notRunningProg
+	inc	hl
+	ld	a, (hl)
+	cp	$6A
+	jr	nz, notRunningProg
+	inc	hl
+	jr	parserReloop
+
+haveTheName:
+	push	hl
+	rst	20h
+	ld	hl, (basic_end)
+	pop	de
+	or	a
+	sbc	hl, de
+	ld	de, op1
+	add	hl, de
+	inc	hl
+	ld	(hl), 0
+	ld	a, 5
+	ld	(de), a
+	bcall(_chkFindSym)
+	jp	c, notRunningProg
+	ld	hl, (curRow)
+	ld	(textShadCur), hl
+	jp	runAHomeProg
+
+
+notRunningProg:
+	xor	a
+parserChain:
+	push	hl
+	push	af
+	push	bc
+	push	de
+	
+	ld	c, fvParserPage
+	call	fakeVarOffset
+	jr	nz, chainStopsHere
+
+	bit	7, (hl)
+	jr	z, notHexChain
+
+	pop	de
+	pop	bc
+	pop	af
+	pop	hl
+	push	af
+	call	hexHook+1
+	pop	af
+;	ret	nz		;this never returns nz
+	push	hl
+	push	af
+	push	bc
+	push	de
+
+notHexChain
+	push	ix
+	ld	ix, omniParser+$4000
+
+	call	checkOmniChain
+	pop	ix
+	jr	nc, omniParserGood
+chainStopsHere:
+	pop	de
+	pop	bc
+	pop	af
+	pop	hl
+	cp	a
+	ret
+
+omniParserGood:
+	ld	hl, omniParser+1
+	call	makeAnOffPageJump
+	
+	pop	de
+	pop	bc
+	pop	af
+	pop	hl
+	push	af
+	call	$8000
+	jr	z, dontQuit
+	pop	af
+	ret
+dontQuit:
+	pop	af
+	push	hl
+	push	af
+	push	bc
+	push	de
+
+	ld	c, fvParserPage
+	call	fakeVarOffset		;this was already found once
+
+	ld	a, (hl)
+	and	$7F
+	jr	nz, itsBeenFound
+refindParser:
+	push	hl
+	call	findArcAppvar
+	jr	c, setParserAbort
+
+	ld	de, avParserName+2
+	add	hl, de
+	call	fast_bhl
+
+	ld	a, b
+	ld	de, $8001
+	ld	bc, 8
+	push	de
+	bcall(_flashToRam)
+	pop	hl
+	call	makeAppName
+	call	unpackName
+	bcall(_findApp)
+	jr	c, setParserAbort
+
+	ld	b, a
+	ld	de, ($8001+6)		;offset
+	ld	a, d
+	push	af
+	and	$3F
+	ld	c, a
+	pop	af
+
+	rlca
+	rlca
+	and	3
+	sub	b
+	neg
+
+
+
+	call	isAddressHook
+	jr	z, weFoundIt
+setParserAbort:
+	pop	hl
+	ld	a, $7F
+	or	(hl)
+	ld	(hl), a
+	jr	chainStopsHere
+
+weFoundIt:
+	pop	hl
+	or	(hl)
+	ld	(hl), a
+	res	7, a
+	dec	hl
+	ld	(hl) ,d
+	dec	hl
+	ld	(hl), e
+	jr	parserGoTime
+
+itsBeenFound:
+	cp	$7F
+	jr	z, chainStopsHere
+
+	dec	hl
+	ld	d, (hl)
+	dec	hl
+	ld	e, (hl)
+
+	call	isAddressHook
+	jr	z, parserGoTime
+
+	inc	hl
+	inc	hl
+	ld	a, (hl)
+	and	$80
+	ld	(hl), a
+	jr	refindParser
+	
+
+parserGoTime:
+	inc	de
+	ex	de, hl
+	call	makeAnOffPageJump
+
+	pop	de
+	pop	bc
+	pop	af
+	pop	hl
+	jp	$8000
+
+	
+
+
+
+;#######################################
+parserChainMenu:
+	ld	hl, avShadow+avParserName
+	ld	a, (hl)
+	or	a
+	jr	z, findingNewParser
+	ld	(hl), 0
+	call	makeAVDirty
+	jp	programSettings
+
+findingNewParser:
+	bit	1, (iy + $36)		;parser hook flag
+	jr	nz, parserHookExists
+
+	ld	hl, noParserHookText
+	ld	e, 31
+displayParserMessage:
+	push	de
+	push	hl
+	bcall(_grBufClr)
+	pop	hl
+	pop	de
+	ld	d, 57
+	call	myVPutSDE
+	jp	programSettingsNoClear
+
+parserHookExists:
+	ld	a, (parserHookPtr+2)
+	cp	1
+	jr	nz, notRamHook
+
+	ld	hl, mustBeAppText
+	ld	e, 32
+	jr	displayParserMessage
+
+notRamHook:
+	ld	c, a
+	in	a, (06)
+	cp	c
+	jr	nz, notZstartNotSilly
+
+	ld	hl, cantChainToZstartText
+	ld	e, 21
+
+	jr	displayParserMessage
+
+notZstartNotSilly:
+	ld	b, 0
+	push	bc
+	bcall(_fillBasePageTable)
+	
+	bcall(_getBaseVer)
+	dec	a
+	pop	bc
+	ld	hl, $8000
+	ld	a, $83
+	jr	nz, was84Not83
+	ld	a, c
+	cp	$20
+	ld	hl, baseAppBrTab
+	jr	c, notSecondTable
+	ld	hl, baseAppBrTab2
+notSecondTable:
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+was84Not83:
+	add	hl, bc
+	di
+	out	(07), a
+	ld	b, (hl)
+	
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+	out	(07), a
+	ld	a, b
+	sub	c
+	cp	4
+	jr	c, notTooFar
+
+	ld	e, 28
+	ld	hl, tooFarText
+	jr	displayParserMessage
+
+notTooFar:
+	rrca
+	rrca
+	sub	$40
+	ld	hl, (parserHookPtr)
+	add	a, h
+	ld	h, a
+	ld	(avShadow+avParserOffset), hl
+	ld	a, b
+	ld	hl, $4000
+	ld	de, $8040
+	push	af
+	bcall(_findAppHeaderSubField)
+	pop	af
+	inc	hl
+	inc	hl
+	ld	bc, 8
+	ld	de, op1+1
+	bcall(_flashToRam)
+
+	set_(avbParser)
+
+	ld	hl, avShadow+avParserName
+	push	hl
+	jp	saveAppNameCommon
+
+
+
+
+mustBeAppText:
+	.db	"Must be an app", 0
+
+noParserHookText:
+	.db	"No parser hook", 0
+cantChainToZstartText:
+	.db	"Can't chain to zStart", 0
+tooFarText:
+	.db	"Too far into app", 0
+	
+
+usageText:
+	.db	$C1, "ON] + ", $C1, 0
+	.db	"] in PRGM menu", 0
+
+noneText:
+	.db	"None", 0
+

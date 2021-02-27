@@ -1,0 +1,468 @@
+;deals with vats and their entries
+
+
+; var table entries: (4 bytes each)
+; [ptr to name in source code | ptr to data]	 
+
+del_name: ;searches for a name and deleates it
+	;Inputs  :  Same as search_name
+    ;		: hl - ptr to name to search for
+    ;		: de - top of vat ptr
+    ;		: bc - bottom of vat ptr
+    ;outputs    ~iff nc
+    ;		: de - new top of vat ptr 
+    ;		: hl - deleated data term 
+    ;		: bc - deleated name term 
+    ;			~iff c
+    ;		: hl - where it would be
+    ;	 	f{nc if everything is fine, c if item not found}
+    call search_name
+    ret c
+    ;at this point, hl is ptr to the table entry
+    
+    ;check if we are deleating from the top
+    ex de,hl ;put place in de
+    ld hl,(_vars_save_top+1)
+    dec hl
+    dec hl
+    dec hl	;adjust top
+    scf		
+    sbc hl,de ;top - place
+    jr z,_del_name_at_top
+     ld b,h
+     ld c,l ;save amount of bytes to copy
+	 add hl,de ;get new top
+     push hl ;save top for ret
+      ld h,d
+      ld l,e ;copy place to hl
+      ld (_del_name_savePlace+1),de ;save for ldir
+      ld e,(hl)
+      inc hl
+      ld d,(hl)
+      push de ;save name for ret
+       inc hl
+       ld e,(hl)
+       inc hl
+       ld d,(hl)
+       push de ;save data for ret
+        inc hl
+_del_name_savePlace:
+        ld de,0
+        ldir ;copy stuff around
+       pop hl ;pop dat term
+      pop bc ;pop name term
+     pop de ;pop top
+     ret
+_del_name_at_top:
+	;	place = top, hl is 0, de is place and top
+    
+	ld h,d ;copy to hl
+    ld l,e
+    
+    ld c,(hl) ;get name term in bc
+    inc hl
+    ld b,(hl)
+    inc hl
+    
+    ld a,(hl) ;get dat term in hl
+    inc hl
+    ld h,(hl)
+    ld l,a
+    
+    ret
+
+
+search_name_create: ;searches for name pointed to by hl in a var list by doing a binary search, will create and insert it if not found
+	;Inputs  :  Same as search_name
+    ;		: hl - ptr to name to search for
+    ;		: de - top of vat ptr
+    ;		: bc - bottom of vat ptr
+    ;outputs: hl - ptr to table entry
+    ;		: de - new top of vat ptr ~iff c
+    ;		f{nc if found, c if created}
+    ;  if created, data term of tbl entry is junk
+    
+    ;WARN: must have ≥4 bytes free above table
+    
+    push hl
+    call search_name
+    pop de
+    jr nz,_search_name_create_not_none
+     ;hl is right ptr for entry
+     ld (hl),e
+     inc hl
+     ld (hl),d
+     dec hl
+     
+     ld de,(_vars_save_top+1)
+     inc de
+     inc de
+     inc de
+     inc de
+     
+     scf
+     ret
+     
+_search_name_create_not_none:
+    ret nc
+    push de
+    
+_vars_save_top:
+    ld de,0 ;this top is past
+    
+    ex de,hl ;de is place, hl is top now
+    or a
+    sbc hl,de ;top - place
+    jr z,_search_name_create_add_to_top
+     ;insert 4 bytes into (hl)
+     ;means copy going down
+     ;hl is top - place = how many bytes to copy
+     ld b,h
+     ld c,l
+     ;get top
+     ld hl,(_vars_save_top+1)
+     
+     ld d,h
+     ld e,l ;copy to de
+     inc de ;add 4 to dest
+     inc de 
+     inc de
+     dec hl ;and fix offsets
+     
+     lddr ;copy
+     
+     inc hl ;to make it point to start term
+     
+     pop de
+     ld (hl),e
+     inc hl
+     ld (hl),d
+     dec hl
+     
+     ld de,(_vars_save_top+1)
+     inc de
+     inc de
+     inc de
+     inc de
+     
+     scf
+     ret
+    
+_search_name_create_add_to_top:
+	ld hl,(_vars_save_top+1) ;get top
+    pop de ;get addr
+    ld (hl),e
+    inc hl
+    ld (hl),d
+    dec hl
+    
+    ld de,(_vars_save_top+1)
+    inc de
+    inc de
+    inc de
+    inc de
+    
+    scf
+    ret
+
+search_name: ;searches for name pointed to by hl in a var list by doing a binary search
+	;Inputs : hl - ptr to name to search for
+    ;		: de - top of vat ptr (ptr to after vat)
+    ;		: bc - bottom of vat ptr
+    ;outputs: hl - ptr to table entry or place it should be
+    ;		f{nc if found, c if not found, z if there were no vars}
+    ;destroys: all except ix, iy
+    
+    
+    
+    ;ld de,(globalVarsTop) ;de is top
+    ld (_vars_save_top+1),de
+    srl d
+    rr e
+    srl d
+    rr e ;div by 4 because that is the entry size
+    
+    ;ld bc,(globalVarsBottom) ;bc is bottom
+	ld (_vars_save_bottom+1),bc
+    
+    ld a,c
+    and 3
+    ld (_search_name_mainLoop_bottomBits+1),a
+    
+    srl b
+    rr c
+    srl b
+    rr c
+    
+    ;check if there are vars
+    ld a,c
+    cp e
+    jr nz,_search_name_doSearch
+    ld a,b
+    cp d
+    jr nz,_search_name_doSearch
+     ;there are no vars!, return so
+_vars_save_bottom:
+     ld hl,0
+     xor a
+     scf
+     ret
+_search_name_doSearch: ;there are vars
+    dec de;make ptr correct
+    
+    
+    ;tests:
+    ;[0,1] finding 0
+    ; l h; m=l
+    ; l in right place
+    ;		finding 1
+    ; l h
+    ;   l=h
+    ; l in right place
+    ;		finding 2
+    ; l h
+    ;   lh
+    ;   h l in right place
+    ;		finding -1
+    ; l h
+   ;h l  	l in right place
+    ; 		finding .5
+    ; l h
+    ;   lh
+    ; h l	l in right place
+    
+    
+    ;[0] finding 0
+    ;lmh √
+    ; finding -1
+    ;  [0]  
+    ;  lmh
+    ; h l √
+    ; finding 1
+    ;  lmh
+    ;   h l √
+    
+    
+    ld (_search_name_mainLoop_namePtr+1),hl ;save for comparing
+_search_name_mainLoop: 
+	  
+	  ;compute middle
+      ld h,d
+      ld l,e
+      add hl,bc ;will never carry
+      rr h ;rotate so carry goes back (even though it will never need to)
+      rr l ;this is our floor of div by 2
+	  ;hl now = middle 
+      push hl
+       ;make hl be pointer now
+       add hl,hl
+       add hl,hl
+       ld a,l
+
+_search_name_mainLoop_bottomBits:
+       or 0
+       ld l,a
+       
+       push hl ;save for if equal
+       push de
+        ;derel hl into de (because it was a pointer to the table entry, not the name
+        ld e,(hl)
+        inc hl
+        ld d,(hl)
+        ;de is now table name 
+       
+        ;get var name in hl
+_search_name_mainLoop_namePtr:
+        ld hl,0
+        
+        call compare_names
+        ;c if hl < de
+        ;c if val < tbl[mid]
+        jr z,_search_name_found ;this takes care of the equality condition, now we just have to change our bounds and check for them crossing
+        
+       pop de
+       pop hl ;data unneeded but hl is free
+       jr c,_search_name_valLessThanTable
+        ;l[i] < v
+        ;change low
+        ;bc is low
+        pop bc
+        inc bc
+        
+        ;check for pass
+        jp _search_name_dimCheck
+_search_name_valLessThanTable:
+        pop de
+        dec de
+_search_name_dimCheck:
+       
+       ;check that lo <= hi is still true
+       
+       ;ld hl,hi
+       ld h,d
+       ld l,e
+       or a
+       sbc hl,bc ; hi >= lo, nc 
+       
+       jp nc,_search_name_mainLoop
+      ;not found
+      ;proper index is L
+      
+      
+      ;[0,1,2,3] finding 4
+      ; L M   H
+      ;     L H ;M=L
+      ;       L =m=h
+      ;       H L ;exit; L is proper place
+      ;finding 2.5
+      ; L M   H
+      ;     L H ;M=L
+      ;       L =m=h
+      ;     H L ;L is proper place
+      ;finding -1
+      ; L M   H
+      ; L		=m=h
+     ;H L ;L is proper place
+      ;finding 0.5
+      ; L M   H
+      ; L		=m=h
+      ; H L	;L is proper place
+      
+      
+       ld h,b
+       ld l,c
+       add hl,hl
+       add hl,hl
+       ld a,(_search_name_mainLoop_bottomBits+1)
+       or l
+       ld l,a
+       or 1 ;zzf
+       scf
+       ret
+ 
+_search_name_found:
+	pop af
+    pop hl
+    pop af
+	or 1 ;zcf, zzf
+    ret
+       
+       
+       
+       
+       
+#macro isAlphaNumericJR(labelIfNot) ;checks if a is alpha numeric
+       
+       cp '0'
+       jr c,labelIfNot
+       cp '9'+1
+       jr c,$+2+ 2+2+2+2
+       cp 'A'
+       jr c,labelIfNot
+       cp $5c 
+       jr nc,labelIfNot
+       
+#endmacro
+
+#macro isAlphaNumericJP(labelIfNot) ;checks if a is alpha numeric
+       
+       cp '0'
+       jp c,labelIfNot
+       cp '9'+1
+       jr c,$+2+ 2+3+2+3
+       cp 'A'
+       jp c,labelIfNot
+       cp $5c 
+       jp nc,labelIfNot
+       
+#endmacro
+       
+       
+compare_names: ;compares the name at hl to the name at de
+	;inputs: hl - name 1
+    ; 		 de - name 2
+    ;outputs: f{z if equal, c if hl is "less" than de}
+    ;destroys: a,hl,de,f
+    
+    
+    ; hl    de
+    ; 'A' > 'B' -> nc
+    ;size hierarchy can be anything consistant, because it's mutually exclusive with the above ordering
+    
+_compare_names_loop:
+	ld a,(de)
+    cp (hl)
+    ret nz ;the flags are correct
+    inc de
+    inc hl
+    ld a,(de)
+    isAlphaNumericJR(_compare_names_deEnds)
+    ld a,(hl)
+    isAlphaNumericJR(_compare_names_hlEndsFirst)
+    jp _compare_names_loop
+    
+    
+_compare_names_deEnds:
+    ;does hl also end at the same time?
+    ld a,(hl)
+    isAlphaNumericJR(_compare_names_equal) ;they are equal because if they weren't, it would have been detected earlier
+    
+    ;over here, de ended first
+    ;since I want the table to have the biggest names at the bottom of mem
+    ;and the table will be sorted in ascending order, I want smaller names
+    ;to be "more" than larger names
+    
+    ;de is shorter than hl, so de > hl, so set carry
+    or 1 ;reset zero flag
+    scf
+    ret
+    
+_compare_names_hlEndsFirst:
+    or 1 ;nz, nc
+    ret
+    
+_compare_names_equal:    
+    xor a ;set z, nc
+    ret
+    
+    
+    
+    
+    
+skipPastAlphaNumericName_bpc:
+	;input: bpc is ptr to name
+    ; output: bpc points to after end of name
+	inc bpc
+    ldAbpc()
+	cp '0'
+    ret c
+    cp '9'+1
+    jr c,skipPastAlphaNumericName_bpc
+    cp 'A'
+    ret c
+    cp $5c 
+    ret nc
+    jp skipPastAlphaNumericName_bpc
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+       
+       
+       
+       

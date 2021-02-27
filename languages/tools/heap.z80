@@ -1,0 +1,138 @@
+;.org 0
+#macro jr_de_<_hl_n(label)
+	scf
+    sbc hl,de
+    jr nc,label
+#endmacro
+
+#macro jr_de_≥_hl_n(label)
+	scf
+    sbc hl,de
+    jr c,label
+#endmacro
+
+#macro jr_de_>_hl_n(label)
+	or a
+    sbc hl,de
+    jr c,label
+#endmacro
+
+#macro jr_de_≤_hl_n(label)
+	or a
+    sbc hl,de
+    jr nc,label
+#endmacro
+
+
+heap_item_find_start:
+	;inputs: hl - pointer to something in the heap (anywhere in the data or length)
+    ;outputs: hl - pointer to start of data of that something in the heap
+    ;         f(c set if not found, reset if found)
+    ;
+    ;destroys: de,bc
+    
+    ex de,hl
+heap_item_find_start_de:
+	
+    ld hl,(heapStart)
+    ;first check that it is in the heap
+    scf
+    sbc hl,de 
+    
+    ccf
+    ret c
+    
+    
+    ;now iterate through the heap
+    
+    
+    scf
+    
+    inc de
+    inc de ;do this to offset start so the length bytes are included in object
+    
+_heap_item_find_start_de__loop:
+
+    adc hl,de ;fix the ≥ check
+    
+    ;check if in heap
+    ld bc,(heapTop)
+    scf
+    sbc hl,bc
+    ret c
+    
+    inc hl
+    add hl,bc
+    ;--
+    
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    res 7,b
+    inc hl
+    
+    add hl,bc
+	
+    jr_de_≥_hl_n(_heap_item_find_start_de__loop)
+	;go back one
+    or a
+    sbc hl,bc
+	;this shant carry
+	ret
+	;hl now points to the data term of the object previously pointed within
+    
+    
+;heap_find_references_to_item:
+
+	
+heap_does_hl_point_to_in_item_de:
+	;inputs: hl - pointer
+    ;		 de - item pointer
+    ;outputs: f{c if yes}
+    ;		  de - double decrement of input
+    ;		  bc - increment of input item size
+    ;destroyed - hl
+    ;		 
+    ;		 
+    
+    ex de,hl
+heap_does_de_point_to_in_item_hl:
+    dec hl
+    ld b,(hl)
+    res 7,b
+    dec hl
+    ld c,(hl)
+    ex de,hl
+    inc bc
+    
+	scf
+    sbc hl,de ;hl ≥ de-2
+    ret nc
+    
+    sbc hl,bc ; hl-de+2<len+2
+	ret 
+	;true if hl ≥ de-2 and hl<de+len
+	
+
+
+heap_does_de_point_to_in_item_hl_save:
+	push bc
+    push de
+    call heap_does_de_point_to_in_item_hl
+    ex de,hl
+    inc hl
+    inc hl
+    pop de
+	pop bc
+    ret
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,82 @@
+;types:
+; 0-5: small number
+; bit 0: sign?
+; bit 1: 8.8 fixed?
+; bit 2: .16 fixed? 
+
+#define t_uint 0	;hl
+#define t_int 1		;hl
+#define t_ufix 2	;hl
+#define t_fix 3		;hl
+#define t_ufrac 4	;hl
+#define t_frac 5	;hl
+
+#define t_halffloat 6	;hl
+#define t_boolean 7	;h
+
+#define t_byte 8	;h
+#define t_word 9	;hl
+
+#define t_char 10	;h
+#define t_tok 11	;hl
+
+#define t_call 12 ;call address 
+
+
+;bit 7 means pointer 
+#define t_pointer 128
+;bit 6&7 means relative pointer
+#define t_relative 64+128
+;bit 4 means NonPrimitive
+#define t_Bigint 16
+#define t_Negative_Bigint 16+1
+;this makes negation easy, you just change the type
+
+#define t_Float 16+2
+#define t_APF 16+3
+;structure: 2 byte mantissa, [±Bigint]
+
+#define t_String 16+4
+#define t_TString 16+5
+
+#define t_Array 16+6	;make array of pointers if you want to be able to store anything to it
+;structure: 
+; [type][
+
+
+#define t_List 16+7	;list is a linked list, so you can store whatever
+
+
+
+
+#define t_Function 16+8
+#define t_Asm 16+9
+
+#define t_Operation 16+10
+
+;function with name
+;
+;
+
+#define t_Class 16+13
+
+;var is like this
+; [type][len(name)+3][name...](optional:[type][valL][valH])
+
+#define t_Global_Variable 16+14 
+#define t_Variable 16+14 
+#define t_Local_Variable 16+15 
+
+
+
+
+;bit 5 means TI type
+;eg: %00100000 - real
+#define t_TI 64
+
+
+
+;operations
+; new operations can be added to the operation table, you add them as pointers to functions
+;(ex, define a***b as tetration)
+

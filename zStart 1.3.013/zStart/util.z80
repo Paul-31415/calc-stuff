@@ -1,0 +1,642 @@
+
+
+
+
+
+;######################################
+isAddressHook:
+	ld	b, a
+	push	bc
+	ld	c, 7
+	ld	a, i
+	jp	pe, $+5
+	ld	a, i
+;$$
+	di
+	out	(c), b
+
+	set	7, d
+	res	6, d
+	ld	a, (de)
+#if	_84
+	ld	b, $81
+#else
+	ld	b, $41
+#endif
+	out	(c), b
+	jp	po, notInt
+	ei
+notInt:
+	cp	$83
+	res	7, d
+	set	6, d
+	pop	bc
+	ld	a, b
+	ret
+
+
+
+;################################
+makeAnOffPageJump:
+	ld	($8005), a
+	ld	b, a
+	ld	a, $CD
+	ld	($8000), a
+	call	findOffPageJump
+	ld	($8001), de
+	ld	($8003), hl
+	ret
+
+;###############################
+makeAppName:
+	push	de
+	ld	a, (hl)
+	ld	de, $8001
+	ld	bc, 6
+	ldir
+	or	a
+	jr	z, isntAnything
+	ld	a, appObj
+isntAnything:
+	ld	($8000), a
+	ld	hl, $8000
+	pop	de
+	ret
+
+;################################
+translate7B:
+	ld	a, $7B
+;################################
+translatePage:
+	bcall(_nzIf83Plus)
+	ret	z
+	and	$1F
+	ret
+	
+
+
+
+;#################################
+newScreen:
+	bcall(_clrScrnFull)
+homeUpRet:
+	bcall(_homeUp)
+	ret
+
+
+;##################################
+ldir0:
+	ld	a, b
+	or	c
+	ret	z
+	ldir
+	ret
+
+
+;##################################
+makeAvDirty:
+	ld	a, 1
+	ld	(avDirty), a
+	ret
+
+
+
+
+
+;#################
+;displayMenuNumber in header
+
+;#####################################
+;clearMemSmall in zStart.z80
+
+
+
+
+
+
+;##############################
+dispName:
+	call	unpackName
+	jr	dispNameEntry
+
+;##############################
+dispNameOrNo:
+	push	de
+	call	unpackName
+	ld	a, (op1)
+	cp	appObj
+	jr	z, isAnApp
+	bcall(_chkFindSym)
+	jr	didFind
+isAnApp:
+	bcall(_findApp)
+didFind:
+	pop	de
+	ld	a, 0
+	jp	c, yesOrNo
+
+dispNameEntry:
+	ld	a, (op1+1)
+	or	a
+	jp	z, yesOrNo
+	xor	a
+	ld	(op1+9), a
+	ld	hl, op1+1
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;####################################
+putOnRight:
+	ld	e, 95
+	call	rightAlign
+	ld	a, d
+	add	a, 8
+	ld	d, a
+	ret
+
+
+
+;#####################################
+;right align
+;input: de = pencol
+;	hl = start of text
+;output: de is changed
+
+rightAlign:
+	push	bc
+	push	hl
+rightAlignLoop:
+	ld	a, (hl)
+	or	a
+	jr	z, doneWithAlign
+	push	de
+	push	hl
+	ld	l, a
+	ld	h, 0
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	bcall(_sFont_Len)
+	pop	hl
+	pop	de
+	ld	a, e
+	sub	b
+	ld	e, a
+	inc	hl
+	jr	rightAlignLoop
+
+doneWithAlign:
+	pop	hl
+	pop	bc
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;############################################
+myVPutSDE:
+	ld	(penCol), de
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;############################################
+;my vPutS
+;input: same
+;output: same
+;destroys: none
+
+myVPutS:
+	push	af
+vPutSLoop:
+	ld	a, (hl)
+	inc	hl
+	or	a
+	jr	z, doneVPutting
+	call	myVPutC
+	jr	vPutSLoop
+doneVPutting:
+	pop	af
+	ret
+
+	
+
+
+;###############################
+unpackName:
+	push	de
+	push	ix
+	push	af
+	ld	a, (hl)
+	inc	hl
+	ld	(op1), a
+
+	ld	de, op2
+	ld	bc, 6
+	push	de
+	ldir
+	pop	hl
+	ld	ix, op1+1
+	ld	bc, 8*256+6
+	ld	d, 8
+	xor	a
+unpackNameLoop:
+	rr	(hl)
+	rra
+	djnz	notNextUnpackByte
+	inc	hl
+	ld	b, 8
+notNextUnpackByte:
+	dec	c
+	jr	nz, unpackNameLoop
+	ld	c, 6
+	rra
+	rra
+	or	a
+	jr	z, haveTheOrig
+	dec	a
+	jr	nz, notSpace
+	ld	a, $20
+	jr	haveTheOrig
+notSpace:
+	add	a, $30-1
+	cp	$3A
+	jr	c, haveTheOrig
+	add	a, $41-$3A
+	cp	$41+26
+	jr	c, haveTheOrig
+	add	a, $61-$41-26
+haveTheOrig:
+	ld	(ix), a
+	inc	ix
+	xor	a
+	dec	d
+	jr	nz, unpackNameLoop
+popAFIXDE:
+	pop	af
+	pop	ix
+	pop	de
+	ret
+
+;####################################
+myVPutCDE:
+	ld	(penCol), de
+;####################################
+myVPutC:
+	push	de
+	push	ix
+	push	af
+	bcall(_vPutMap)
+	jr	popAFIXDE
+
+
+;###############################
+justStoreName:
+	push	af
+	push	hl
+	push	ix
+	jr	lateStoreNameEntry
+
+;#######
+convAndStoreName:
+	push	de
+	rst	20h
+	pop	de
+	ld	(op1), a
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;###############################
+storeName:
+	push	hl
+	push	ix
+	push	af
+	ld	a, (op1)
+	ld	(de), a
+	inc	de
+lateStoreNameEntry:
+	ex	de, hl
+	ld	ix, op1+1
+	ld	c, 9
+	ld	de, 6*256+0
+	jr	enterStore
+
+storeNameLoop:
+	rrca
+	rr	e
+	djnz	notOutOfBits
+	inc	ix
+enterStore:
+	ld	a, (ix)
+	or	a
+	jr	z, twasZero
+	sub	$20
+	jr	z, gotTheReduce2
+	sub	$30-$20
+	cp	10
+	jr	c, gotTheReduce
+	sub	$41-$3A
+	cp	10+26
+	jr	c, gotTheReduce
+	sub	$61-$41-26
+gotTheReduce:
+	inc	a
+gotTheReduce2:
+	inc	a
+twasZero:
+	ld	b, 6
+notOutOfBits:
+	dec	c
+	jr	nz, storeNameLoop
+	ld	(hl), e
+	inc	hl
+	ld	e, 0
+	ld	c, 8
+	dec	d
+	jr	nz, storeNameLoop
+	ex	de, hl
+	jr	popAFIXDE
+
+
+
+
+
+;##########################################
+releaseOn:
+	ei
+	push	af
+releaseOnLoop:
+	in	a, (04)
+	bit	3, a
+	jr	z, releaseOnLoop
+	halt
+	halt
+	halt
+	halt
+	in	a, (04)
+	bit	3, a
+	jr	z, releaseOnLoop
+	pop	af
+	ret
+
+
+
+
+;#########################################
+pushOP1:
+	push	bc
+	push	de
+	push	hl
+	push	af
+
+	ld	hl, -12
+	add	hl, sp
+	ld	sp, hl
+	ex	de, hl
+
+	ld	hl, 12
+	add	hl, sp
+
+	ld	bc, 10
+	ldir
+
+	ld	hl, op1
+	ld	bc, 12
+	ldir
+	jr	popAFHLDEBC
+
+
+
+;##########################################
+popOP1:
+	push	bc
+	push	de
+	push	hl
+	push	af
+	
+	ld	hl, 10
+	add	hl, sp
+	ld	de, op1
+	ld	bc, 12
+	ldir
+
+	ld	hl, 10+12-1
+	add	hl, sp
+	ex	de, hl
+
+	ld	hl, 10-1
+	add	hl, sp
+
+	ld	bc, 10
+	lddr
+
+	inc	de
+	ex	de, hl
+	ld	sp, hl
+
+popAFHLDEBC:
+	pop	af
+popHLDEBC:
+	pop	hl
+	pop	de
+	pop	bc
+	ret
+
+;#########################################
+LToHexString:	ld	a,l
+	call	LNum1
+	ld	a,l
+	jr	LNum2
+
+LNum1:	rra
+	rra
+	rra
+	rra
+LNum2:	or	0F0h
+	daa
+	add	a,0A0h
+	adc	a,40h
+
+	ld	(de),a
+	inc	de
+	xor	a
+	ld	(de), a
+	ret
+
+
+
+;#############################################
+;my PutS
+;input: same
+;output: same
+;destroys: none
+
+myPutS:
+	push	af
+putSLoop:
+	ld	a, (hl)
+	inc	hl
+	or	a
+	jr	z, donePutting
+	bcall(_putC)
+	jr	putSLoop
+donePutting:
+	pop	af
+	ret
+
+
+
+
+
+
+;##########################
+;Get Pixel
+;Input: A = x displayed position
+;	L = y displayed position
+;Output: HL = location of byte
+;	A = x
+;Destorys: F DE 
+
+GetPixel:
+	LD	H, 0
+	LD	D, H
+	LD	E, L
+	ADD	HL, HL
+	ADD	HL, DE
+	ADD	HL, HL
+	ADD	HL, HL
+
+	LD	E, A
+	SRL	E
+	SRL	E
+	SRL	E
+	ADD	HL, DE
+
+	LD	DE, PlotSScreen
+	ADD	HL, DE
+	RET
+
+
+;########################################
+;graph buffer copy
+;input: none
+;output: none
+
+graphBufferCopy:
+	ld	a, $80
+	out	($10), a
+	ld	hl, plotSScreen
+	ld	c, $20
+dispColumn:
+	DWAIT
+	ld	a, c
+	out	($10), a
+	cp	$2C
+	ret	z
+	ld	b, 64
+	ld	de, 12
+dispByte:
+	DWAIT
+	ld	a, (hl)
+	out	($11), a
+	add	hl, de
+	djnz	dispByte
+	ld	de, -767
+	add	hl, de
+	inc	c
+	jr	dispColumn
+
+
+
+;####################################
+keyScanFD:
+	ld	a, $FD
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;####################################
+;key scan
+;input: a = group
+;output: b = buttons
+;destorys: a
+
+keyScan:
+	out	(01), a
+	nop
+	nop
+	nop
+	nop
+	in	a, (01)
+	ld	b, a
+	ld	a, $FF
+	out	(01), a
+	ret
+
+
+;###############################
+;convert HL to decimal
+;input: hl = number
+;	de = location to put number
+;output: b = number of numbers
+;	de = byte after last number
+;remarks:
+;	0 terminated, yay
+
+convHex:
+	push	de
+	inc	de
+	inc	de
+	inc	de
+	inc	de
+	push	de
+	ld	b, 1
+convHexLoop:
+	push	de
+	or	a
+	ld	de, 10
+	sbc	hl, de
+	add	hl, de
+	jr	c, next
+	pop	de
+
+	inc	b
+	ld	a, 10
+	bcall(_divHLbyA)
+
+	add	a, $30
+	ld	(de), a
+	dec	de
+	jr	convHexLoop
+next:
+	pop	de
+	ld	a, $30
+	add	a, l
+	ld	(de), a
+
+	pop	hl
+	pop	de
+	inc	hl
+	push	bc
+	
+backLoop:
+	dec	hl
+	djnz	backLoop
+
+	pop	bc
+	push	bc
+	ld	c, b
+	ld	b, 0
+	ldir
+
+	pop	bc
+
+	xor	a
+	ld	(de), a
+
+	ret
+	
+
+;####################################
+;negHL
+negHL:
+	push	af
+	xor	a
+	sub	l
+	ld	l, a
+	sbc	a, a
+	sub	h
+	ld	h, a
+	pop	af
+	ret

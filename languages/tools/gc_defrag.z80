@@ -1,0 +1,278 @@
+
+
+
+
+
+
+
+
+
+
+
+defragment_adjust_ptrs_default: ;adjusts global pointers, is a subroutine for defragment_heap
+	;must conserve hl, de
+	;input to routine:
+        ;		: hl - data cursor
+        ;		: de - destination cursor
+        ;		: bc - last size
+        ;		:(defragment_max_safe_ptr) - start of stuff
+        ;	 MUST PRESERVE: hl,de
+    	
+        ;routine adjusts for the chunk of memory
+        ; from (defragment_max_safe_ptr)+hl-de to hl 
+        ; being moved down to end at de
+        ; i.e. being moved de-hl bytes
+        ;
+    push hl
+    push de
+    
+    ld b,h
+    ld c,l ;set end correct
+    
+    ;set delta to de-hl
+    ex de,hl
+    or a
+    sbc hl,de
+    ex de,hl
+    
+    ;set hl to (defragment_max_safe_ptr)-(de-hl)
+    ld hl,(defragment_max_safe_ptr)
+    or a
+    sbc hl,de
+    
+    call mov_ptrs
+	;inputs : hl - start
+    ;		: de - delta
+    ;		: bc - end
+    pop de
+    pop hl
+    ld (defragment_max_safe_ptr),hl ;store new start
+    ret
+    
+
+    
+    
+    
+    
+    
+    
+heap_garbage_collect: ;goes through the heap refs and deleates unreferenced things
+
+	;todo
+	ld a,E_Version | $80 
+	bjump(_JError)
+
+
+
+
+	;first mark everything in the heap as deleated
+    ld hl,(heapStart)
+_heap_garbage_collect_delLoop:
+	;cp with heaptop
+
+    ex de,hl ;if top <= ptr, we at top
+    ld hl,(heapTop)
+    scf
+    sbc hl,de ;compute top - ptr - 1; if top < ptr + 1, c set
+	jr c,_heap_garbage_collect_delLoop_end
+    ex de,hl
+    
+	ld c,(hl)
+    inc hl
+    ld b,(hl) 
+    set 7,(hl) ;darn, this would be a place where I could use set 7,(ix+*),b
+    inc hl
+    res 7,b
+    
+    add hl,bc
+    jp _heap_garbage_collect_delLoop
+_heap_garbage_collect_delLoop_end:
+	
+    ;now we loop through the global vat and undelete anything that is referenced
+    
+    
+    
+    
+    get_globalVatStart(globalVatStartAddr) ;into hl
+    
+_heap_garbage_collect_global_undelLoop:
+
+	;check if it's less than the end
+    
+	get_globalVatEnd(de)
+	or a
+    sbc hl,de 
+	;depth first, so by this time, we are done
+    ret nc
+    adc hl,de;fix hl and inc it
+    
+    ;get the stuff
+    inc hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    
+    push hl
+    ex de,hl
+    call heap_undelete_item
+    pop hl
+    jp _heap_garbage_collect_global_undelLoop
+    
+
+heap_item_find_start:
+	;inputs
+    
+;undel(obj):    
+heap_undelete_item:
+	;args: hl - obj
+    ;destroys: all
+;  if obj.exists:
+;    return
+;  obj.exists = true
+    dec hl
+    bit 7,(hl)
+	ret z
+    res 7,(hl)
+    inc hl
+;  for ptr in ptrs:
+	ex de,hl
+    ld hl,-20
+    call stack_safety
+    
+    push de
+    getPtrRegistryStart(hl)
+_heap_undelete_item__loop:
+
+	ex de,hl
+    getPtrRegistryEnd(hl)
+    scf
+    sbc hl,de ; while i < end
+	jr nc,_heap_undelete_item__loop_end_check_fail
+	 pop de
+     ret
+_heap_undelete_item__loop_end_check_fail:
+
+
+	ex de,hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld bc,1
+    bit 7,d
+    set 7,d
+    jr nz,_heap_undelete_item__loop_not_run
+     ld c,(hl)
+     inc hl
+     ld b,(hl)
+     inc hl
+_heap_undelete_item__loop_not_run:
+    
+;    if ptr.loc in obj:
+		;de			;(sp)
+	
+    ex (sp),hl
+    call heap_does_de_point_to_in_item_hl_save
+    ex (sp),hl
+    jr nc, _heap_undelete_item__loop
+    
+    ld a,b
+    or c
+    jr z,_heap_undelete_item__loop ;zero size ptr array check
+    inc b
+    
+    ;ptr loc = de
+    ;ptr dest = (de)
+    ;run length + 256 = bc
+    ;input obj = (sp)
+    ;ptr i = hl
+    
+    ex (sp),hl
+    push de
+    
+_heap_undelete_item__inner_rle_loop:
+
+;      undel(find_obj(ptr.dest)) 
+	
+    ;free: de
+    ;ptr loc = hl
+    
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ;ptr dest = de
+    ;find obj:
+    
+    push hl
+    push bc
+    call heap_item_find_start_de
+   	;free: bc,de
+   
+    ;now undel hl
+
+    call nc,heap_undelete_item
+
+	pop bc
+    pop hl
+	
+
+	dec c
+    jr nz,_heap_undelete_item__inner_rle_loop
+    djnz _heap_undelete_item__inner_rle_loop
+	
+    jp _heap_undelete_item__loop
+    
+    
+
+
+
+
+
+
+stack_safety:
+	add hl,sp
+	push de
+    ld de,(stack_limit)
+	or a
+    sbc hl,de ;if de > hl, c
+    pop de
+    ret nc
+    ;stack issue!
+    jp System_raiseStackDepthError
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
+;  
+;del(obj):
+;  obj.exists = false
+;  for ptr in ptrs:
+;    if ptr.loc in obj:
+;      del ptr
+    
+    
+
+  
+    
+    
+    
+    
+    
+    
+    
+    
+    

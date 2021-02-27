@@ -1,0 +1,1078 @@
+;#include    "ti83plus.inc"
+;#define     progStart   $9D95
+;#define 	saveSScreen 86ECh
+;.org        progStart-2
+;.db         $BB,$6D
+
+FPmul_hl_de:
+	push de	
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    ld hl,FPmul_hl_de_ans+3
+    ld (hl),b
+    ld h,b
+    ld l,c
+    add hl,hl ;gets sign in carry and exp in h
+    ld a,h
+    push af ;save it
+        ;check for inf
+    xor $ff
+    jr nz,FPmul_hl_de_ok1
+     
+     
+FPmul_hl_de_ok1:    
+	;check for 0
+    xor $ff
+    or c
+    or d
+    or e
+    jr nz,FPmul_hl_de_non0_1
+	 
+    
+FPmul_hl_de_non0_1:    
+	pop af
+    ld b,0
+    set 7,c
+    or a ;check for subnormal
+    jr nz,_FPmul_hl_de_normal1
+     rl e
+     rl d
+     rl c;no rl b because to clear top bit
+_FPmul_hl_de_normal1: 
+
+    ;ok now we get the other  
+    pop hl
+    push de ;save cde
+    push bc	;c on top
+    push af ;exp
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    ld a,b
+    ld hl,FPmul_hl_de_ans+3
+    xor (hl)	;sign
+    ld (hl),a
+    ld h,b
+    ld l,c
+    add hl,hl ;gets sign in carry and exp in h
+    ld a,h
+    push af ;save it
+    
+    
+    
+    
+    
+FPmul_hl_de_ans:    
+.db 0,0,0,0
+
+
+
+;nans
+floatInfMinusInfNan:
+.db $01,$00,$80,$7f
+floatInfTimesZeroNan:
+.db $02,$00,$80,$7f
+
+
+;little endian, just like the Z80 normally is
+;	              
+;		m   m  Emm sEE
+;ix+: 	0	1	2	3
+
+
+;time: 78
+floatGetExponent_ix: ;gets exponent at ix into a
+    ld a,(ix+3) ;19
+    xor (ix+2)	;19
+    and $7f		;7
+    xor (ix+2) ;this masks on bit 7 of (hl)
+    rlca  		;4
+    ret			;10
+    
+;time: 78
+floatGetExponent_hl:
+    inc hl		;6
+    inc hl
+    inc hl
+    ld a,(hl)	;7
+    dec hl		;6
+    xor (hl)	;7
+    and $7f		;7
+    xor (hl) ;this masks on bit 7 of (hl)
+    rlca		;4
+    dec hl
+    dec hl
+    ret
+    
+;time: 113/118
+floatSetExponent_ix: ;sets exponent at ix to a
+    rra	;4
+    jr nc,_floatSetExponent_ixNoOdd		;12/7
+     set 7,(ix+2)		;23
+     jp _floatSetExponent_ixLoadRest	;10
+_floatSetExponent_ixNoOdd:
+     res 7,(ix+2)
+_floatSetExponent_ixLoadRest:
+    xor (ix+3)	;19
+    and $7f	;7
+    xor (ix+3) ;a now has f(ix)'s sign bit
+    ld (ix+3),a	;19
+    ret
+    
+
+;time: 105/110
+floatSetExponent_hl: ;sets exponent at hl to a
+    inc hl
+    inc hl
+    rra		;4
+    jr nc,_floatSetExponent_hlNoOdd	;12/7
+     set 7,(hl);15
+     jp _floatSetExponent_hlLoadRest	;10
+_floatSetExponent_hlNoOdd:
+     res 7,(hl);15
+_floatSetExponent_hlLoadRest:
+    inc hl		;6
+    xor (hl)	;7
+    and $7f		;7
+    xor (hl) ;a now has f(ix)'s sign bit
+    ld (hl),a	;7
+    dec hl		;6
+    dec hl
+    dec hl
+    ret
+
+floatSet0_hl: ;doesn't affect [hl]'s sign, destroys a
+	xor a
+    ld (hl),a
+	inc hl
+    ld (hl),a
+    inc hl
+    ld (hl),a
+    inc hl		
+    ld a,(hl)
+    and $80	
+    ld (hl),a	
+    dec hl		
+    dec hl
+    dec hl
+    ret
+floatSetInf_hl: ;doesn't affect [hl]'s sign, destroys a
+	xor a
+    ld (hl),a
+	inc hl
+    ld (hl),a
+    inc hl
+    ld (hl),$80
+    inc hl		
+    ld a,(hl)
+    or $7f
+    ld (hl),a	
+    dec hl		
+    dec hl
+    dec hl
+    ret
+
+floatGetMantissa_hl_ix: ;loads the mantissa at ix into 3 bytes (little endian) at hl, uses a 
+    ld a,(ix)
+    ld (hl),a
+	inc hl
+    ld a,(ix+1)
+    ld (hl),a
+	inc hl
+    ld a,(ix+2) 
+    or $80		;this byte is the one with the implicit bit
+    ld (hl),a
+	call floatGetExponent_ix
+    or a ;flags
+    dec hl
+    dec hl
+    ret nz 
+    ;subnormal
+     rl (hl) ;carry is already 0 from "or a"
+     inc hl  ;now we rotate the 3 bytes at hl left 1
+     rl (hl)
+     inc hl
+     rl (hl)
+	 dec hl
+     dec hl
+    ret
+	
+floatSetMantissa_ix_hl: ;loads mantissa at hl into ix, make sure to set the exponent first as this uses it to check for subnormalness, this thing assumes that mantissa needs no normalization
+    call floatGetExponent_ix
+    or a
+    
+    jr nz,_floatSetMantissa_ix_hl_Normal
+	 ;here we just rr everything as we load it, as such, we must round
+     inc hl
+     inc hl
+     ld a,(hl) ;msb
+     rra	;carry is 0 from "or a" and we know exponent is 0 already
+     ld (ix+2),a
+     dec hl
+     ld a,(hl)
+     rra
+	 ld (ix+1),a
+     dec hl
+     ld a,(hl)
+     rra
+	 ld (ix),a ;now we need to do our rounding, round to nearest, ties to even. since even ends in 0, if carry and bit 0, we must inc
+     ret nc  ;otherwise we can return
+     bit 0,a
+     ret nz
+	 ;now we have to inc
+	 inc (ix)
+     ret nz 	;these are nz because apparently inc (ix) affects z but not c
+     inc (ix+1)
+     ret nz
+     inc (ix+2) ;overflow will result in setting bit 0 of exponent, perfect.
+     ret
+_floatSetMantissa_ix_hl_Normal:
+	;now we just do a standard loading
+	inc hl
+     inc hl
+     ;preserve bit 0 of exponent
+     rrca
+     xor (hl)
+     and $80	
+     xor (hl)
+     ld (ix+2),a
+     dec hl
+     ld a,(hl)
+	 ld (ix+1),a
+     dec hl
+     ld a,(hl)
+	 ld (ix),a
+	ret
+    
+    
+;time: ~310 if 0
+;	   ~298 if subnormal
+;      ~286 if normal
+;	   ~326 if nan
+;	   ~314 if inf
+floatFlags_hl: ;does flags of float at hl, 
+	;  7	6	5	4	3	2	1	0
+    ;  S	Z	–	H	–	P/V	N	C
+    ;C	: set if float is inf/nan
+    ;Z	: set if float is 0
+    ;S	: sign
+    ;P/V: if C, set if float is nan
+    ;     if NC, set if float is Subnormal  
+    push bc
+    push af
+	call _floatFlags_hl_b
+    ;on the stack, ...[f][a][c][b]...
+    ;sp:-------------^
+    inc sp
+    push bc
+    ;on the stack, ..[c][b][a][c][b]...
+    ;sp:------------^
+    inc sp
+    pop af
+    pop bc
+    ret
+_floatFlags_hl_b:
+    inc hl		
+    inc hl
+    inc hl
+    ld a,(hl)
+    and $80
+    ld b,a ;does S flag
+    ld a,(hl)
+    dec hl	
+    xor (hl)
+    and $7f	
+    xor (hl)
+    or a ;check for subnormal
+    jr nz,_floatFlags_hl_nonSubnormal
+     set 2,b
+     ;check if zero
+     ld a,(hl)
+     and $7f
+     dec hl
+     or (hl)
+     dec hl
+     or (hl)
+     ret nz 
+     set 6,b
+     ret
+_floatFlags_hl_nonSubnormal:
+    xor $ff ;check for inf/nan
+    jr nz,_floatFlags_hl_Normal
+     inc b ;set c
+     ;check if NAN
+     ld a,(hl)
+     and $7f
+     dec hl
+     or (hl)
+     dec hl
+     or (hl)
+     ret z 
+     set 2,b ;set p/v
+     ret
+_floatFlags_hl_Normal:
+    dec hl
+    dec hl
+    ret
+    
+
+
+
+    
+	
+;time: 
+; ∞-∞ : ~2080
+; a+b :	~7264 to ~6848, ~4800 if out of range, ~1664 if one is 0
+; ∞+n : ~1280
+;
+floatAdd_hl_de:;adds float at hl to float at de, preserves all except [hl]
+	push af
+    push ix
+	push bc
+    push de
+    push hl
+    push hl
+    call _floatAdd_hl_de_noLoad
+    pop de
+    ld bc,4
+    ldir
+    pop hl
+    pop de
+    pop bc
+    pop ix
+    pop af
+    ret
+    
+    
+    
+_floatAdd_hl_de_noLoad_check_for_error:
+    ret pe ;it's a nan, return it
+_floatAdd_hl_de_noLoad_check_for_inf_minus_inf:
+    push af
+    pop bc
+    ;flags in c now
+    ex de,hl
+    call floatFlags_hl
+    ex de,hl
+    ret nc ;it's finite, ret the inf
+    ex de,hl
+    ret pe ;the other's a nan, ret it
+    
+    ld a,c ;now we just have to check that signs agree
+    push af
+    pop bc
+    xor c ;if bit 7 is set, signs don't agree
+    rla ;put bit 7 into carry
+    ret nc ;signs agree
+    ;signs don't; must emit error now
+    ld hl,floatInfMinusInfNan
+    ret
+
+_floatAdd_hl_de_noLoad: ;adds float at hl to float at de and doesn't load the result anywhere, all it does is point hl to the result, whether it has to make a new float or not
+	call floatFlags_hl ;set flags 
+    ;C	: set if float is inf/nan
+    ;Z	: set if float is 0
+    ;S	: sign
+    ;P/V: if C, set if float is nan				;even is set
+    ;     if NC, set if float is Subnormal 
+    
+    jr c,_floatAdd_hl_de_noLoad_check_for_error
+    
+    ex de,hl ;now we check the other one
+    call floatFlags_hl
+    ret c ;if nan, ret it ; if inf, ret it
+	
+    ;now we can add
+    
+    call floatGetExponent_hl
+    ld c,a
+    ex de,hl
+    call floatGetExponent_hl
+    ld b,a ;for saving for much later
+    sub c ;exponent difference, if it was negative, C is set, and [de] has the bigger exponent
+    jr nc,_floatAdd_hl_de_noLoad_noSwap
+     ex de,hl
+     neg
+     ld b,c ;b has max of exps
+_floatAdd_hl_de_noLoad_noSwap:    
+    
+	cp 25 ;effective mantissa size is 24 bits, so if they are 24 apart, we'll just be rounding, and if they are 25 or more apart, the addition won't effect [hl]
+    ret nc
+    ;save exp base val
+    push bc
+    
+    ;clean our regs from last time
+    push hl
+    push de
+    ld hl,_floatAdd_hl_de_noLoad_r1s
+    ld (hl),0
+    ld de,_floatAdd_hl_de_noLoad_r1s+1
+    ld bc,17
+    ldir
+    pop de
+    pop hl
+    ;save diffex
+    push af
+    
+    
+    ;ok, now we actually have to add
+    ld ixh,d
+    ld ixl,e	;ld ix,de
+    ex de,hl ;make hl the discardable one
+    ld hl,_floatAdd_hl_de_noLoad_r2 ;r2 has the smaller one
+    call floatGetMantissa_hl_ix
+    bit 7,(ix+3) ;check sign
+    jr z,_floatAdd_hl_de_noLoad_r2_is_positive
+     ld b,7 ;register size
+     ld hl,_floatAdd_hl_de_noLoad_r2s
+     call negBInt_hl
+_floatAdd_hl_de_noLoad_r2_is_positive: 
+    
+    ld ixh,d
+    ld ixl,e	;ld ix,de	;de is what was hl
+    ld hl,_floatAdd_hl_de_noLoad_r1 ;so it has larger exp so it goes into r1
+    call floatGetMantissa_hl_ix
+    bit 7,(ix+3) ;check sign
+    jr z,_floatAdd_hl_de_noLoad_r1_is_positive
+     ld b,7 ;register size
+     ld hl,_floatAdd_hl_de_noLoad_r1s
+     call negBInt_hl
+_floatAdd_hl_de_noLoad_r1_is_positive:
+	
+    ;now we have a shifting party
+    ld hl,_floatAdd_hl_de_noLoad_r2s
+    pop af
+    ld b,7 ;size
+    call sraaBInt_hl ;a,bc,d destroyed
+    
+    ;now we add
+	ld de,_floatAdd_hl_de_noLoad_r1s
+	ld b,7
+    call addBint_hl_de
+    
+    
+    ;now we store result
+    ld de,_floatAdd_hl_de_noLoad_res
+    
+    pop ix ;b was exp, 
+    ld ixl,ixh
+    ld ixh,0 
+    ld bc,-6*8+1	;ones place is top of 6th byte (byte 5) so subtract 6*8-1
+    add ix,bc
+    ld b,7
+    jp BintToFloat_de_hl_expIX
+	
+
+
+
+
+
+    
+_floatAdd_hl_de_noLoad_res:
+.db 0,0,0,0
+_floatAdd_hl_de_noLoad_r1s:
+.db 0,0,0
+_floatAdd_hl_de_noLoad_r1:
+.db 0,0,0,0
+_floatAdd_hl_de_noLoad_r2s:
+.db 0,0,0
+_floatAdd_hl_de_noLoad_r2:
+.db 0,0,0
+_floatAdd_hl_de_noLoad_r2sign:
+.db 0 ;extra byte for sign
+_floatAdd_hl_de_noLoad_resfloat:
+.db 0,0,0,0
+
+
+
+
+floatMul_hl_de:
+
+
+
+
+
+
+
+
+
+_floatMul_hl_de_noLoad: ;Muls float at hl to float at de and doesn't load the result anywhere, all it does is point hl to the result, whether it has to make a new float or not
+	
+    push de
+    ld de,_floatMul_hl_de_noLoad_arg1
+    ld bc,4
+    ldir
+    pop hl
+    ld bc,4
+    ldir
+    
+    ;do signs to both
+    ld a,(_floatMul_hl_de_noLoad_arg1+3)
+    ld hl,_floatMul_hl_de_noLoad_arg2+3
+    xor (hl)
+    rla
+    jr c,_floatMul_hl_de_noLoad_resNeg
+     res 7,(hl)
+     ld hl,_floatMul_hl_de_noLoad_arg1+3
+     res 7,(hl)
+     ld hl,floatInfTimesZeroNan+3
+     res 7,(hl)
+     jp _floatMul_hl_de_noLoad_resdonesign
+_floatMul_hl_de_noLoad_resNeg:
+ 	 set 7,(hl)
+	 ld hl,_floatMul_hl_de_noLoad_arg1+3
+     set 7,(hl)
+     ld hl,floatInfTimesZeroNan+3
+     set 7,(hl)
+_floatMul_hl_de_noLoad_resdonesign:
+    ld hl,_floatMul_hl_de_noLoad_arg1
+    ld de,_floatMul_hl_de_noLoad_arg2
+    
+    call floatFlags_hl ;set flags 
+    ;C	: set if float is inf/nan
+    ;Z	: set if float is 0
+    ;S	: sign
+    ;P/V: if C, set if float is nan				;even is set
+    ;     if NC, set if float is Subnormal 
+    jr nz,_floatMul_hl_de_noLoad_arg1_non0 ;check if inf
+     ex de,hl ;now we check the other one
+     call floatFlags_hl
+     ex de,hl
+     ret nc ;ret the 0 if finite
+     ex de,hl
+     ret pe ;ret the nan
+     ld hl,floatInfTimesZeroNan
+     ret ;ret ∞*0 nan
+_floatMul_hl_de_noLoad_arg1_non0:
+	jr nc,_floatMul_hl_de_noLoad_arg1_finite
+     ret pe ;ret if nan
+     ex de,hl ;now we check the other one
+     call floatFlags_hl
+     ret c ;ret the other if is is nan or inf
+     ex de,hl
+     ret nz ;ret the inf if the other isn't 0
+     ld hl,floatInfTimesZeroNan
+     ret ;ret ∞*0 nan
+_floatMul_hl_de_noLoad_arg1_finite:
+	ex de,hl ;now we check the other one
+    call floatFlags_hl
+	ret c ;ret the other if it is nan or inf
+    ret z ;ret it if it's 0 also
+    
+    ;now we can mul
+	call floatGetExponent_hl
+    
+    
+    
+    
+    
+    
+    
+    
+_floatMul_hl_de_noLoad_arg1:
+.db 0,0,0,0
+_floatMul_hl_de_noLoad_arg2:
+.db 0,0,0,0
+    
+    
+
+
+
+
+
+
+
+BintToFloat_de_hl: 
+	ld ix,$3f
+    
+BintToFloat_de_hl_expIX: ;IX has exponent offset for top bit ;convert int at hl to float at de
+;this assumes [hl] is signed
+;inputs:hl - ptr to Bint
+;		b  - size of Bint
+;		de - ptr to float destination
+;		ix - exponent offset
+;destroys : a,[hl],de
+;Outputs: hl is copy of de
+;		[hl] is a float representation of the Bint with an exponential offset determined by ix
+;	     the offset is such that the one's place of the Bint has a value of 2^ix
+;		i.e. calling this on bints of size 5 and 6 with the same number in each results in the same floats
+;		
+
+
+	;this also does rounding ties to even
+    
+    ;start with getting sign
+    push hl
+    push bc
+    
+    
+    ld a,b
+    add a,l
+    ld l,a
+    ld a,0
+    adc a,h
+    ld h,a
+    dec hl
+    ld a,(hl)
+    rla
+    ;sign is in carry now
+    jr nc,_BintToFloat_de_hl_expIX_NonNeg
+     ;negate [hl]
+     
+     ld a,$80
+     inc de
+     inc de
+     inc de
+     ld (de),a ;save sign
+     dec de
+     dec de
+     dec de
+;     ld c,b ;save b
+     call negBint_hl
+;     ld b,c
+_BintToFloat_de_hl_expIX_NonNeg:
+    
+    ;ok now we have to do the normalization step
+    
+    ;first we find out how much we have to shift
+    pop bc
+_BintToFloat_de_hl_expIX_LargeNormLoop: ;doing that a byte at a time
+	 ld a,(hl)
+	 or a ;flags
+	 jr nz,_BintToFloat_de_hl_expIX_LargeNormLoop_End
+     ;ok, if it's z we continue by decing b and hl to keep hl at the top byte of the number
+	 ;no need to dec ix because ix is bottom's place
+     dec hl
+    djnz _BintToFloat_de_hl_expIX_LargeNormLoop ;djnz because if b reaches 0, hl will be pointing to before the Bint and thus the value is 0 
+    pop hl
+    ex de,hl
+    jp floatSet0_hl ;jp so the routine's ret rets this as well
+    
+_BintToFloat_de_hl_expIX_LargeNormLoop_End:
+	;ok so (hl) is top byte and b is new size of bint
+    ;now we need to finish normalization by shifting untill we see a carry, then we deal with rounding and subnormal and stuff
+    ld c,b ;keep new b
+    ;hl is top byte so we need to ex with the hl on the stack, we save it for mantissa loading
+    ex (sp),hl
+    push de; free de so we can use it for faster ix
+    ld d,ixh
+    ld e,ixl
+    
+    ex de,hl ;we have to add b*8 to de because for reasons (exponent tracking)
+    push bc
+    push hl
+    ld l,c
+    ld h,0
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    ld b,h
+    ld c,l
+    pop hl
+    add hl,bc
+    pop bc
+    ex de,hl
+    
+    
+    
+_BintToFloat_de_hl_expIX_shiftLoop:
+	 ld b,c
+     ;for this loop we actually do have to modify ix
+     ;each shift left makes the one's place worth half as much, so we dec de
+     dec de
+     ;check if de was ≤ 0
+     bit 7,d
+     jr c,_BintToFloat_de_hl_expIX_subnormal
+	 call slaBInt_hl
+	jr nc,_BintToFloat_de_hl_expIX_shiftLoop ;no worries about 0 because that was dealt with earlier
+	;ok now we need to check for inf 
+   
+    ;checking for inf case, (subnormal was checked for before)
+    ;checking inf
+    inc de ;make 00ff -> 0100
+    ld a,d
+    or a ;flags
+    dec de ;restore
+    jr z,_BintToFloat_de_hl_expIX_normal
+     ;it's infinity, so set it to inf and ret
+     pop hl ;de pointer from before
+     pop de ;the prev push
+     jp floatSetInf_hl ;jp so no double-ret
+     
+_BintToFloat_de_hl_expIX_subnormal:
+    inc de ;restore de from prev inc for test
+	;now we prepare the subnormal for rounding and loading
+    ;this involves sra-ing till de is 0
+    ;so we sra -de times
+    ;de should never be very negative so...
+    ld a,e
+
+    ;prep b and hl
+    ld b,c
+    ;hl is already fine
+    neg
+    call nz ,srlaBInt_hl ;we need no sign extension
+    ;ok now it's all shifted correctly so now we have to round our mantissa
+    ld e,0
+_BintToFloat_de_hl_expIX_normal:
+	;do one unshift
+    ld b,c
+    call sraBInt_hl
+    
+    ;e is how much exp (00 ≤ de < ff)
+    ld a,e
+    pop hl ;pop de into hl (de was dest from before)
+    call floatSetExponent_hl
+	
+    ;now we do mantissa and round
+    push hl
+    pop ix ;mv hl -> ix	
+    ;now we need to get hl pointing to mantissa area (3 bytes before top)
+    
+    pop hl
+    dec hl
+    dec hl
+	call floatSetMantissa_ix_hl
+    ;now if e isn't 0 we round (otherwise it already rounded
+	ld a,e
+    or a
+    ret z ;no rounding needed because it already did it for us
+    ld d,ixh
+    ld e,ixl
+    bit 0,(hl)
+    ex de,hl ;make hl point to float
+    ;if bit 0 was 0, it's even so no rounding
+    ret z
+    ex de,hl
+    dec hl
+    bit 7,(hl)
+    ex de,hl
+    ;if bit 7 is 0, round down
+    ret z
+    ;round up by incrementing [hl] as a Bint
+    
+    xor a
+    inc hl
+    inc hl
+    inc hl
+    inc (hl)
+    dec hl
+    adc a,(hl)
+    ld (hl),a
+    ld a,0
+    dec hl
+    adc a,(hl)
+    ld (hl),a
+    ld a,0
+    dec hl
+    adc a,(hl)
+    ld (hl),a
+    ret
+    
+
+
+
+
+
+
+
+
+
+;bigint routines
+negBInt_hl: ;negates little endian int of size b at hl
+;inputs: b - size > 0
+;		hl - location
+;outputs: [hl] negated
+;destroys: a,b
+
+
+	push hl ;no idea how large b is
+    or a ;clear carry flag
+_negBInt_hl_loop: 
+	 ld a,0
+     sbc a,(hl)
+     ld a,(hl)
+     inc hl
+    djnz _negBInt_hl_loop
+    pop hl
+    ret
+
+addBint_hl_de: ;adds de to hl, destroys b,a,de
+;inputs: b - size > 0
+;		
+;destroys: a,b
+   or a
+adcBint_hl_de:
+   push hl
+_addBint_hl_de_loop:
+    ld a,(de)
+    adc a,(hl)
+    ld (hl),a
+    inc de
+    inc hl
+   djnz _addBint_hl_de_loop
+   pop hl
+   ret
+
+slaBInt_hl: ;shifts in a 0, returns a carry like normal
+	push hl ;faster
+    or a;clear C
+_slaBInt_hl_loop:
+	 rl (hl)
+     inc hl
+    djnz _slaBInt_hl_loop
+    pop hl
+    ret
+    
+    
+sraBInt_hl: ;does sign extention, uses a,b
+;inputs: b - size > 0
+;		
+;destroys: a,b
+
+    ;ok, for sra, we have to start at the highest byte
+    
+    ld a,b
+    add a,l
+    ld l,a
+    ld a,0
+    adc a,h
+    ld h,a
+    dec hl 
+    
+    ;setup sign bit
+    rlc (hl)
+    rrc (hl) ;sets carry to bit 7 of (hl)
+_sraBInt_hl_loop:
+     rr (hl)
+     dec hl
+    djnz _sraBInt_hl_loop
+    inc hl
+    ret
+    
+srlBInt_hl: ;does 0 extention, uses a,b
+;inputs: b - size > 0
+;		
+;destroys: a,b
+
+    ;ok, for srl, we have to start at the highest byte
+    
+    ld a,b
+    add a,l
+    ld l,a
+    ld a,0
+    adc a,h
+    ld h,a
+    dec hl 
+    
+    or a ;clear carry
+_srlBInt_hl_loop:
+     rr (hl)
+     dec hl
+    djnz _srlBInt_hl_loop
+    inc hl
+    ret
+    
+sra8BInt_hl: ;does sign extention, uses c,a also, this has disaster if b is 1 or 0
+    ;for sra we start at end and work down
+    ;but to copy correctly, we ldir from bottom (ld_rs need rarifaction, rrs need compression)
+    push de
+    push hl
+    ld d,h
+    ld e,l
+    inc hl
+    ld c,b
+    dec c
+    ld b,0
+    ldir
+    
+    dec hl ;now we are doing sign extension
+    dec de
+    ld a,(de)
+    rla
+ 	ld a,0
+    jr nc,_sra8BInt_hl_pos
+     cpl
+_sra8BInt_hl_pos:
+    ld (hl),a
+    pop hl
+    pop de
+    ret
+    
+    
+srlaBInt_hl:
+    or a
+    ret z ;none
+    push bc
+	ld d,a
+    rra
+    rra
+    rra
+    and $1f ;mask
+    call nz,srl8aBInt_hl
+    ld a,d
+    and $07 ;this is the remaining shifts we have to do
+    pop bc
+    ret z ;
+    ld d,a
+    ld c,b
+srlaBInt_hl_Loop:
+	 ld b,c
+     call srlBInt_hl
+     dec d
+    jr nz,srlaBInt_hl_Loop
+	ret
+    
+sraaBInt_hl: ;does sign extention, shifts [hl] right a times, uses a,bc,d
+;inputs: b - size > 0
+;		 a - shift < size*8
+;		
+;destroys: a,b
+    or a
+    ret z ;none
+    push bc
+	ld d,a
+    rra
+    rra
+    rra
+    and $1f ;mask
+    call nz,sra8aBInt_hl
+    ld a,d
+    and $07 ;this is the remaining shifts we have to do
+    pop bc
+    ret z ;
+    ld d,a
+    ld c,b
+sraaBInt_hl_Loop:
+	 ld b,c
+     call sraBInt_hl
+     dec d
+    jr nz,sraaBInt_hl_Loop
+	ret
+
+
+srl8aBInt_hl:
+	push af
+    xor a   ;nop opcode
+    jr _sru8aBInt_hl
+    
+sra8aBInt_hl: ;does sign ext, shifts [hl] right a*8 times
+	push af
+    ld a,$2f ;cpl opcode
+_sru8aBInt_hl:
+    
+    ld (_sr8aBInt_hl_sign1),a
+    ld (_sr8aBInt_hl_sign2),a
+    pop af
+_sr8aBInt_hl:
+    push de
+    push hl
+    push af
+    ld d,h ;de = hl
+    ld e,l
+    ;hl += a
+    add a,l
+    ld l,a
+    ld a,0
+    adc a,h
+    ld h,a
+    
+    
+    ;c = b-a
+    pop af
+    push af
+    sub b
+    ;a ≥ b, C is reset
+    ;horrible, breaks everything if a ≥ b, so we make it safe
+    jr c,_sr8aBInt_ok
+     ;make it just the sign, or 0 if we are srl-ing
+     pop af
+     ;hl is offset too far now, so we pop it
+     pop hl
+     push hl
+     ;add b to hl
+     ld a,l
+     add a,b
+     ld l,a
+     ld a,0
+     adc a,h
+     ld h,a
+     dec hl ;now it points to the top of the number
+     ld a,0
+     bit 7,(hl)
+     jr z,_sr8aBInt_notOk_pos
+_sr8aBInt_hl_sign1:
+      cpl
+_sr8aBInt_notOk_pos:
+	 
+ 	 
+	 ;now we set everything to a
+     pop hl
+     ld (hl),a
+     ;de still = hl, so we inc de
+     ld a,b ;check for if b is 1
+     cp 1
+     jr z,_sr8aBInt_notOk_noFill
+     
+     inc de
+	 ld c,b
+     ld b,0
+     dec bc
+     ldir
+_sr8aBInt_notOk_noFill:
+	pop de
+    ret
+_sr8aBInt_ok:
+    neg ; -(a-b) = b-a
+    ld c,a
+    
+    ld b,0
+    
+    ldir
+	
+    
+    
+    dec hl ;now we are doing sign/0 extension
+    dec de
+    ld a,(de)
+    rla
+ 	ld a,0
+    jr nc,_sr8aBInt_hl_pos
+_sr8aBInt_hl_sign2:
+     cpl
+_sr8aBInt_hl_pos:
+    ld (hl),a
+    pop af
+    ;now we extend sign/0 extension a times
+    ld c,a ;b is 0 from ldir
+    ld d,h
+    ld e,l
+    dec de
+    lddr
+    
+    pop hl
+    pop de
+    ret
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+

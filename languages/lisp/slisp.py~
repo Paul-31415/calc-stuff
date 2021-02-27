@@ -1,0 +1,17 @@
+#stack lisp
+
+
+class Cons:
+    def __init__(self,a,b):
+        self.a = a
+        self.b = b
+    def recRepr(self,parens=True):
+        o = ["","("][parens]
+        c = ["",")"][parens]
+        if type(self.b) == Cons:
+            return f'{o}{self.a} {self.b.recRepr(False)}{c}'
+        if self.b == None:
+            return f'{o}{self.a} {c}'
+        return f'{o}{self.a} . {self.b}{c}'
+    def __repr__(self):
+        return self.recRepr(True)

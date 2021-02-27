@@ -1,0 +1,167 @@
+
+
+
+
+
+
+
+
+StoRoutine:
+	;sto stack as ans var
+    pop hl
+    ld (_StoRoutine_ret+1),hl
+    ld a,(AnsType)
+	cp t_Global_Variable+t_pointer
+    jp z,NotImplementedError ;global vars
+    cp t_Local_Variable+t_pointer
+	jr z,_StoRoutine_local
+    
+    jp Error_Invalid
+    
+_StoRoutine_local:
+    dec sp
+    pop af
+    ;type of ans
+    cp 16
+    jp nc,NotImplementedError ;big vars
+	push af
+    
+	;check if exists
+	ld hl,(Ans)
+    
+    call findLocalVar
+    	;RETURNS:
+              ;if found: c,nz
+              ; hl - ste
+              ; de - data
+              ; a - type
+              ;if not found: nc,nz
+              ; hl - top of symbol table (in stack)
+              ;if there is no local layer: nc,z
+    jp z,Error_Invalid
+    jr nc,_StoRoutine_local_makeSmallVar
+    ;exists, so modify it
+    pop af
+    ld (hl),a
+    inc hl
+    pop de
+    ld (hl),e
+    inc hl
+    ld (hl),d
+    ;stored successfully!
+    jp _StoRoutine_ret
+    
+_StoRoutine_local_makeSmallVar:
+	ld hl,(Ans)
+    ld c,(hl)
+    ld b,0
+    add hl,bc
+    dec hl
+    dec hl
+    
+	pop af ;get type in a
+	ld (hl),a ;sto it
+    pop de ;get contents in de
+    inc hl
+    ld (hl),e
+    inc hl
+    ld (hl),d
+
+    ld de,(Ans) ;name ptr
+    ld hl,0 ;size
+    call allocLocalVar
+    ;stored, so we are done
+    
+
+_StoRoutine_ret:
+	jp Error_Invalid
+
+
+    
+PlusRoutine:
+	;add ans and stack
+    pop hl ;get return address
+    ld (_PlusRoutine_ret+1),hl
+    
+    ld a,(AnsType)
+    cp 16
+    jr nc,_PlusRoutine_nonPrimitiveOp1
+    ;it's primitive (and not pointer)
+    ld l,a
+    ld h,0
+    add hl,hl
+    ld de,_PlusRoutine_primitive_jumpTable
+    add hl,de
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    ex de,hl
+
+    dec sp ;get type from stack
+    pop af
+
+    jp (hl)
+    
+_PlusRoutine_primitive_jumpTable:
+.dw _PlusRoutine_add_uint
+.dw NotImplementedError
+.dw NotImplementedError
+.dw NotImplementedError
+
+.dw NotImplementedError
+.dw NotImplementedError
+.dw NotImplementedError
+.dw NotImplementedError
+
+.dw NotImplementedError
+.dw NotImplementedError
+.dw NotImplementedError
+.dw NotImplementedError
+
+.dw NotImplementedError
+
+    
+    
+_PlusRoutine_add_uint:
+    ;check type
+    cp t_uint
+    jp nz,NotImplementedError
+    ld hl,(Ans)
+    pop de
+    add hl,de
+    ld (Ans),hl
+    jp nc,_PlusRoutine_ret
+    ;turn it to a bigint
+    ex de,hl
+    ld hl,appData
+    ld (Ans),hl
+    ld (hl),3 ;3 bytes
+    inc hl
+    ld (hl),e
+    inc hl
+    ld (hl),d
+    inc hl
+    ld (hl),1
+    ld a,t_Bigint
+    ld (AnsType),a
+    jp _PlusRoutine_ret
+    
+    
+    
+_PlusRoutine_ret:
+	jp NotImplementedError
+    
+_PlusRoutine_nonPrimitiveOp1:
+    
+    
+    
+    
+    
+    
+    
+    jp NotImplementedError
+    
+
+
+
+	

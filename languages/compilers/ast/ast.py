@@ -1,0 +1,12 @@
+import code
+import state
+
+class ast:
+    def __init__(self,parent,*childs):
+        self.children = childs
+    def get_code(self,state):
+        r = code([])
+        for c in self.children:
+            tmpCode,state = c.get_code(state)
+            r += tmpCode
+        return r,state

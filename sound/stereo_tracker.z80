@@ -1,0 +1,992 @@
+;
+
+org 0
+trim: ;163 (0) is 23khz, 170 (7) is 22khz, 178 (15) is 21khz, 187 (24) is 20khz
+
+;[8000,8230) is free (and can fit 2 alligned 256 byte samples in it, or 8x 64 byte samples)
+;[9872,9b72) is appbackupscreen
+;  [9872,9900) is free
+;  (9a01,9a9a) is free
+org $82a5
+pitch_table: ;takes 26 bytes
+org $82a5+26
+;[86ec,89ec) is savesscreen
+org $8700
+square_table: ;[8700,8900)
+org $8900
+
+
+org $9d95-2
+db  $BB,$6D
+
+
+b_call: macro addr
+    rst 28h
+dw addr
+endm	
+
+
+	
+main:
+	b_call $4540 ;ClrLCDFull
+	
+    di        
+	;b_call $4B52 ;ansname
+    ;rst 10h
+    ;ret c ;abort if not found
+    ; and $1f ;only accepts string types as input
+    ;cp 4;StrngObj
+    ;ret nz
+
+	;xor a
+    ;or b
+    ;ret nz ;in ram
+
+	;inc de
+    ;inc de
+    ;push de ;save data term
+    
+   
+	;exx
+	;ld de,1238
+	;exx
+	call setup_tables
+
+	
+    call setup_sound_engine
+	ei
+	exx
+mainloop:
+	
+	call scan_keys
+	;
+	ld hl,(keys_down+3)
+
+	ld b,16
+mainloop_keyloop:
+	ex de,hl
+	call calc_sample
+	ex de,hl
+    add hl,hl 
+	jr nc, mainloop_key_pressed
+    djnz mainloop_keyloop
+mainloop_key_pressed:
+prev_key_pressed:
+	ld a,0
+	cp b
+	jr z,mainloop_no_change
+	ld a,b
+	ld (prev_key_pressed+1),a
+	add a,a
+	ld hl,pitch_table
+	cp 26
+	jr nc,mainloop_key_pressed_second_octave
+	add a,l
+	ld l,a
+	ld a,(hl)
+	inc l
+	ld h,(hl)
+	ld l,a
+	srl h
+	rr l
+	jr mainloop_key_pressed_set_pitch
+mainloop_key_pressed_second_octave:
+	sub 24
+	add a,l
+	ld l,a
+	ld a,(hl)
+	inc l
+	ld h,(hl)
+	ld l,a
+mainloop_key_pressed_set_pitch:
+	push hl
+	call calc_sample
+	exx
+	pop de
+    exx
+	ld de,$8000
+	ld b,0
+rng_seed:
+	ld hl,0
+	call fill_rand
+	call fill_rand
+	call rand16_hl
+	ld (rng_seed+1),hl
+mainloop_no_change:
+	in a,(4)
+	and 8
+	jr nz,mainloop
+    jp cleanup_sound_engine
+
+scan_keys:
+	ld a,0xfe
+	ld de,keys_prev
+	ld hl,keys_down
+	ld bc,7
+	ldir
+	ex de,hl
+	ld b,7
+_scan_keys_loop:
+	rlca
+	out (1),a
+	push af
+	call calc_sample
+    in a,(1)
+    dec de
+    ld (de),a
+	pop af
+    djnz _scan_keys_loop
+    ret
+	
+keys_down:
+db 0,0,0,0,0,0,0
+keys_prev:	
+db 0,0,0,0,0,0,0
+
+calc_sample: ;destroys af,hl
+	ld a,(smc_n-stereo_3t_int+$9a9b) ;13
+soft_sample_count_and_rate:
+	ld hl,0
+	sub h
+	cp l
+	ret c ;42/36
+	ld a,h
+	add a,l
+	ld (soft_sample_count_and_rate+1+1),a
+	;57
+	exx
+	jr nc,_calc_sample_skip_rhythm_tick
+_calc_sample_skip_rhythm_tick:
+
+	;single stereo twang voice, pitch = de 
+	add hl,de
+	jr nc,_calc_sample_skip_voice_1
+	push hl
+    inc b
+    ld l,b
+	call twang_sample
+_calc_sample_skip_voice_1:
+	
+	exx
+	ret
+
+	;single twang voice module with acc in l
+twang_sample: ; destroys h,af
+	ld h,$80
+	ld a,(hl)
+	rra
+	rra
+	rra
+	call set_sample_right
+	inc l
+	ld a,(hl)
+	dec l
+	add a,(hl)
+	rra
+	ld (hl),a
+	inc h
+	ld a,(hl)
+	rra
+	rra
+	rra
+	call set_sample_left
+	inc l
+	ld a,(hl)
+	dec l
+	add a,(hl)
+	rra
+	ld (hl),a
+	ret
+	
+setup_tables:
+	ld hl,pitch_table_entries
+	ld bc,13*2
+	ld de,pitch_table
+	ldir
+
+	ld h,0x80
+	ld d,h
+	ld l,b
+	ld e,l
+	ld b,1
+	dec c
+	ld (hl),l
+	inc e
+	ldir ;fill the 512 byte sample section with zeros
+	
+	;save contrast value
+	;ld a,($8447)
+	;ld (save_contrast),a
+	
+	;setup squares table
+	ld h,square_table>>8
+	ld l,0
+	ld d,l
+	ld e,l
+	ld b,l
+	ld c,1
+_setup_square_table_loop:
+	push de
+     srl d
+     rr e
+     srl d
+     rr e
+	 ld (hl),e
+	 inc h
+	 ld (hl),d
+	 dec h
+    pop de
+	ex de,hl
+	add hl,bc
+	inc bc
+	inc bc
+	ex de,hl
+	inc l
+	jr nz,_setup_square_table_loop
+	;other tables to set up?:
+	
+		
+	ret
+;save_contrast:
+;db 0
+cleanup_tables:
+	ret
+
+;details about feinman osc using smult8_16:
+; for buffer size...	
+;  best purity is s,c,m = ...
+;256:116,-24, 6  (impurity 0.012204787124337702)
+;128:122,-19,12  (impurity 0.002661030297032796)
+; 64:111,-20,25  (impurity 0.000990604373523607)
+; 32: 92,-31,49  (impurity 8.943638121283737e-05)
+; 16:112,-83,99  (impurity 1.5012397816649425e-05)
+
+	
+pitch_table_entries:
+dw 0,0x43ce,0x47d6,0x4c1c,0x50a3,0x556e,0x5a82,0x5fe4,0x6598,0x6ba2,0x7209,0x78d1,0x8000
+note_pitch:
+	ld b,a
+	and $0f ;semitone
+	add a,a
+	add a,pitch_table & 0xff
+	ld l,a
+	ld h,pitch_table >> 8
+	ld a,(hl)
+	inc l
+	ld h,(hl)
+	ld l,a ;;55
+	; got pitch, now rightshift the right amount
+	ld a,b
+	rra;4 bytes per
+	rra
+	and $3c
+	ld ($+3+1),a  
+	jr $+2
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	srl h
+	rr l
+	ret;109/349
+	
+	
+fast_divmod_12: ;divide a by 12
+	;result in b
+	;modulus in a
+	ld l,a
+	ld e,a
+	ld d,0
+	ld h,d ;init ;; 19
+	
+	add hl,hl
+	add hl,hl
+	add hl,de 
+	add hl,hl
+	add hl,hl
+	add hl,de ;times 21 ;; 66
+
+	ld l,h
+	ld e,h
+	ld h,d ;rs 8 ;; 12
+	ld b,l ;save divisor ;; 4
+	
+	add hl,hl
+	add hl,de
+	add hl,hl
+	add hl,hl ;times 12 ;; 44
+
+	sub h
+	cp 12
+	ret c ;  ;;22/16
+	inc b
+	sub 12
+	ret ;; 21 ;total: 167/182
+	
+jump_relative_hl:
+	pop bc
+    add hl,bc
+	jp (hl);25 (42 when counting the call)
+
+	;versus the
+	; ld ($+3+1),a
+	; jr $
+	;construction, which takes 25
+
+log2p1_hl: ;integer log 2 of hl
+	ld b,16
+_log2p1_hl_loop:
+	add hl,hl
+	ret c
+	djnz _log2p1_hl_loop
+	ret
+
+	
+;derived from https://www.msxcomputermagazine.nl/mccw/92/Multiplication/en.html
+; IN : A and D are to be multiplied
+; OUT: HL is result
+; CHANGES : AF,BC,E,HL
+smult8_16:
+	ld  h,square_table/256
+	xor d
+	jp p,_smult8_16_same_sign
+	xor d
+	jp p,_smult8_16_ds_a_pos
+	;a is negative
+	neg
+	ld e,a
+	sub d
+	ld l,a
+	ld c,(hl)
+	inc h
+	ld b,(hl)
+	ld a,e
+	add a,d ;nc
+	ld l,a
+	ld e,(hl)
+	dec h
+	ld l,(hl)
+	ld h,e
+	sbc hl,bc
+	ret;132
+_smult8_16_ds_a_pos:
+	ld e,a
+	add a,d ;want -|a|*|d|, so first do |a|-|d|
+	ld l,a
+	ld c,(hl)
+	inc h
+	ld b,(hl)
+	ld a,e
+	sub d ;sum, carry set
+	ld l,a
+	ld e,(hl)
+	dec h
+	ld l,(hl)
+	ld h,e
+	or a
+	sbc hl,bc
+	ret ;128
+	
+_smult8_16_same_sign:
+	xor d
+	jp p,_smult8_16_both_posative
+	;both negative
+	neg
+	jp pe,_smult8_16_128_128
+	ld e,a
+	add a,d
+	ld l,a
+	ld c,(hl)
+	inc h
+	ld b,(hl)
+	ld a,e
+	sub d ;sum, carry set
+	ld l,a
+	ld e,(hl)
+	dec h
+	ld l,(hl)
+	ld h,e
+	or a
+	sbc hl,bc
+	ret ;136
+_smult8_16_128_128:
+	ld h,d
+	ld l,0
+	srl h  ; if squaretable is div by 4, include this, if it's div by 2, omit this rightshift
+	rr l
+	ret ;90 ;or 74 if 2xy
+_smult8_16_both_posative:
+	ld e,a
+	sub d
+	ld l,a
+	ld c,(hl)
+	inc h
+	ld b,(hl)
+	ld a,e
+	add a,d
+	ld l,a
+	ld e,(hl)
+	dec h
+	ld l,(hl)
+	ld h,e
+	sbc hl,bc
+	ret ;124
+
+umult8_16:;unsigned multiply using the tables
+	;hl <- a*d
+	; (x+y)>>1
+	; shift in c
+	; |x-y| part
+	; just neg if c
+	ld  h,square_table/256
+	ld e,a
+	sub d
+	jr nc,$+2+2
+	 neg
+	;|x-y|
+	; can lookup (x-y)^2 /4
+	ld l,a
+	ld c,(hl)
+	inc h
+	ld b,(hl) ;bc has (x-y)^2/4 in it now
+	ld a,e
+	add a,d ;;57/60
+;	jp c,_umult8_16_big
+;	ld l,a
+;	ld e,(hl) 
+;	dec h
+;	ld l,(hl) 
+;	ld h,e
+;	sbc hl,bc ;carry is zero because table domain
+;	ret ;118/121
+;_umult8_16_big:
+	rra
+	ld l,a
+	ld e,(hl) 
+	dec h
+	ld l,(hl) 
+	ld h,e    ;hl has ((x+y)/2)^2/4, recover bottom bits
+	rla
+	add hl,hl
+	rra
+	adc hl,hl
+	sbc hl,bc ;carry is zero because table domain
+	ret ;146/149
+	
+ 
+	 
+	
+;sfmult16: ;signed fixed point 8.8 multiply
+	;inputs ix*iy
+	;output hl
+	;destroys bc,de,af
+;	ld a,ixl
+;	ld d,iyl
+;	call umult8_16
+;	push hl ;44 + 146/149
+;    ld a,ixl
+;    ld d,iyh
+;    call umult8_16
+;	push hl
+;    ld a,ixh
+;    ld d,iyl
+;	call umult8_16
+;	push hl
+;    ld a,ixh
+;	ld d,iyh
+;	call smult8_16
+;	ld h,l
+;	ld h,0
+;	pop de
+;    add hl,de
+;	pop de
+;    add hl,de
+;    pop de
+;    ld e,d
+;    ld d,0
+;    add hl,de
+;	ret; time: 771/826
+	
+	
+multc_jit: ;compiles a "hl <- de * const" with const hl, writes it at de
+	;destroys a,bc,hl
+	dec hl
+	ld a,l
+	or h
+	ret z
+	inc hl ;* 1 is a nop
+	push hl
+    ld hl,_multc_jit_setup
+	ld bc,_multc_jit_setup_end-_multc_jit_setup
+	ldir
+	pop hl
+    ld b,16
+_multc_jit_start_loop:
+	add hl,hl
+	jr c,$+2+3
+	djnz _multc_jit_start_loop
+	ret
+_multc_jit_loop:
+	ld a,$19 ;add hl,de
+	ld (de),a
+	inc de
+	ld c,0
+_multc_jit_ones_loop:
+	inc c
+	add hl,hl
+	jr nc,$+2+2
+	djnz _multc_jit_ones_loop
+	ld a,c
+	cp 3
+	jr c,_multc_jit_adds
+_multc_jit_shifts_and_subs:
+	push hl
+    push bc
+	call shiftc_jit
+    ld hl,_multc_jit_sub
+    ld bc,_multc_jit_sub_end-_multc_jit_sub
+    ldir
+    pop hl
+	pop bc
+    jr _multc_jit_zeros
+_multc_jit_adds:
+	push bc
+    ld b,c
+    ld c,$19 ;add hl,de
+	ld a,$29 ;add hl,hl
+	ex de,hl
+	ld (hl),a
+	inc hl
+	ld (hl),c
+	inc hl
+	djnz $-4
+	ex de,hl
+	pop bc
+_multc_jit_zeros:
+	ld a,b
+	or a
+	ret z
+	ld c,0
+_multc_jit_zeros_loop:
+	inc c
+	add hl,hl
+	jr c,$+2+2
+	djnz _multc_jit_zeros_loop
+	ld a,c
+	push hl
+    push bc
+    call shiftc_jit
+    pop bc
+    pop hl
+    ld a,b
+	or a
+	jp nz,_multc_jit_loop
+	ret
+
+_multc_jit_setup:
+	ld hl,0
+_multc_jit_setup_end:
+_multc_jit_sub:
+	or a
+	sbc hl,de
+_multc_jit_sub_end:
+
+shiftc_jit: ;jits a "hl<<const(A)" routine at de (that can destroy a)
+	;destroys a,bc,hl
+	;shift, cost:t-states, bytes
+	; 0  0  0
+	; 1 11  1
+	; 2 22  2
+	; 3 33  3
+	; 4 44  4
+	; 5 55  5
+	; 6 55 14
+	; 7 35  9
+	; 8 11  3
+	; 9 22  4
+	;10 33  5
+	;11 44  6
+	;12 55  7
+	;13 50 13 
+	;14 38 10
+	;15 26  7
+	;16 10  3
+	cp 16
+	jr c,_shiftc_jit_lt16
+	ld hl,_shiftc_jit_sl16
+    ld bc,_shiftc_jit_sl16_e-_shiftc_jit_sl16
+    ldir
+	ret
+_shiftc_jit_lt16:
+	cp 13
+	jr c,_shiftc_jit_lt13
+	jr nz,_shiftc_jit_gt13
+	ld hl,_shiftc_jit_sl13
+    ld bc,_shiftc_jit_sl13_e-_shiftc_jit_sl13
+    ldir
+	ret
+_shiftc_jit_gt13:
+	cp 14
+	jr nz,_shiftc_jit_15
+	ld hl,_shiftc_jit_sl14
+    ld bc,_shiftc_jit_sl14_e-_shiftc_jit_sl14
+	ldir
+	ret
+_shiftc_jit_15:
+	ld hl,_shiftc_jit_sl15
+    ld bc,_shiftc_jit_sl15_e-_shiftc_jit_sl15
+	ldir
+	ret
+_shiftc_jit_lt13:
+	cp 8
+	jr c,_shiftc_jit_small
+	ld hl,_shiftc_jit_sl8
+	ld bc,_shiftc_jit_sl8_e-_shiftc_jit_sl8
+	ldir
+	sub 8
+_shiftc_jit_small:; sl is cost 11
+	cp 6
+	jr c,_shiftc_jit_sls
+	jr nz,_shiftc_jit_not_6
+	ld hl,_shiftc_jit_sl6
+	ld bc,_shiftc_jit_sl6_e-_shiftc_jit_sl6
+	ldir
+	ret
+_shiftc_jit_not_6:
+	ld hl,_shiftc_jit_sl7
+    ld bc,_shiftc_jit_sl7_e-_shiftc_jit_sl7
+    ldir
+    ret
+_shiftc_jit_sls:
+	or a
+	ret z
+	ex de,hl
+	ld (hl),$29
+	inc hl
+	dec a
+	jr nz, $-1-1-2
+	ex de,hl
+	ret
+
+
+_shiftc_jit_sl15:
+	rr l
+_shiftc_jit_sl16:
+	ld hl,0
+_shiftc_jit_sl16_e:;10
+	rr h
+_shiftc_jit_sl15_e:;26
+_shiftc_jit_sl14:
+_shiftc_jit_sl13:
+	ld a,l
+	ld hl,0
+	rra
+	rr h
+	rra
+	rr h
+_shiftc_jit_sl14_e:;38 and uses a
+	rra
+	rr h
+_shiftc_jit_sl13_e:;50
+
+	
+_shiftc_jit_sl7: 
+	rr h
+_shiftc_jit_sl8:
+	ld h,l
+	ld l,0
+_shiftc_jit_sl8_e:;11
+	rr h
+	rr l
+_shiftc_jit_sl7_e:;35
+_shiftc_jit_sl6:
+	ld a,h
+	ld h,l
+	ld l,0
+	rra
+	rr h
+    rr l
+	rra
+	rr h
+    rr l 
+_shiftc_jit_sl6_e:;55 and uses a
+
+
+
+rand16_hl:;advance hl to next pseudorandom number
+	; a contains copy of l
+;def srand16():
+;    v = [0,0]
+;    while 1:
+;        v[1] = (rrca8((v[0]^0xff)-1)+v[1])&0xff
+;        v[0] = ((v[1]-v[0])^162)&0xff
+;        yield v[1]+v[0]*1j
+     ld a,l
+     cpl
+     dec a
+     rrca
+     add a,h
+     ld h,a
+     sub l
+     xor 162 ;constant obtained via exhaustive search
+     ld l,a
+    ret ; 49
+	
+	
+fill_rand: ;fills de with b samples rand, hl seed
+	ld a,l
+_fill_rand_loop:
+     cpl
+     dec a
+     rrca
+     add a,h
+     ld h,a
+     sub l
+     xor 162 
+     ld l,a
+	
+	ld (de),a
+	inc de
+
+	djnz _fill_rand_loop
+	ret
+	
+putbin: ;prints c at hl
+	ld b,8
+putbin_loop:
+	xor a
+	rlc c
+	adc a,"0"
+	ld ($844B),hl;currow,curcol (h -> col)
+	inc h
+	b_call $4501 ;PutMap
+	djnz putbin_loop
+	ret
+
+;magic numbers gotten by measurement
+; max range, colisions,  approx middle
+;l: 08 - 6C, 41  1C   ,     0A
+;r: 5E - 04, 17  34   ,     55
+;this means:
+;  l has range 100
+;  r has range 90     
+;  r is 42 wide
+;  l is 24 wide
+;  l≤r-24 for optimal stereo operation then
+;  so, going up from endpoints,
+;    l = x+8
+;    r = 94-x
+;    l = r-24
+;    x+8 = 94-x-24
+;    2x = 94-24-8 = 62
+;	 x = 31 (wow, barely 5 bits)
+;  thus: l in [8,39], r in [63,94]
+;thus:
+set_sample: ;sample r,l in a,b
+	and 31
+	sub 94+trim+1
+	cpl ;neg = cpl, inc = dec, cpl = sub 1, cpl
+	ld (smc_r-stereo_3t_int+$9a9b),a
+	ld a,31
+	and b
+	add a,8 ;18+13 = 31 t between
+	ld (smc_l-stereo_3t_int+$9a9b),a
+	ret
+set_sample_right: ;sample r in a
+	and 31
+	sub 94+trim+1
+	cpl ;neg = cpl, inc = dec, cpl = sub 1, cpl
+	ld (smc_r-stereo_3t_int+$9a9b),a
+	ret
+set_sample_left: ;sample l in a
+	and 31
+	add a,8 ;18+13 = 31 t between
+	ld (smc_l-stereo_3t_int+$9a9b),a
+	ret
+	
+
+	
+int_chain:
+	ex af,af'
+	;call cleanup_sound_engine
+	xor a
+	out (3),a
+	ld a,0xe0
+	out (3),a
+	ex af,af'
+	ei
+	ret
+sine_table:
+db 0x10,0x10,0x10,0x11,0x11,0x11,0x12,0x12,0x13,0x13,0x13,0x14,0x14,0x14,0x15,0x15,0x15,0x16,0x16,0x16,0x17,0x17,0x17,0x18,0x18,0x18,0x19,0x19,0x19,0x1a,0x1a,0x1a,0x1a,0x1b,0x1b,0x1b,0x1b,0x1c,0x1c,0x1c,0x1c,0x1d,0x1d,0x1d,0x1d,0x1d,0x1e,0x1e,0x1e,0x1e,0x1e,0x1e,0x1e,0x1e,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1e,0x1e,0x1e,0x1e,0x1e,0x1e,0x1e,0x1e,0x1d,0x1d,0x1d,0x1d,0x1d,0x1c,0x1c,0x1c,0x1c,0x1b,0x1b,0x1b,0x1b,0x1a,0x1a,0x1a,0x1a,0x19,0x19,0x19,0x18,0x18,0x18,0x17,0x17,0x17,0x16,0x16,0x16,0x15,0x15,0x15,0x14,0x14,0x14,0x13,0x13,0x13,0x12,0x12,0x11,0x11,0x11,0x10,0x10,0x10,0xf,0xf,0xe,0xe,0xe,0xd,0xd,0xc,0xc,0xc,0xb,0xb,0xb,0xa,0xa,0xa,0x9,0x9,0x9,0x8,0x8,0x8,0x7,0x7,0x7,0x6,0x6,0x6,0x5,0x5,0x5,0x5,0x4,0x4,0x4,0x4,0x3,0x3,0x3,0x3,0x2,0x2,0x2,0x2,0x2,0x1,0x1,0x1,0x1,0x1,0x1,0x1,0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x1,0x1,0x1,0x1,0x1,0x1,0x1,0x1,0x2,0x2,0x2,0x2,0x2,0x3,0x3,0x3,0x3,0x4,0x4,0x4,0x4,0x5,0x5,0x5,0x5,0x6,0x6,0x6,0x7,0x7,0x7,0x8,0x8,0x8,0x9,0x9,0x9,0xa,0xa,0xa,0xb,0xb,0xb,0xc,0xc,0xc,0xd,0xd,0xe,0xe,0xe,0xf,0xf
+	;frame count
+;	ld a,(smc_n-stereo_3t_int+$9a9b)
+;	exx
+;	sub c
+;	exx
+;	cp b
+;	ret c
+;	exx
+;	add a,c
+;	jr nc,$+3
+;	 inc b  ;bc' tracks samples, b' updates at 91 hz and lasts 2.8 seconds before rolling over
+;   ld c,a  ;b' is probably gonna be the tempo controller
+;	;what should de' and hl' be?
+;	;
+;	;for sine test, de' is freq and hl' is phase
+;	add hl,de
+;	ld a,h
+;	exx
+;	ld hl,sine_table
+;	ld d,0
+;	and 0x7f
+;	ld e,a
+;	add hl,de
+;	ld h,(hl)
+;	ld l,h
+	;ld hl,0x1010;you know, ix isn't that much slower than hl for add
+	            ;we could do left in hl and right in ix (this could allow for easy dithery stuff)
+                ; but i'm probably gonna use ix for the song pointer
+;	ret
+
+;sine_table:
+;db 0x10,0x10,0x11,0x12,0x13,0x13,0x14,0x15,0x15,0x16,0x17,0x17,0x18,0x19,0x19,0x1a,0x1a,0x1b,0x1b,0x1c,0x1c,0x1d,0x1d,0x1e,0x1e,0x1e,0x1e,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1e,0x1e,0x1e,0x1e,0x1d,0x1d,0x1c,0x1c,0x1b,0x1b,0x1a,0x1a,0x19,0x19,0x18,0x17,0x17,0x16,0x15,0x15,0x14,0x13,0x13,0x12,0x11,0x10,0x10,0xf,0xe,0xd,0xc,0xc,0xb,0xa,0xa,0x9,0x8,0x8,0x7,0x6,0x6,0x5,0x5,0x4,0x4,0x3,0x3,0x2,0x2,0x1,0x1,0x1,0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x1,0x1,0x1,0x1,0x2,0x2,0x3,0x3,0x4,0x4,0x5,0x5,0x6,0x6,0x7,0x8,0x8,0x9,0xa,0xa,0xb,0xc,0xc,0xd,0xe,0xf
+
+	
+setup_sound_engine:
+	;setup isr and sample timer
+    di
+    ;xor a
+    ;out ($2e),a
+    ld hl,$9900 ;vec table in appbackupscreen
+    ld de,$9901
+    ld (hl),$9a
+	ld bc,256
+	ldir
+    
+    ld a,$99
+    ld i,a
+    
+    im 2
+	
+	;copy interrupt into appbackupscreen also
+    ld hl,stereo_3t_int
+	ld de,$9a9a
+	ld bc,int_end-stereo_3t_int
+	ldir
+	
+    ;set fast mode
+    ld a,1
+    out ($20),a
+    
+    ;disable interrupts from other sources
+    ld a,$e0
+    out (3),a
+    
+
+    ;setup speeds of other timers
+    ld a,$82 ;/4
+    out ($30),a
+    out ($33),a
+    ;setup sample timer at 23.4khz
+    ;ld a,$82 ;/4
+    out ($36),a
+    ld a,3
+    out ($37),a
+	dec a
+	out ($34),a;set other timers to not loop
+    out ($31),a;
+
+    ld a,163+trim
+    out ($38),a
+    ei
+    ret	
+cleanup_sound_engine:
+	di
+   
+    ;turn off all timers' interrupts
+    xor a
+    out ($31),a
+	out ($34),a
+    out ($37),a
+    out (0),a
+
+    ld a,$0b
+    out (3),a
+    
+    im 1
+    ret
+
+
+stereo_3t_int:
+	ex af,af'
+    in a,(4)
+    rlca ;check timer 3, the sample timer
+    jr nc,stereo_3t_int_not_timer_3
+	;reset
+	ld a,3
+	out (37h),a
+	dec a
+	out (0),a
+;	ld a,0xe0
+;	out (3),a ; adds 18 t-states but hopefully prevents linkport-based freezing ; down to 5.8 MHz (i'm moving this)
+smc_l:
+	ld a,63
+	out (35h),a ; timer2 happens 36 before ret, with /4 do 9+v
+smc_r:
+	ld a,196
+	out (32h),a ; timer1 happens 18 before ret, with /4 do 5+((size-38)-v)
+	ex af,af'
+	ei
+	ret ;131 ;38*4
+stereo_3t_int_not_timer_3:
+	rlca ; timer 2
+	jr nc,stereo_3t_int_not_timer_2
+	ld a,2
+	out (34h),a
+	xor a
+	out (0),a
+	ex af,af'
+	ei
+	ret ;93 ;28*4 this is the clearence needed between l and r
+stereo_3t_int_not_timer_2:
+	rlca ; timer 1, the path with the issue
+	jr nc,stereo_3t_int_not_timer_1 ;add 11 t-states, but allows chaining
+	ld a,2
+	out (31h),a
+	dec a
+	out (0),a
+smc_n:
+    add a,0
+    ld (smc_n-stereo_3t_int+$9a9b),a
+	 ;adds 20 t-states and tracks number of samples  (and exx is free for the audio engine to use)
+	ex af,af'
+	ei
+	ret;118 ;35*4
+stereo_3t_int_not_timer_1:
+	ex af,af'
+	jp int_chain
+int_end:

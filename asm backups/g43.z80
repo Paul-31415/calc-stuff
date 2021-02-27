@@ -1,0 +1,357 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	saveSScreen 86ECh
+.org        progStart-2
+.db         $BB,$6D
+
+	bcall(_ansName)
+    rst 10h
+    ex de,hl
+    rst 20h
+    bcall(_convOp1)
+    push af
+    
+;    ld hl,picn
+;    rst 20h
+;    ld hl,picn+2
+;    inc (hl)
+    
+;	rst 10h
+;    inc de
+;    inc de
+;    push de
+
+    
+    ld a,$40
+   out ($30),a
+   ld a,1        ; loop, no interrupt
+   out ($31),a
+   ld a,182
+   out ($32),a
+   
+;    pop hl
+;	ld (bufs),hl
+
+    pop af
+drawloop:
+
+    push af
+    ld hl,buff
+	call drawToScreen
+	pop bc 	
+
+	
+    
+longtimeLoop:
+    in a,(4)
+    bit 5,a       ;bit 5 tells if timer 1 is done
+   jr z,longtimeLoop
+   ld a,1        ; loop, no interrupt
+   out ($31),a
+    
+    in a,(4)
+    bit 3,a
+    ld a,b
+    
+    jr nz ,drawloop
+	xor a
+   out ($30),a   ;Turn off the timer.
+   out ($31),a
+    ret
+    
+    
+
+;picn:
+;.db $07,$60,0,0,0,0,0,0,0,0
+
+
+buff:
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db $ff,0,0,0
+.db $ff,0,0,0
+.db $ff,0,0,0
+.db $ff,0,0,0
+.db $ff,0,0,0
+.db $ff,0,0,0
+.db $ff,0,0,0
+.db $ff,0,0,0
+.db 0,$ff,0,0
+.db 0,$ff,0,0
+.db 0,$ff,0,0
+.db 0,$ff,0,0
+.db 0,$ff,0,0
+.db 0,$ff,0,0
+.db 0,$ff,0,0
+.db 0,$ff,0,0
+.db $ff,$ff,0,0
+.db $ff,$ff,0,0
+.db $ff,$ff,0,0
+.db $ff,$ff,0,0
+.db $ff,$ff,0,0
+.db $ff,$ff,0,0
+.db $ff,$ff,0,0
+.db $ff,$ff,0,0
+.db 0,0,$ff,0
+.db 0,0,$ff,0
+.db 0,0,$ff,0
+.db 0,0,$ff,0
+.db 0,0,$ff,0
+.db 0,0,$ff,0
+.db 0,0,$ff,0
+.db 0,0,$ff,0
+.db $ff,0,$ff,0
+.db $ff,0,$ff,0
+.db $ff,0,$ff,0
+.db $ff,0,$ff,0
+.db $ff,0,$ff,0
+.db $ff,0,$ff,0
+.db $ff,0,$ff,0
+.db $ff,0,$ff,0
+.db 0,$ff,$ff,0
+.db 0,$ff,$ff,0
+.db 0,$ff,$ff,0
+.db 0,$ff,$ff,0
+.db 0,$ff,$ff,0
+.db 0,$ff,$ff,0
+.db 0,$ff,$ff,0
+.db 0,$ff,$ff,0
+.db $ff,$ff,$ff,0
+.db $ff,$ff,$ff,0
+.db $ff,$ff,$ff,0
+.db $ff,$ff,$ff,0
+.db $ff,$ff,$ff,0
+.db $ff,$ff,$ff,0
+.db $ff,$ff,$ff,0
+.db $ff,$ff,$ff,0
+.db 0,0,0,$ff
+.db 0,0,0,$ff
+.db 0,0,0,$ff
+.db 0,0,0,$ff
+.db 0,0,0,$ff
+.db 0,0,0,$ff
+.db 0,0,0,$ff
+.db 0,0,0,$ff
+.db $ff,0,0,$ff
+.db $ff,0,0,$ff
+.db $ff,0,0,$ff
+.db $ff,0,0,$ff
+.db $ff,0,0,$ff
+.db $ff,0,0,$ff
+.db $ff,0,0,$ff
+.db $ff,0,0,$ff
+.db 0,$ff,0,$ff
+.db 0,$ff,0,$ff
+.db 0,$ff,0,$ff
+.db 0,$ff,0,$ff
+.db 0,$ff,0,$ff
+.db 0,$ff,0,$ff
+.db 0,$ff,0,$ff
+.db 0,$ff,0,$ff
+.db $ff,$ff,0,$ff
+.db $ff,$ff,0,$ff
+.db $ff,$ff,0,$ff
+.db $ff,$ff,0,$ff
+.db $ff,$ff,0,$ff
+.db $ff,$ff,0,$ff
+.db $ff,$ff,0,$ff
+.db $ff,$ff,0,$ff
+.db 0,0,$ff,$ff
+.db 0,0,$ff,$ff
+.db 0,0,$ff,$ff
+.db 0,0,$ff,$ff
+.db 0,0,$ff,$ff
+.db 0,0,$ff,$ff
+.db 0,0,$ff,$ff
+.db 0,0,$ff,$ff
+.db $ff,0,$ff,$ff
+.db $ff,0,$ff,$ff
+.db $ff,0,$ff,$ff
+.db $ff,0,$ff,$ff
+.db $ff,0,$ff,$ff
+.db $ff,0,$ff,$ff
+.db $ff,0,$ff,$ff
+.db $ff,0,$ff,$ff
+.db 0,$ff,$ff,$ff
+.db 0,$ff,$ff,$ff
+.db 0,$ff,$ff,$ff
+.db 0,$ff,$ff,$ff
+.db 0,$ff,$ff,$ff
+.db 0,$ff,$ff,$ff
+.db 0,$ff,$ff,$ff
+.db 0,$ff,$ff,$ff
+.db $ff,$ff,$ff,$ff
+.db $ff,$ff,$ff,$ff
+.db $ff,$ff,$ff,$ff
+.db $ff,$ff,$ff,$ff
+.db $ff,$ff,$ff,$ff
+.db $ff,$ff,$ff,$ff
+.db $ff,$ff,$ff,$ff
+.db $ff,$ff,$ff,$ff
+
+.db %01010101,%00110011,%00001111,%00000000,%00000000,%00000000
+.db %01010101,%00110011,%00001111,%11111111,%00000000,%00000000
+.db %01010101,%00110011,%00001111,%00000000,%11111111,%00000000
+.db %01010101,%00110011,%00001111,%11111111,%11111111,%00000000
+.db %01010101,%00110011,%00001111,%00000000,%00000000,%11111111
+.db %01010101,%00110011,%00001111,%11111111,%00000000,%11111111
+.db %01010101,%00110011,%00001111,%00000000,%11111111,%11111111
+.db %01010101,%00110011,%00001111,%11111111,%11111111,%11111111
+
+
+
+
+
+
+drawToScreen: ;approx 139,160 tstates
+	;at 60hz, effectively reduces cpu speed to 44% - 15 mhz mode basically becomes 6.6 mhz mode
+	;buff ptr in hl
+    
+    
+    push hl
+    
+;    ld b,a
+    and 3
+    ld hl,logop2Table
+    add a,l
+    ld l,a
+    ld a,0
+    adc a,h
+    ld h,a
+    ld a,(hl)
+    ld (logop2),a
+    
+
+	ld a,1
+    out ($20),a;fast mode
+
+	
+	di
+    
+    ld a,$05
+    out ($10),a
+	
+    pop hl
+
+	exx
+r4mask:
+    ld hl,%1010101000010001
+    rlc l
+    rlc h
+    ld (r4mask+1),hl
+    
+    ld a,$80
+    out ($10),a   
+
+	or a ;zcf
+r3mask:
+    ld a,%01001001
+    bit 2,a
+    jr z,r3NCam
+     scf
+r3NCam:
+    rla
+    ld (r3mask+1),a
+    ld c,a
+    exx
+    ;r3-c`
+    ;r4-hl`
+    ;
+    
+    
+	ld c,$20
+    
+    ld b,12
+colLoop:
+    ld a,c
+    out ($10),a
+    push bc
+    ld (saveSP),sp
+    ld sp,hl
+    
+    ld b,64
+    
+core:	;what to do at each byte ;325 clock cycles max
+	;buff: 4 byte chunks per byte
+
+	;r4-2
+    pop de
+    ld a,e
+    exx
+	and h
+    rlc h
+    exx
+    ld l,a
+	;r4-1
+    ld a,d
+    exx
+    and l
+    rlc l
+    exx
+    or l
+    ld c,a
+    
+    
+	;r3-2
+    pop de
+    ld a,e
+	exx
+    and c
+    exx
+    ld h,a
+	;r3-1
+	ld a,d
+    exx
+    cpl
+	or c ;and not c
+    cpl
+    bit 2,c
+    jr z,r3NCc
+     scf
+r3NCc:
+    rl c
+    exx
+    or h
+	
+;logop1:
+;    or l
+    
+logop2:
+	or c
+    
+    
+    out ($11),a
+    
+	djnz core
+    or a
+    ld hl,0
+    adc hl,sp
+    
+	ld sp,(saveSP)
+	pop bc
+    inc c
+    
+    djnz colLoop
+    
+	
+    
+    
+    ret
+saveSP:
+.dw 0
+;logop1Table:
+;	or l
+;    xor l
+;    and l
+;	or l
+logop2Table:
+	or c
+    xor c
+    and c
+	or c

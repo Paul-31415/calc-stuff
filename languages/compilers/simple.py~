@@ -1,0 +1,90 @@
+    
+
+
+
+
+def compile(s):
+    
+    code = ''
+    regs = ['x','y','z']
+    i = 0
+    s += '````````'
+
+    frame = []
+    
+    while s[i] != '`':
+        oldi = i
+        new = ''
+        if s[i] == regs[0]:
+            regs[0],regs[2] = regs[2],regs[0]
+            new = "\tpush bc\n\tex (sp),hl\n\tpop bc\n"
+        elif s[i] == regs[1]:
+            regs[1],regs[2] = regs[2],regs[1]
+            new = "\tex de,hl\n"
+        elif s[i] == regs[2]:
+            pass
+        elif s[i:i+2] == '->':
+            i += 2
+            if s[i] == regs[0]:
+                new = "\tld b,h\n\tld c,l\n"
+            elif s[i] == regs[1]:
+                new = "\tld d,h\n\tld e,l\n"
+        elif s[i] == '+':
+            i += 1
+            if s[i] == regs[0]:
+                new = "\tadd hl,bc\n"
+            elif s[i] == regs[1]:
+                new = "\tadd hl,de\n"
+            elif s[i] == regs[2]:
+                new = '\tadd hl,hl\n'
+        elif s[i:i+2] == '+c':
+            i += 2
+            if s[i] == regs[0]:
+                new = "\tadc hl,bc\n"
+            elif s[i] == regs[1]:
+                new = "\tadc hl,de\n"
+            elif s[i] == regs[2]:
+                new = '\tadc hl,hl\n'
+        elif s[i] == '-':
+            i += 1
+            new = '\tor a\n'
+            if s[i] == regs[0]:
+                new +="\tsbc hl,bc\n"
+            elif s[i] == regs[1]:
+                new +="\tsbc hl,de\n"
+            elif s[i] == regs[2]:
+                new +='\tsbc hl,hl\n'
+        elif s[i] == '~':
+            i += 1
+            if s[i] == regs[0]:
+                new +="\tsbc hl,bc\n"
+            elif s[i] == regs[1]:
+                new +="\tsbc hl,de\n"
+            elif s[i] == regs[2]:
+                new +='\tsbc hl,hl\n'
+        elif s[i] in "0123456789":
+            n = ''
+            while s[i] in "0987654321":
+                n += s[i]
+                i += 1
+            assert s[i:i+2] == "->"
+            i += 2
+            if s[i] == regs[0]:
+                new += "\tld bc,"+n+'\n'
+            elif s[i] == regs[1]:
+                new += "\tld de,"+n+'\n'
+            elif s[i] == regs[2]:
+                new += "\tld hl,"+n+'\n'
+        elif s[i] in '[{(':
+            lbl = 'label'+str(i)
+            frame.push([regs.copy(),lbl])
+            lbl += ':\n'
+            new = lbl
+            
+            
+        i += 1
+        code += "\n; "+repr(s[oldi:i]) + "\n"+new
+    return code
+
+        
+        

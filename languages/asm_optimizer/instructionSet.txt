@@ -1,0 +1,44 @@
+#z80 instruction set
+
+00:nop
+|time += 4
+|pc += 1
+
+01$c$b:ld bc,$v
+[$c = $v
+[$b = $v >> 8
+|time += 10
+|c = getMem(pc+1)
+|b = getMem(pc+2)
+|pc += 3
+
+02:ld (bc),a
+|time += 7
+|setMem(bc,a)
+|pc += 1
+
+03:inc bc
+|time += 6
+|bc += 1
+|pc += 1
+
+04:inc b
+|time += 4
+|doFlags(b += 1,SZ5H3VN-)
+|pc += 1
+
+05:dec b
+|time += 4
+|doFlags(b -= 1,SZ5H3VN-)
+|pc += 1
+
+06$b:ld b,$v
+[$b = $v
+|time += 7
+|b = getMem(pc+1)
+|pc += 2
+
+07:rlca
+|time += 4
+|doFlags(a = rlc(a),--503-0C)
+|pc += 1

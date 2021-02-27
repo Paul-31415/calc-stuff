@@ -1,0 +1,209 @@
+Coaster 83/83+ By Matt Roberts
+
+Game Idea by: Jason George (drummerman2002__@hotmail.com, www.hollowblue.com,
+				http://yourbuddyicon.freeservers.com)
+
+NOTE TO ASM PROGRAMMERS: Just like with Glasscars, I'm offering to give you
+the documented source to Coaster's 3D engine. I'd still like you to write me
+personally at mattrob@wam.umd.edu for it, even if you've already asked for
+the Glasscars engine. I will then send you the latest version of every engine
+I have made, that is, once I finish and refine them. I can assure you I've
+made them easier for you to use than ever. If you can use SPRXOR or SpriteOn,
+you can use Matt3D, and you will be able to write a game like Glasscars in a
+flash.
+
+A WORD ABOUT COMPATIBILITY:
+	Coaster tracks on the 83 and 83+ are exactly the same. The actual
+Coaster program is calc-specific, but if you have an 83 and your buddy has
+an 83+, or vica-versa, you can still send over your track files for him to
+ride.
+
+COASTER: Quick Tour
+
+	Included with Coaster are several demo tracks. To open one, start the
+game, select a name (other than "New") from the list that pops up, and
+hit enter twice. That brings up that coaster in edit mode, where you can
+change anything about the track you want. To run the track in first-person,
+hit the Y= key (labeled "Options") and select Run Track. Then, just sit back
+and enjoy the ride.
+
+Note: 2nd toggles the car while you're in ride mode.
+
+COASTER: Step by Step
+
+	Coaster starts out with a neat opening sequence, which was thought up
+by Nick Haigler (<jxsnt@aol.com>). You can skip it by pressing quit, or wait
+until it ends and then hitting any key. Then, you have a list of coasters
+that are on the calculator (in RAM, they won't show up if they're archived).
+If no Coaster files are in RAM, the only option will be "New," which will
+allow you to start a new coaster from scratch. I suggest practicing on one
+of the included, pre-made tracks first. Use the arrow keys and enter to
+select the track you want to open. The tracks appear in the order in which
+they were created/sent to the calculator.
+	Next it will prompt you for a name for that coaster. If you want, you
+can change the name (characters A-Z and " ") by using all four arrow keys
+and the delete key. Hit enter when you have a name you like.
+	Now you are in 3D edit mode. Hit the "Options" key and then select
+"Keys" at any time to get a list of which key does what. Zoom and Graph
+always change the currently selected piece. The left and right arrow keys
+change the type of the selected piece. A list of types are as follows:
+
+Straight
+Small Right Turn
+Medium Right Turn
+Large Right Turn
+Small Left Turn
+Medium Left Turn
+Large Left Turn
+Small Loop
+Big Loop
+Corkscrew
+
+	The up and down arrow keys can angle some pieces up or down. Some
+pieces,like loops, cannot be angled. Delete deletes the current piece,
+and Stat inserts a piece.
+	You can also control the view in 3D edit mode. This is sometimes
+necessary to see the part of the coaster you are working on. The view is
+controlled by Stat, Del, and the arrow keys (the same keys that edit
+pieces) but you have to hold down 2nd in order to get them to change the
+view. For example, pressing 2nd-Up arrow moves your point of view up and
+over the coaster. 2nd-Left moves your point of view left. 2nd-Del and
+2nd-Stat zoom in and out. Note that wherever your point of view is, you
+are always looking towards the exact center of the Coaster world.
+	At the top left corner of the editing screen is data on the
+currently selected piece. First is the piece number, followed by a "/",
+then the piece type and size, followed by a "/", and finally the angle
+of the piece. Notice that you cannot select or do anything to the
+"station"; that is the beginning of the coaster. The only time you
+have an opportunity to move or reorient the station is when you start
+a new track (See the section on new tracks).
+	The Coaster world is pretty big, but it does have edges. If the
+track goes outside these edges or gets too low, an error message appears
+that says "Track outside of World!" Any portion of the track that is not
+within the world will not show up on screen, whether you are in edit or
+ride mode. You can ride on a track that goes outside of the world, but
+the ride will end before you actually go outside the world.
+	When you hit Options, a menu comes up with all kinds of things to
+choose from. Here is what each option does:
+
+Run Track: Lets you ride the current track, as-is. Pressing Quit during
+	the ride will bring you back to the Options menu.
+
+Edit: Sends you back into the 3D editor.
+
+Special: Here you can change, with Enter, whether the current piece is
+	an accelerator, decelerator (brake), lift (the winch-thing at the
+	beginning of a real roller coaster), or a normal piece.
+
+Bank: This angles the current piece axially, if applicable. Normally, you
+	would bank a left turn to the left, so that riding the coaster feels
+	more natural.
+
+Track: Changes between Steel and Magic Steel. The ride is the same with
+	either option, but with Magic Steel, the cross-braces in the track
+	don't show up, so it looks like you're riding on magically suspended
+	rails!
+
+Keys: This brings up the on-calc help file.
+
+Quit: Self-explanatory.
+
+	Note that you can use the keys you use in the 3D editor in the
+Options screen as well. They work the same way, except there is no
+way to angle a piece from the Options menu, as the up and down arrow keys
+are used to select different menu items. For example, "Zoom" and "Graph"
+still select the next/previous pieces, as the piece ID at the top of the
+screen will show you. There are several reasons you might edit the track
+from here instead of the 3D editor. One is that it is faster then the 3D
+editor when dealing with a long track, and the keys are easier to press.
+
+COASTER: Starting a new track
+
+	To start your own track from scratch, select New from the track
+selection screen. Then give it the name of your choice. Once you press
+Enter, you will be in the 3D edit mode, and a message on the screen will
+flash: "Place Station (STAT)." This is your opportunity to start the
+coaster from any point in the world you want to. Note that the view
+controls work as normal, and that the station starts out in the exact
+center of the world. You can move it around with the arrow keys. The Del
+key changes the direction it's facing. Press Stat when you have it where
+you want it. Then you can build the track as normal.
+
+COASTER: Saving Tracks
+
+	When you exit Coaster, a message may appear asking you if you want
+to save the changes to a new coaster. Before you say yes or no (Y/N),
+there are some things you should know about how Coaster saves tracks.
+
+1. Coaster never edits a file, or deletes a file. All it can do is open
+	a file and create a new one if you make any changes to it and
+	want them saved. For example, if you open up a pre-made coaster,
+	change it, and then save and exit, the original file remains, but
+	a new track file that reflects your changes is saved to the calc.
+
+2. The following things constitute changing of the track:
+	a. Changing the name
+	b. Changing a piece in any way
+	c. Changing the track type
+	d. Adding/deleting pieces
+
+3. When Coaster makes a new track file on the calc, it names the file
+	with a name based on the coaster's name. For example, the coaster
+	MATTS WILD RIDE would be saved as MATTS WI. If you save a track
+	of a same or similar name twice, Coaster will find the first
+	unique filename to save it under, since you can't have two files
+	of the same name on a calc. For example, if I opened, changed, and
+	resaved my coaster several times, it would be automatically saved
+	under the following names:
+
+	1st: MATTS WI
+	2nd: NATTS WI
+	3rd: OATTS WI
+
+	And so forth. Note that if you do not have enough memory to hold
+	a new file when Coaster attempts to save it, wierd things may happen.
+
+
+WHAT TO DO IF COASTER WON'T LET YOU INSERT PIECES
+	If you fill up to much memory by placing to many complex pieces like
+	loops and turns in your coaster, Coaster will stop you from inserting
+	more pieces. When Coaster's memory fills up, it will not let you
+	change pieces either. All you can do is go delete some pieces of the
+	coaster to free up memory.
+
+
+A WORD ABOUT YOUR TRACKS:
+	Think your design is good? Worth giving to other people to ride?
+	By all means, upload it to ticalc.org, in their 83/83+ misc. game
+	levels section.
+
+
+KNOWN BUGS:
+	Apparently all the games I've written screw with the value of
+	"rand" which is actually a Ti-83 variable essential to finding
+	random numbers. If you ever use a random function and get an
+	"OVERFLOW" error, just reset rand by storing a number to it,
+	i.e. 50->rand (Enter).
+	Coaster may corrupt itself and become unstable if you add
+	a large number of pieces at a point where they are not inside
+	the coaster world, then put them inside the world all at once.
+	To avoid any problems, don't add to many pieces to a large
+	coaster while Coaster is displaying a "Track outside of world"
+	error.
+
+
+IN CLOSING
+	That's about it. Write me <mattrob@wam.umd.edu> if you have any
+questions or bug reports. There's bound to be a couple bugs. But, KEEP
+THE COMMENTS TO A MINIMUM. This is as good as Coaster gets on the calc,
+people! I tried hard, but I can't give you anything more! I mean, look
+at it! It's like 13k! Without Ion's/MirageOS's efficient memory useage,
+it would have been impossible to write!
+
+	Remember that I will continue making games as long as you keep playing
+your 83. I've got some good ones coming, and soon, too! Sorry Coaster took
+so long.
+
+	Thanks to the people who contributed on this project, namely Jason
+George, Nick Haigler, and Robin Kay, whose line drawing function has
+improved all of my 3D endeavors a great deal.

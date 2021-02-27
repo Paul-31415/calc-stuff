@@ -1,0 +1,13 @@
+Bin28xp reference
+
+USAGE
+
+bin28xp [-c comment] [-n name] [[-i] in.bin] [[-o] out.8xp]
+
+Input file name can be `stdin' or omitted
+Output file name can be `stdout' or omitted
+
+NOTES
+
+bin28xp will allow you to make files too large for a TI calculator
+to accept.  You must ensure that your files are less than 20000 bytes.

@@ -1,0 +1,370 @@
+.org $0000
+
+#include "notes.inc"
+
+title:	.db "Liberty Bell March",0
+artist:	.db "John Philip Sousa",0
+album:	.db "",0
+
+
+song:
+
+tempo = 130
+
+	playsection(intro)
+	playsection(mainSecA)
+	playsection(mainSecA)
+
+	playsection(mainSecB)
+	playsection(mainSecB)
+
+	playsection(mainSecC)
+	playsection(mainSecCfA)
+	playsection(mainSecC)
+	playsection(mainSecCfB)
+
+	playsection(mainSecD)
+	playsection(mainSecDfA)
+
+
+	playsection(mainSecC)
+	playsection(mainSecCfA)
+	playsection(mainSecC)
+	playsection(mainSecCfB)
+
+	playsection(mainSecD)
+	playsection(mainSecDfB)
+
+
+	endsong
+
+intro:
+	note(f2,f2,f3,f3,quarter)
+	note(e2,e2,e3,e2,eighth)
+	note(d2,d2,d3,d3,quarter)
+	note(cs2,cs2,cs3,cs3,eighth)
+
+	note(c2,c2,c3,c3,quarter)
+	note(b1,b1,b2,b2,eighth)
+	note(bb1,bb1,bb2,bb2,quarter)
+	note(a1,a1,a2,a2,eighth)
+
+	note(g1,g1,g2,g2,eighth)
+	note(a1,a1,a2,a2,eighth)
+	note(bb1,bb1,bb2,bb2,eighth)
+	note(a1,a1,a2,a2,quarter)
+	note(g1,g1,g2,g2,eighth)
+
+	note(c1,c2,c3,c3,quarter3)
+
+	note(rest,rest,rest,rest,half)
+
+	; LEADING NOTE:
+	note(rest,rest,c3,c3,eighth)
+
+	endsection
+
+mainSecA:
+	
+
+	note(f1,c2,f2,a2,quarter)
+	note(rest,c2,f2,a2,eighth)
+	note(c1,c2,f2,a2,eighth)
+	note(rest,c2,e2,ab2,eighth)
+	note(rest,c2,f2,a2,eighth)
+
+	note(f1,c2,a2,f3,quarter)
+	note(rest,c2,a2,c3,eighth)
+	note(c1,c2,f2,c3,quarter)
+	note(rest,c2,a2,a2,eighth)
+
+	note(e1,c2,g2,bb2,quarter)
+	note(f1,c2,g2,bb2,eighth)
+	note(g1,c2,g2,bb2,quarter)
+	note(f1,c2,a2,c3,eighth)
+
+	note(e1,c2,bb2,d3,quarter)
+	note(d1,c2,bb2,d3,eighth)
+	note(c1,c2,bb2,d3,quarter)
+	note(d1,c2,g2,bb2,eighth)
+
+	; Repeat, shift key:
+
+
+	note(e1,bb1,e2,g2,quarter)
+	note(rest,bb1,e2,g2,eighth)
+	note(c1,bb1,e2,g2,eighth)
+	note(rest,bb1,eb2,fs2,eighth)
+	note(rest,bb1,e2,g2,eighth)
+
+	note(e1,bb1,bb2,e3,quarter)
+	note(rest,bb1,bb2,d3,eighth)
+	note(c1,bb1,bb2,d3,quarter)
+	note(rest,bb1,g2,bb2,eighth)
+
+	note(f1,bb1,f2,a2,quarter)
+	note(g1,bb1,f2,a2,eighth)
+	note(a1,bb1,f2,a2,quarter)
+	note(g1,bb1,g2,bb2,eighth)
+
+	note(f1,bb1,a2,c3,quarter)
+	note(e1,bb1,a2,c3,eighth)
+	note(d1,bb1,a2,c3,quarter)
+	note(c1,bb1,a2,c2,eighth)
+
+	; Shift key:
+	note(f1,c2,f2,a2,quarter)
+	note(rest,c2,f2,a2,eighth)
+	note(c1,c2,e2,a2,eighth)
+	note(rest,c2,e2,ab2,eighth)
+	note(rest,c2,f2,a2,eighth)
+
+	note(f1,c2,g2,a3,quarter)
+	note(rest,c2,a2,f3,eighth)
+	note(c1,c2,a2,f3,quarter)
+	note(rest,c2,g2,c3,eighth)
+
+	note(d1,d2,g2,b2,quarter)
+	note(e1,b1,g2,g3,eighth)
+	note(f1,b1,g2,g3,quarter)
+	note(e1,b1,g2,g3,eighth)
+
+	note(d1,cs2,b2,g3,quarter)
+	note(c1,rest,b2,g3,eighth)
+	note(b0,rest,b2,g3,quarter)
+	note(a0,rest,b2,g3,eighth)
+
+	
+	; Last bit:
+
+	note(g1,c2,c3,e3,quarter)
+	note(g1,c2,e3,g3,eighth)
+	note(g1,c2,e3,g3,eighth)
+	note(g1,c2,eb3,fs3,eighth)
+	note(g1,c2,e3,g3,eighth)
+
+	note(g1,b1,d3,d3,quarter)
+	note(g1,b1,f2,g3,eighth)
+	note(g1,b1,f2,g3,eighth)
+	note(g1,b1,f2,fs3,eighth)
+	note(g1,b1,f2,g3,eighth)
+
+	note(c1,c2,e2,c3,quarter)
+	note(g1,d2,f2,b2,eighth)
+	note(c1,c2,e2,c3,quarter)
+	note(g1,d2,f2,b2,eighth)
+
+	note(c2,c2,e2,c3,quarter)
+	note(rest,rest,rest,rest,eighth)
+	note(c1,bb1,e2,c3,quarter)
+	note(rest,rest,rest,rest,eighth)
+	endsection
+
+mainSecB:
+	note(f1,rest,c2,a2,eighth)
+	note(f1,rest,c2,ab2,eighth)
+	note(f1,rest,c2,a2,eighth)
+	note(c1,rest,f2,d3,quarter)
+	note(c1,rest,f2,c3,eighth)
+
+	note(f1,a1,c2,a2,quarter)
+	note(f1,a1,c2,rest,eighth)
+	note(a1,a1,c2,f2,quarter)
+	note(a1,a1,c2,rest,eighth)
+
+	note(bb1,f1,d2,d2,quarter)
+	note(bb1,f1,d2,rest,eighth)
+	note(c2,bb1,e2,g2,quarter)
+	note(c2,bb1,e2,rest,eighth)
+
+	note(f1,a1,c2,f2,quarter)
+	note(f1,a1,c2,rest,eighth)
+	note(c1,a1,c2,rest,eighth)
+	note(c1,a1,c2,f2,eighth)
+	note(c1,a1,c2,f2,eighth)
+
+
+	;
+
+	note(e1,bb1,c2,g2,eighth)
+	note(e1,bb1,c2,a2,eighth)
+	note(e1,bb1,c2,bb2,eighth)
+	note(c1,bb1,g2,e3,quarter)
+	note(c1,bb1,e2,d3,eighth)
+
+	note(f1,a1,f2,c3,quarter)
+	note(f1,a1,f2,rest,eighth)
+	note(d1,ab1,c3,f3,quarter)
+	note(d1,ab1,c3,rest,eighth)
+
+	note(g1,a1,c3,e3,quarter)
+	note(g1,a1,c3,rest,eighth)
+	note(g1,f2,b2,d3,quarter)
+	note(g1,f2,b2,rest,eighth)
+
+	note(c1,e2,g2,c3,quarter)
+	note(c1,e2,g2,rest,eighth)
+	note(c1,e2,g2,rest,quarter)
+	note(c1,e2,g2,c3,eighth)
+
+
+	note(bb1,bb2,f2,d3,quarter)
+	note(bb1,bb2,f2,d3,eighth)
+	note(bb1,bb2,f2,d3,eighth)
+	note(bb1,bb2,f2,cs3,eighth)
+	note(bb1,bb2,f2,d3,eighth)
+
+	note(a1,a2,cs2,e3,quarter)
+	note(a1,a2,cs2,rest,eighth)
+	note(a1,g2,cs2,e3,quarter)
+	note(a1,g2,cs2,rest,eighth)
+
+	note(d2,a2,d2,f3,quarter)
+	note(d2,a2,d2,f2,eighth)
+	note(bb1,f2,d2,g2,eighth)
+	note(bb1,f2,d2,f2,eighth)
+	note(bb1,f2,d2,g2,eighth)
+
+
+	note(a1,e2,cs2,a2,quarter)
+	note(a1,e2,cs2,a2,eighth)
+	note(a1,e2,cs2,a2,quarter)
+	note(a1,e2,cs2,a2,eighth)
+
+	note(bb1,g1,d2,g2,quarter)
+	note(rest,g1,d3,f3,eighth)
+	note(bb1,g1,bb2,d3,quarter)
+	note(rest,g1,g2,bb2,eighth)
+
+	note(c1,f1,  f2,a2,quarter)
+	note(rest,f1,rest,rest,eighth)
+	note(c1,a1,  f2,f2,quarter)
+	note(rest,a1,rest,rest,eighth)
+
+	note(e1,bb1,c2,g2,quarter)
+	note(rest,bb1,rest,rest,eighth)
+	note(c1,bb1,c2,e2,quarter)
+	note(rest,g1,rest,rest,eighth)
+
+
+	note(f1,f1,c2,f2,quarter)
+	note(c1,f1,c2,f2,eighth)
+	note(f0,f1,c2,rest,quarter)
+	note(rest,rest,rest,f2,eighth)
+
+	endsection
+
+mainSecC:
+	note(bb0,rest,bb1,d2,quarter)
+	note(rest,rest,bb1,rest,eighth)
+	note(c1,c0,bb1,eb2,quarter)
+	note(rest,rest,bb1,rest,eighth)
+
+	note(cs1,cs0,	bb1,e2,quarter)
+	note(rest,rest,	bb1,rest,eighth)
+	note(d1,d0,	bb1,f2,quarter)
+	note(rest,rest,	bb1,rest,eighth)
+
+	endsection
+
+mainSecCfA:
+
+	note(bb0,bb1,	f2,d3,quarter)
+	note(rest,rest,	f2,d3,eighth)
+	note(f0,bb1,	f2,d3,quarter)
+	note(rest,rest,	e2,cs3,eighth)
+
+	note(bb0,bb1,	f2,d3,quarter)
+	note(rest,bb1,	f2,rest,eighth)
+	note(f0,f1,	d2,rest,eighth)
+	note(f0,f1,	d2,rest,eighth)
+	note(rest,d1,	d2,f2,eighth)
+
+	endsection
+
+mainSecCfB:
+
+	note(c1,a1,	c2,eb3,quarter)
+	note(rest,rest,	c2,eb3,eighth)
+	note(f0,ab1,	c2,eb3,quarter)
+	note(rest,rest,	b1,d3,eighth)
+
+	note(c1,a1,	c3,eb3,quarter)
+	note(rest,f1,	c3,rest,eighth)
+	note(f0,c2,	a2,rest,eighth)
+	note(f0,c2,	a2,rest,eighth)
+	note(rest,d2,	a2,d3,eighth)
+
+	endsection
+
+mainSecD:
+	note(f1,eb2,	a2,c3, 	quarter)
+	note(rest,rest,	a2,rest,eighth)
+	note(f1,d2,	ab2,b2,quarter)
+	note(rest,rest,	ab2,rest,eighth)
+
+	note(f1,eb2,	a2,c3, 	quarter)
+	note(rest,f1,	a2,f2,eighth)
+	note(f1,e1,	rest,e2,quarter)
+	note(rest,f1,	rest,f2,eighth)
+
+	note(bb1,bb2,	f2,d3, 	quarter)
+	note(rest,bb2,	f2,rest,eighth)
+	note(bb1,rest,	e2,cs3,quarter)
+	note(rest,rest,	e2,rest,eighth)
+
+	note(bb1,bb2,	f2,d3, 	quarter)
+	note(rest,f1,	rest,f2,eighth)
+	note(bb1,e1,	d2,e2,quarter)
+	note(rest,f1,	rest,f2,eighth)
+
+	endsection
+
+mainSecDfA:
+
+	note(c2,f1,	f2,a2, 	quarter)
+	note(rest,rest,	f2,rest,eighth)
+	note(c2,a1,	f2,c3,quarter)
+	note(rest,rest,	f2,rest,eighth)
+
+	note(c1,g1,	e2,bb2,	quarter)
+	note(rest,rest,	e2,c3,eighth)
+	note(c1,bb1,	e2,g2,quarter)
+	note(rest,rest,	e2,bb2,eighth)
+
+	note(g1,c2,	eb2,a2,	quarter)
+	note(rest,rest,	rest,bb2,eighth)
+	note(g1,bb1,	eb2,g2,quarter)
+	note(rest,rest,	rest,a2,eighth)
+
+	note(g1,a1,	eb2,f2,	quarter)
+	note(rest,rest,	rest,g2,eighth)
+	note(g1,a1,	c2,eb2,quarter)
+	note(rest,rest,	rest,f2,eighth)
+	
+	endsection
+
+mainSecDfB:
+
+	note(eb1,c2,	eb2,g2, quarter)
+	note(rest,c2,	eb2,rest, eighth)
+	note(c1,rest,	g2,eb3, quarter)
+	note(rest,rest,	g2,rest, eighth)
+
+	note(f1,bb2,	f2,d3, quarter)
+	note(rest,rest,	f2,bb2, eighth)
+	note(f1,a2,	eb2,c3, quarter)
+	note(rest,rest,	eb2,a2, eighth)
+
+	note(bb1,bb2,	d2,bb2, quarter)
+	note(f1,bb2,	d2,bb2, eighth)
+	note(bb1,f2,	d2,bb2, quarter)
+	note(f1,d2,	d2,bb2, eighth)
+
+	note(bb0,bb1,	d2,bb2, quarter)
+	note(rest,rest,rest,rest,eighth)
+	note(bb0,bb1,	d2,bb2, quarter)
+	note(rest,rest,rest,rest,eighth)
+	endsection
+
+.end

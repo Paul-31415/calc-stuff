@@ -1,0 +1,11 @@
+= = = ATHERLOAD GUIDE = = =
+
+Atherload is based on Xgen Studios' game, Motherload (Google it if you haven't heard of the game before). This is a fast and fun clone for the TI calculator. It takes up very little space (only 2.6 KB!), so you won't have to do backflips to get it on your calculator. Atherload has ASCII scrollable graphics. It requires under 1 KB of ram to run.
+
+Load ATHRLD, ATHRLD1, and ATHRLD2 onto your calculator, and run ATHRLD to play. After displaying the title screen, the program will generate the map. On a TI-84, this should take under 30 seconds. Press the DEL key while it is generating or during gameplay to exit.
+
+When it finishes, you can start playing. You are the R ship, which you can move with the arrow keys. The == is the landing pad. If you land on the pad, your fuel is replenished, your minerals are exchanged for money, and you can upgrade your ship. Press the Y= button to upgrade load capacity, and WINDOW to upgrade fuel capacity (both upgrades cost 50).
+
+Each time you move, your fuel goes down a little. If it goes down all the way, you become stranded and die. Drill into the soil (O's), to reach minerals. The minerals are (in order of ascending cost): Ironium, Bronzium, Silverium, Goldium, Platinum, Emerald, Diamond, Amazonite. Each time your ship crosses one of these minerals, the ship stores it in your load. You cannot store more than your load capacity.
+
+This game doesn't really have an end... I suppose if you reach the bottom and come back up to the landing pad, you can consider yourself a winner. :D

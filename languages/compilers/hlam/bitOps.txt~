@@ -1,0 +1,5 @@
+a << b
+  where b is constant:
+  = [sla a] b times
+  = 
+

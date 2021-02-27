@@ -1,0 +1,674 @@
+ 
+; idea for lfsr rand: 3 bit lut lookahead
+
+; Demo idea:
+;  tracker composer where first you set up "hardware" with "points"
+;   hardware is modules that are jitted into the interrupt, they cost worst-case t-state execution time
+;   composers allocate points towards the modules they want to use and it displays an estimated
+;      cpu performance hit (in percent and 'feels like' units (effective cpu speed))
+;   (you are allowed to go above 100% but audio will have a bad time unless you are careful to not
+;    line up too many worst case execution times in your song data)
+;
+;  you add the modules in a graph/node like constructor and set up input channels (and their clock-logic)
+;
+;  modules:
+;    pulse wave
+;    saw wave (modulus thingy)
+;    triangle wave
+;    sample playback (256 byte samples probably (likely less are also allowed),
+;                      - this could be made out of a saw wave into a lookup module)
+;    noise (prng)
+;    twang? (sample playback + filter + writeback)
+;    
+;    integrator
+;    differentiator
+;    biquad (coeffs restricted to easy multiplies (probably just have 2^n and 1±2^n))
+;             (you can build this out of integrators and arithmetics)
+;    logical/arithmetic operations
+;    
+;    lookup and writeback modules
+;
+;  since several modules can be defined in terms of other modules, perhaps allow defining
+;   of complex modules and have some predefined (biquad, iir1, twang)
+;  maybe include an assembler for inline assembling?
+;
+
+
+;left and right need to be at least 11 t-states appart or at the same time
+;problem with doing right,left,silence is that right modulates left a bit
+
+;I might be able to get 8 bit per channel stereo if I do the
+;256 t-state interrupts frames thingy using a single timer
+;alternating left and right
+;perhaps just focus on getting 4 bit per channel stereo and 8 bit per channel mono?
+;4 bit is 24 db dynamic range (12 db voltage)
+;8 bit is 48 db dynamic range
+;4 bit sounds fine at a high enough sample rate with simple error prop dither
+
+
+;phases (single channel): ((val,0),0)
+; int 1: read timer and allign, setup timer to  v, set out
+; int 2: read timer and allign, setup timer to ~v, clear out
+; int 3: read timer and allign, setup timer to  k (trims sample rate)
+; min sr = 29khz, max sr = 58k
+;2 channel: ((r,0),(l,0),0)
+; int 1: read timer and allign, setup timer to  r, set R
+; int 2: read timer and allign, setup timer to ~r, clear R
+; int 3: read timer and allign, setup timer to  l, set L
+; int 4: read timer and allign, setup timer to ~l, clear L
+; int 5: read timer and allign, setup timer to  k (trims sample rate)
+; min sr = 19k, max sr = 29k
+
+; in terms of dithering:
+;  simple error prop + triangle noise (pp amplitude 2 ulp) is pleasing
+
+;I'm not gonna correct for the cpu instruction length noise because that costs too much
+
+
+interrupt:
+    ex af,af'
+int_jump:
+    jp r_on ;14
+
+r_on:
+	ld a,1
+	out (0),a
+	inc a
+	out (37h),a
+	ld a,r_off
+	ld (int_jump+1),a
+r_value:
+	ld a,127
+	out (38h),a
+	ex af,af'
+	ei
+	ret ;89 - 103
+r_off:
+	cpl
+	exx
+	ld b,a
+	xor a
+	out (0),a
+	ld a,2
+	out (37h),a
+	ld a,l_on
+    ld (int_jump+1),a
+	ld a,b
+	exx
+	out (38h),a
+	ex af,af'
+    ei
+    ret ;102 - 116
+l_on:
+	ld a,2
+    out (0),a
+    out (37h),a
+    ld a,l_off
+    ld (int_jump+1),a
+l_value:
+    ld a,127
+    out (38h),a
+	ex af,af'
+    ei
+    ret ;85 - 99
+l_off:
+    cpl
+    exx
+    ld b,a
+    xor a
+    out (0),a
+    ld a,2
+    out (37h),a
+    ld a,int_wait
+    ld (int_jump+1),a
+    ld a,b
+    exx
+    out (38h),a
+	ex af,af'
+    ei
+    ret ;98 - 112
+int_wait:
+	ld a,r_on
+    ld (int_jump+1),a
+	ld a,2
+	out (37h),a
+	ld a,50
+	out (38h),a
+	ex af,af'
+    ei
+    ret ;74 - 88
+;total: 430 main (without wait) (~942 or 15.9khz)
+;yeah there's no room with this code
+
+;for 22khz stereo need < 42 tstates per interrupt
+;25 khz - 600 t-states (8bit mono is conceivable)
+int8bitmono:
+	ex af,af'
+	jr nc,i8bm_on
+	cpl
+	out (38h),a ;check if can do this order
+    ld a,2
+    out (37h),a
+    xor a
+    out (0),a
+    ex af,af'
+    ret
+i8bm_on:
+	ld a,3
+	out (0),a
+	dec a
+	out (37h),a
+i8bm_val:
+	ld a,127
+
+	
+	out (38h),a
+	scf
+	ex af,af'
+	ret ;92 + 97 + calc = 189 + calc, room: ~155
+
+	
+;25 khz - 600 t-states (7 or 6 bit stereo is conceivable)
+;	
+;6 bit stereo
+#define depth 64
+#define offset 18
+int_stereo:;19 to get to interrupt
+	ex af,af'
+	jr nc,r_on
+stereo_smc_jr_origin:
+	;off
+	exx
+	ld b,a
+	ld a,2
+	out (37h),a
+	xor a
+	out (0),a
+	ld a,depth+offset+offset
+	sub b
+	exx
+	scf
+	out (38h),a ;90+11
+	ex af,af'
+	ei
+	ret ;18 = 118
+r_on:
+	ld a,l_on-stereo_smc_jr_origin
+	ld (stereo_smc_jr_origin-1),a
+	ld a,1
+	out (0),a
+	inc a
+	out (37h),a
+r_val:
+	ld a,63 ;can't be too big
+	add offset
+	out (38h),a ;102+11
+	ex af,af'
+	ei
+    ret ;18 = 131
+l_on:
+    ld a,r_on-stereo_smc_jr_origin
+    ld (stereo_smc_jr_origin-1),a
+    ld a,2
+    out (0),a
+    out (37h),a
+l_val:
+    ld a,63
+	add offset
+    out (38h),a ;98+11
+    ex af,af'
+	ei
+    ret ;18 = 127
+
+;full cycle: 494/(494+128) = 24 kHz
+; = 20.5% performance, feels like 3 MHz
+	
+;buffer reading version
+;	
+int_stereo:;19 to get to interrupt
+	ex af,af'
+	exx
+	jr nc,r_on
+stereo_smc_jr_origin:
+	;off
+	ld b,a
+	ld a,2
+	out (37h),a
+	xor a
+	out (0),a
+	ld a,depth+offset+offset
+	sub b
+	exx
+	scf
+	out (38h),a ;90+11
+	ex af,af'
+	ei
+	ret ;18 = 118
+r_on:
+	ld a,l_on-stereo_smc_jr_origin
+	ld (stereo_smc_jr_origin-1),a
+	ld a,1
+	out (0),a
+	inc a
+	out (37h),a
+	ld a,(hl) ;can't be too big
+	inc l
+	add offset
+	exx
+	out (38h),a ;114+11
+	ex af,af'
+	ei
+    ret ;18 = 145
+l_on:
+    ld a,r_on-stereo_smc_jr_origin
+    ld (stereo_smc_jr_origin-1),a
+    ld a,2
+    out (0),a
+    out (37h),a
+    ld a,(hl)
+	inc l
+	add offset
+	exx
+    out (38h),a ;110+11
+    ex af,af'
+	ei
+    ret ;18 = 139
+
+;full cycle: 520/(520+128) = 23 kHz
+; = 19.75% performance, feels like 3 MHz
+
+	
+
+
+;variable sr version
+;	
+int_stereo:;19 to get to interrupt
+	ex af,af'
+	exx
+	jr nc,r_on
+stereo_smc_jr_origin:
+	;off
+	ld c,a
+	ld a,2
+	out (37h),a
+	xor a
+	out (0),a
+	ld a,depth+offset+offset
+	sub b
+	exx
+	scf
+	out (38h),a ;90+11
+	ex af,af'
+	ei
+	ret ;18 = 118
+r_on:
+	ld a,l_on-stereo_smc_jr_origin
+	ld (stereo_smc_jr_origin-1),a
+	ld a,1
+	out (0),a
+	inc a
+	out (37h),a
+	
+	add hl,de
+	dec a
+	or h
+	ld c,a
+	ld a,(bc)
+	
+	add offset
+	exx
+	out (38h),a ;133+11
+	ex af,af'
+	ei
+    ret ;18 = 162
+l_on:
+    ld a,r_on-stereo_smc_jr_origin
+    ld (stereo_smc_jr_origin-1),a
+    ld a,2
+    out (0),a
+    out (37h),a
+
+	ld a,254
+	and h
+	ld c,a
+	ld a,(bc)
+    
+	add offset
+	exx
+    out (38h),a ;121+11
+    ex af,af'
+	ei
+    ret ;18 = 150
+
+;full cycle: 548/(548+128) = 22 kHz
+; = 18.9% performance, feels like 2.8 MHz
+
+;2 timer method (or 3 timer for stereo method)
+; one timer resets, the other sets, both loop
+; to change the held value, you adjust the timer's phase
+	
+mono_phase_int:
+	ex af,af'
+    in a,(4)
+    rlca ;check timer 3, the sample timer
+    jr nc,mono_phase_int_not_timer_3
+	;reset
+	ld a,3
+	out (37h),a
+	xor a
+	out (0),a
+	ex af,af'
+	ei
+	ret ;77
+mono_phase_int_not_timer_3:
+	ld a,3
+	out	(34h),a
+	out (0),a
+	ex af,af'
+	ei
+	ret ;78
+;193 per
+;with 29khz (512 tstates) feels like 9.35 MHz
+;with 25khz (600 tstates) feels like 10 MHz
+;with 23khz (652 tstates) feels like 10.56 Mhz
+
+stereo_phase_int:
+	ex af,af'
+    in a,(4)
+    rlca ;check timer 3, the sample timer
+    jr nc,stereo_phase_int_not_timer_3
+	;reset
+	ld a,3
+	out (37h),a
+	xor a
+	out (0),a
+	ex af,af'
+	ei
+	ret ;77
+stereo_phase_int_not_timer_3:
+	rlca
+	rlca
+	and 3
+	out (0),a
+	ld a,3
+	out (34h),a
+	out (31h),a
+	ex af,af'
+	ei
+	ret;104
+;219 per (this calc is wrong it should be 342)
+;with 29khz (512 t-states) feels like 8.58 MHz
+;with 25khz (600 t-states) feels like 9.53 MHz
+;with 23khz (652 t-states) feels like 9.96 MHz
+	
+
+;
+mono_2t_int:
+	ex af,af'
+    in a,(4)
+    rlca 
+    jr nc,mono_2t_int_not_timer_3
+	;reset
+	ld a,3
+	out (37h),a
+	out (0),a
+	ld a,128
+	out (37h),a
+	ex af,af'
+	ei
+	ret ;91
+mono_2t_int_not_timer_3:
+	ld a,2
+	out	(34h),a
+	xor a
+	out (0),a
+	ex af,af'
+	ei
+	ret ;82
+;211 per
+;with 29khz (512 t-states) feels like  8.82 MHz
+;with 25khz (600 t-states) feels like  9.73 MHz
+;with 23khz (652 t-states) feels like 10.15 MHz
+	
+
+stereo_3t_int:
+	ex af,af'
+    in a,(4)
+    rlca ;check timer 3, the sample timer
+    jr nc,stereo_3t_int_not_timer_3
+	;reset
+	ld a,3
+	out (37h),a
+	dec a
+	out (0),a 
+	ld a,63
+	out (35h),a
+	ld a,196
+	out (32h),a
+	ex af,af'
+	ei
+	ret ;113
+stereo_3t_int_not_timer_3:
+	rlca ; timer 2
+	ld a,2
+	jr nc,stereo_3t_int_not_timer_2
+	out (34h),a
+	xor a
+	out (0),a
+	ex af,af'
+	ei
+	ret ;93
+stereo_3t_int_not_timer_2:
+	out (31h),a
+	dec a
+	out (0),a
+	ex af,af'
+	ei
+	ret;98
+;361 per
+;with 29khz (512 t-states) feels like 4.42 MHz
+;with 25khz (600 t-states) feels like 5.96 MHz
+;with 23khz (652 t-states) feels like 6.69 MHz
+
+
+
+
+
+
+	
+;now 1 bit dither method? (8 bit audio but dithered down to 1 bit per channel)
+
+;def rand16():
+;    v = [0,0]
+;    while 1:
+;        v[1] = (rrca8((v[0]^0xff)-1)+v[1])&0xff
+;        v[0] = ((v[1]-v[0])^162)&0xff
+;        yield v[1]
+
+	
+
+;todo: replace constant mults with luts
+interrupt_dither:
+	ex af,af'
+	ld a,3 ;keep it looping
+	out (37h),a
+	exx
+	;calc violet noise now
+	;alloc: v = [b,c]
+	ld a,b
+	cpl
+	dec a
+	rrca
+	add c
+	ld c,a
+	sub b
+	xor 162
+	ld b,a
+	rra
+	ld d,a
+	ld a,c
+	srl a
+	sub d
+	;a has dither now
+	rra ;dither over 2
+	push af
+	add l ;add error prop
+int_dith_lval:
+	ld e,127
+	cp e 
+	ld a,e
+	ld d,0
+	jr nc,$+2+1+1
+	 inc d
+	 cpl 
+    ld l,a
+	sra l
+	sra l
+	sra l
+	sra l
+	pop af
+    add h
+int_dith_rval:
+    ld e,127
+	sla d
+    cp e 
+    ld a,e
+    jr nc,$+2+1+1
+     inc d
+     cpl
+    ld h,a
+    sra	h
+    sra	h
+    sra	h
+    sra	h
+	ld a,d
+	out (0),a
+	exx
+	ex af,af'
+	ei
+	ret
+	
+
+	
+
+	
+	
+
+
+
+
+
+
+
+
+
+; need differential delay from 1 to 29 (0-31)
+
+#macro delay_a
+	rra
+	jr c,$+3
+	 nop
+	;; 15,16
+	rrca
+	jr nc,$+4
+	 and 0x07
+	;; 16,18  - 31,34
+	cpl
+	and 0x07
+	ld ($+3+1),a
+	jr $+2
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	;; 36,64  - 67,98 
+#endmacro
+#macro delay_a
+	;; faster version, ASSERT a is 5 bits at most
+	or a						;zero carry 
+	
+	rra
+	jr c,$+3 
+	 nop
+	;; 15,16
+	rrca
+	jr nc,$+4
+	 and 0x07
+	;; 16,18  - 31,34
+	cpl
+	ld ($+3+1),a
+	jr $+2
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	;; 29,57  - 60,91
+#endmacro
+#macro delay_not_a
+	rra
+	jr nc,$+3
+	 nop
+	;; 15,16
+	rrca
+	jr c,$+4
+	 and 0x07
+	;; 16,18  - 31,34
+	and 0x07
+	ld ($+3+1),a
+	jr $+2
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	;; 32,60  - 63,94
+#endmacro
+
+;maybe have a global volume adjust (from 11 to 32?)
+; probably not
+
+
+
+
+
+;;; ok... delay(a) is a+64ish t-states so 96ish overhead
+;;;  freqmax is then 16.7k for stereo, ~33k for mono
+;;;  looks like maybe we can do 8 bit mono (with 1 bit balance)
+;;;  and 4,4 bit stereo
+;;;  maybe even 6,2 (common,diff) stereo
+;;;    i1 set 3, i2 set 1 or 2 then 0 (lut of interrupts for the 4 values)
+
+; if I just ignore synchronization (allow program noise to seep in),
+;  I'll be able to do 8,8 stereo (with a noise floor of up to 23/256 = -20.9db)
+;   with a 256,256 timer thingy with 4 interrupts
+;
+;   another approach is to put out a square wave >20khz and do phase or freq modulation
+;    (and have the wave have a fixed duty time) instead of pulse width modulation.
+;        - not sure if it works nice for stereo 
+;    this could be acheived by running two timers and having the interrupt set the output based on what
+;     timer fired it, then just writing to the counters at the right time in the main program
+; 
+; an option for _fast_ 5 level (13.9db) stereo is a interrupt that just outputs and rotate2s a repeatedly
+;  the level is set by the number of ones in a'
+	
+
+;interrupt:
+;	ex af,af'
+;    jp nz,off_ring_then_tip
+;
+;   
+;	
+;off_tip_then_ring:
+;	out (0),a  ;11
+;    dec a      ;4
+;    ex af,af'  ;4
+;    ei         ;4
+;   	ret        ;10 - 33

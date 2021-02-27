@@ -1,0 +1,23 @@
+Texmaker Documentation
+
+USAGE:
+
+texmaker reads a 24-bit color PPM file from stdin
+and writes a plain text include file to stdout.
+
+texmaker can also produce transparency information if enabled by ``-t''
+
+Example usage:
+
+texmaker <walltextures.ppm >walltextures.inc
+
+texmaker -t <spritetexture.ppm >spritetexture.inc
+
+INPUT FORMAT:
+
+Plain old binary PPM format.
+If you need a program that can save PPMs, try the GIMP.
+
+OUTPUT FORMAT:
+
+Coming "soon", read the code for now.

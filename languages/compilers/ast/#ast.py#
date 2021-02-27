@@ -1,0 +1,20 @@
+import code
+import state
+import types
+
+class ast:
+    def __init__(self,*childs):
+        self.children = childs
+    def get_code(self,state):
+        r = code([])
+        for c in self.children:
+            tmpCode,state = c.get_code(state)
+            r += tmpCode
+        return r,state
+
+class const(ast):
+    def __init__(self,val):
+        self.val = val
+    def get_code(self,state):
+        return s,state
+    

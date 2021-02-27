@@ -1,0 +1,69 @@
+« TRN
+DUP SIZE LIST-> DROP ;drop the trailing 2
+;now loop
+;each step should make the row have only 1 '1' in it and should place it at the end of iteration
+-> h w
+« 1 h 1 - FOR r
+
+{r 1}
+ 1 w FOR c
+  DUP ROT DUP
+  1 DISP
+  ROT
+  IF GETI 0 ≠ THEN
+   ;first normalize
+   DROP
+   SWAP
+   
+   GETI
+   SWAP
+   DROP
+
+   INV
+
+   w IDN
+   {c c}
+   ROT
+   PUT
+   *
+   ;now finish the loop constructing another matrix to do the add things with
+   IF c w < THEN   
+    w IDN
+    1 c + w FOR n
+     OVER
+     {r n}
+     GET
+     0 SWAP -
+     {n r} SWAP
+     PUT
+    NEXT
+    *
+    ;now just shift it in to the last place
+    w IDN
+    c w 1 - FOR n
+     {n n}
+     0 PUT
+     n 1 + n 2 ->LIST
+     1 PUT
+    NEXT
+    {w w} 0 PUT
+    {c w} 1 PUT
+    *
+   END
+   1
+   w
+  ELSE
+   ROT
+   DROP
+   1
+  END
+ STEP
+DROP
+
+
+
+NEXT
+
+»
+TRN
+»

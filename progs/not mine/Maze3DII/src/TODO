@@ -1,0 +1,27 @@
+Things to improve:
+
+1. The Makefile
+
+Currently, the makefile is unclear to read and difficult to maintain.
+It may also have a few bugs.  Makefile wizards are welcome to clean it up.
+
+2. Labels, Comments, and Documentation
+
+Labels should be rewritten in a consistent style,
+e.g. UpperCaseWords or underscore_separation.
+In light of TASM's 16-character limit on macro arguments,
+UpperCaseWords seems the most sensible.
+
+Prefixes should be consistently used to identify what
+part of the program a label applies to.
+
+Documentation was written at the last minute and could use everything
+from a spelling/grammar check to a complete rewrite.
+
+3. Drawing pixels
+
+Currently, the 3D Engine's main bottleneck is its ability
+to draw columns of walls.  A faster method of resizing and
+drawing these columns would lead to substantial speed increases.
+
+

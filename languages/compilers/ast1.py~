@@ -1,0 +1,27 @@
+class code:
+    def __init__(self,lines):
+        self.content = lines
+    def __init__(self,asmCode):
+        lines = asmCode.split('\n')
+        while len(asmCode) > 0:
+            
+        
+    def get(self,comment):
+        r = ''
+        for i in range(len(self.content)):
+            if comment and self.content[i][1]:
+                r += self.content[i][0]
+            elif not self.content[i][1]:
+                r += self.content[i][0]
+        return r
+    
+            
+
+
+
+class ast:
+    def __init__(self,*childs):
+        self.children = childs
+
+    def get_code(self,state):
+        

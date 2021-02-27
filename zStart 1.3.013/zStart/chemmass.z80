@@ -1,0 +1,658 @@
+
+formula		equ	saveSScreen+768-1
+bufferLoc	equ	formula-2
+noAdd		equ	bufferLoc-1
+
+
+
+
+chemHook:
+	add	a, e
+	or	a
+	jr	nz, retz
+
+	ld	a, (cxCurApp)
+	cp	$40
+	jr	nz, retz
+
+	xor	a
+	ld	(noAdd), a
+	ld	(formula), a
+	ld	de, saveSScreen
+	ld	(bufferLoc), de
+	ld	hl, (basic_start)
+preParseLoop:
+	ex	de, hl
+	ld	hl, (bufferLoc)
+	ld	bc, saveSScreen+760
+	sbc	hl, bc
+	jp	nc, errorMemory
+
+	ex	de, hl
+	ld	de, (basic_end)
+	inc	de
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	c, notDonezz
+
+	ld	de, saveSScreen
+	ld	(basic_start), de
+	ld	(nextParseByte), de
+
+	ld	de, (bufferLoc)
+	dec	de
+	ld	(basic_end), de
+
+retZ:
+	cp	a
+	ret
+
+notDonezz:
+	ld	a, (hl)
+
+	cp	$AF	;  ?
+	jr	nz, notQuestion
+	ld	a, 1
+	ld	(noAdd), a
+	ld	a, (formula)
+	xor	1
+	ld	(formula), a
+	ld	a, $10
+	jr	nz, justStarting
+	ld	a, $11
+justStarting:
+	ld	de, (bufferLoc)
+	ld	(de), a
+	inc	de
+	ld	(bufferLoc), de
+	inc	hl
+	jr	preParseLoop
+
+
+notQuestion:
+	cp	$BB
+	jr	nz, notBBz
+bbNext:
+	ld	de, (bufferLoc)
+	ldi
+	ld	(bufferLoc), de
+nextzz:
+	ld	de, (bufferLoc)
+	cp	$10-'A'
+	ld	a, 0
+	jr	nz, notParenth
+	ld	a, (formula)
+	or	a
+	jr	z, notParenth
+	ld	a, (noAdd)
+	or	a
+	jr	nz, donsAdd
+	ld	a, $70	;  +
+	ld	(de), a
+	inc	de
+donsAdd:
+	ld	a, 1
+notParenth:
+	ld	(noAdd), a
+
+	ldi
+	ld	(bufferLoc), de
+
+	jp	preParseLoop
+
+notBBz:
+	ld	a, (formula)
+	or	a
+	jr	z, nextzz
+	ld	a, (hl)
+	sub	'A'
+	jr	c, nextzz
+	cp	'Z'-'A'+1
+	jr	nc, nextzz
+
+	push	hl
+
+	push	af
+
+	inc	hl
+	ld	a, (hl)
+
+	cp	$BB
+	jr	nz, _1Letter
+
+	pop	af
+	pop	bc	;old hl
+	push	af
+
+	inc	hl
+
+	ld	a, (hl)
+	cp	tLa
+	jr	c, notLittle
+	cp	tLz+1
+	jr	c, itsLittle
+notLittle:
+	pop	af
+	dec	hl
+	jr	bbNext
+
+itsLittle:
+	cp	tLl
+	jr	c, noTIGarbage
+	dec	a
+noTIGarbage:
+
+	sub	tLa-'a'	;token to ascii
+	ld	c, a
+	pop	af
+	add	a, 'A'
+	ld	b, a
+
+
+	push	hl
+	ld	hl, _2letterTable
+	ld	d, 0
+findLoopz:
+	ld	a, (hl)
+	cp	b
+	jr	z, firstMatch
+	inc	hl
+	ld	e, (hl)
+	add	hl, de
+	cp	'Z'
+	jr	z, invalid
+	jr	findLoopz
+	
+firstMatch:
+	inc	hl
+	inc	hl
+	ld	e, 3
+matchLoop:
+	ld	a, (hl)
+	cp	c
+	jr	z, totalMatch
+	add	hl, de
+
+	cp	'a'
+	jr	c, invalid
+	jr	matchLoop
+
+totalMatch:
+	inc	hl
+	jr	finishOff
+
+
+invalid:
+	pop	hl
+	dec	hl
+	dec	hl
+	jp	errorUndefined
+
+
+
+
+
+
+_1letter:
+	pop	af
+	
+
+	ld	l, a
+	ld	h, 0
+	add	hl, hl
+	ld	de, _1LetterTable
+	add	hl, de
+	
+
+finishOff:
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+
+	ld	a, d
+	or	e
+	jr	z, notIncluded
+
+	ex	de, hl
+	push	hl
+
+	bcall(_setxxxxop2)
+
+	ld	c, 1	;bytes before decimal
+	pop	hl
+	ld	de, 1000
+	sbc	hl, de
+	add	hl, de
+	jr	c, bytesFound
+	inc	c
+	ld	de, 10000
+	sbc	hl, de
+	add	hl, de
+	jr	c, bytesFound
+	inc	c
+bytesFound:
+
+	ld	de, (bufferLoc)
+
+	ld	a, (formula)
+	or	a
+	jr	z, notFormul
+	ld	a, (noAdd)
+	or	a
+	jr	nz, notFormul
+	ld	a, $70	;  +
+	ld	(de), a
+	inc	de
+notFormul:
+
+	ld	a, $10	;  (
+	ld	(de), a
+
+	inc	de
+
+	ld	hl, op2+2
+
+	call	rldThing
+
+	dec	c
+	jr	z, odd
+
+	call	rldThing
+
+	inc	hl
+	
+	dec	c
+	jr	z, even
+
+	call	rldThing
+
+odd:
+	ld	a, $3A
+	ld	(de), a
+	inc	de
+	
+	call	rldThing
+
+	inc	hl
+
+	call	rldThing
+
+	jr	finished
+
+even:
+	ld	a, $3A
+	ld	(de), a
+	inc	de
+	call	rldThing
+
+	call	rldThing
+finished:
+
+	ld	a, $11	;  )
+	ld	(de), a
+	inc	de
+
+	ld	(bufferLoc), de
+
+	xor	a
+	ld	(noAdd), a
+	
+	pop	hl
+	inc	hl
+
+	jp	preParseLoop
+	
+
+notIncluded:
+	pop	hl
+	jp	errorUndefined
+
+
+
+
+rldThing:
+	ld	a, $30
+	rld
+	ld	(de), a
+	inc	de
+	ret
+
+
+
+
+
+
+
+
+
+_1letterTable:
+	.dw	0
+	.dw	1081
+	.dw	1201
+	.dw	0
+	.dw	0
+	.dw	1900
+	.dw	0
+	.dw	101
+	.dw	12691
+	.dw	0
+	.dw	3910
+	.dw	0
+	.dw	0
+	.dw	1401
+	.dw	1600
+	.dw	3097
+	.dw	0
+	.dw	0
+	.dw	3206
+	.dw	0
+	.dw	23803
+	.dw	5094
+	.dw	18385
+	.dw	0
+	.dw	8891
+	.dw	0
+
+
+_2letterTable:
+	.db	'A'
+	.db	8*3+1
+	.db	'c'
+	.dw	22700
+	.db	'g'
+	.dw	10787
+	.db	'l'
+	.dw	2698
+	.db	'm'
+	.dw	24300
+	.db	'r'
+	.dw	3985
+	.db	's'
+	.dw	7492
+	.db	't'
+	.dw	21000
+	.db	'u'
+	.dw	19697
+
+	.db	'B'
+	.db	6*3+1
+	.db	'a'
+	.dw	13733
+	.db	'e'
+	.dw	901
+	.db	'h'
+	.dw	26200
+	.db	'i'
+	.dw	20898
+	.db	'k'
+	.dw	24700
+	.db	'r'
+	.dw	7990
+
+	.db	'C'
+	.db	10*3+1
+	.db	'a'
+	.dw	4008
+	.db	'd'
+	.dw	11241
+	.db	'e'
+	.dw	14012
+	.db	'f'
+	.dw	25100
+	.db	'l'
+	.dw	3545
+	.db	'm'
+	.dw	24700
+	.db	'o'
+	.dw	5893
+	.db	'r'
+	.dw	5200
+	.db	's'
+	.dw	13290
+	.db	'u'
+	.dw	6355
+
+	.db	'D'
+	.db	2*3+1
+	.db	'b'
+	.dw	26200
+	.db	'y'
+	.dw	16250
+
+	.db	'E'
+	.db	3*3+1
+	.db	'r'
+	.dw	16726
+	.db	's'
+	.dw	25200
+	.db	'u'
+	.dw	15196
+
+	.db	'F'
+	.db	3*3+1
+	.db	'e'
+	.dw	5585
+	.db	'm'
+	.dw	25700
+	.db	'r'
+	.dw	22300
+
+	.db	'G'
+	.db	3*3+1
+	.db	'a'
+	.dw	6972
+	.db	'd'
+	.dw	15725
+	.db	'e'
+	.dw	7261
+
+	.db	'H'
+	.db	5*3+1
+	.db	'e'
+	.dw	400
+	.db	'f'
+	.dw	17849
+	.db	'g'
+	.dw	20059
+	.db	'o'
+	.dw	16493
+	.db	's'
+	.dw	26500
+
+	.db	'I'
+	.db	2*3+1
+	.db	'n'
+	.dw	11482
+	.db	'r'
+	.dw	19222
+
+	.db	'K'
+	.db	1*3+1
+	.db	'r'
+	.dw	8380
+
+	.db	'L'
+	.db	4*3+1
+	.db	'a'
+	.dw	13891
+	.db	'i'
+	.dw	694
+	.db	'r'
+	.dw	26000
+	.db	'u'
+	.dw	17497
+
+	.db	'M'
+	.db	5*3+1
+	.db	'd'
+	.dw	25800
+	.db	'g'
+	.dw	2430
+	.db	'n'
+	.dw	5494
+	.db	'o'
+	.dw	9594
+	.db	't'
+	.dw	26600
+
+	.db	'N'
+	.db	7*3+1
+	.db	'a'
+	.dw	2299
+	.db	'b'
+	.dw	9291
+	.db	'd'
+	.dw	14424
+	.db	'e'
+	.dw	2018
+	.db	'i'
+	.dw	5869
+	.db	'o'
+	.dw	25900
+	.db	'p'
+	.dw	23700
+
+	.db	'O'
+	.db	1*3+1
+	.db	's'
+	.dw	19020
+
+	.db	'P'
+	.db	8*3+1
+	.db	'a'
+	.dw	23100
+	.db	'b'
+	.dw	20720
+	.db	'd'
+	.dw	10642
+	.db	'm'
+	.dw	14500
+	.db	'o'
+	.dw	20900
+	.db	'r'
+	.dw	14091
+	.db	't'
+	.dw	19508
+	.db	'u'
+	.dw	24400
+
+	.db	'R'
+	.db	7*3+1
+	.db	'a'
+	.dw	22600
+	.db	'b'
+	.dw	8547
+	.db	'e'
+	.dw	18621
+	.db	'f'
+	.dw	26100
+	.db	'h'
+	.dw	10291
+	.db	'n'
+	.dw	22200
+	.db	'u'
+	.dw	10107
+
+	.db	'S'
+	.db	8*3+1
+	.db	'b'
+	.dw	12175
+	.db	'c'
+	.dw	4496
+	.db	'e'
+	.dw	7896
+	.db	'g'
+	.dw	26300
+	.db	'i'
+	.dw	2809
+	.db	'm'
+	.dw	15036
+	.db	'n'
+	.dw	11871
+	.db	'r'
+	.dw	8762
+
+	.db	'T'
+	.db	8*3+1
+	.db	'a'
+	.dw	18095
+	.db	'b'
+	.dw	15892
+	.db	'c'
+	.dw	9800
+	.db	'e'
+	.dw	12760
+	.db	'h'
+	.dw	23204
+	.db	'i'
+	.dw	4788
+	.db	'l'
+	.dw	20438
+	.db	'm'
+	.dw	16893
+
+	.db	'X'
+	.db	1*3+1
+	.db	'e'
+	.dw	13129
+
+	.db	'Y'
+	.db	1*3+1
+	.db	'b'
+	.dw	17304
+
+	.db	'Z'
+	.db	2*3+1
+	.db	'n'
+	.dw	6539
+	.db	'r'
+	.dw	9122
+
+_2LetterEnd:
+
+
+
+
+
+
+
+
+
+errorUndefined:
+	ld	(basic_pc), hl
+	ld	a, $80 | E_Undefined
+	bjump(_jError)
+
+
+
+
+
+
+
+
+
+
+
+
+.echo $-chemhook
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.end
+.end

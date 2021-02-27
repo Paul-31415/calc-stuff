@@ -1,0 +1,51 @@
+
+  Here are the prototypes for a pixel manipulation package based on the 
+flag manipulation routines provided with the HP28S.  I would like to see these
+implemented as machine language subroutines at some point.  These map the 
+display like so:
+
+	0			       136	
+      0-+-------------------------------+
+	|				|
+	|				|
+	|				|
+     31-+-------------------------------+
+
+
+X Y -> SP 	- Set Pixel     - KEY LINE is OR
+X Y -> CP	- Clear Pixel	- change KEY LINE to NOT AND
+X Y -> TP	- Toggle Pixel  - change KEY LINE to XOR
+X Y -> PS?	- is Pixel Set?
+X Y -> PC?	- is Pixel Clear?
+
+(!NOTE peek and poke are Alonzo Gariepy's machine language versions !NOTE)
+(      This program requires 32 STWS to run properly.                    )
+(      Checksums use ACHK						 )
+	
+ 
+SP [6F5E]
+<< SWAP					; get X to find proper column	
+   #FF840h				; start of first part of memory map
+   IF OVER 68 >= THEN 416 + END		; if in 2nd part, adjust start adress
+   SWAP 8 * + 				; each column is 8 nybbles
+   SWAP OVER PEEK			; get current column bitmap
+   SWAP 2 SWAP ^ R->B			; generate mask
+   OR					; KEY LINE - function - sets pixel
+   SWAP	POKE				; put revised bitmap back in display
+>>
+
+PS? [515B]
+<< SWAP
+   #FF840h
+   IF OVER 68 >= THEN 416 + END
+   SWAP 8 * +
+   PEEK					; get current bitmap
+   SWAP 2 SWAP ^ R->B			; generate mask
+   AND					; isolate interesting bit
+   DUP / B->R				; convert to std hp true/false (1/0)
+>>
+
+PC? [FA1A]
+<< PS? NOT >>
+
+  

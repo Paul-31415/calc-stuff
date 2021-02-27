@@ -1,0 +1,531 @@
+
+Hi!
+
+In this game you stand face to face to
+horrible monsters (called BLOBS). 
+You are supposed to shoot as many BLOBS
+as possible (with your bazooka)
+before you end up between the bloody jaws of
+a mini-BLOB.
+This is how to play the game:
+When you run the main program BLOB
+you'll see a square in which you and
+the BLOB get placed. The biggest of
+the figures is the BLOB, the small
+one is you.
+Now you can move or fire 
+by pressing:
+
+NEXT	:move right
+USER	:  "  down
+SOLV 	:  "  left
+LEFT	:  "  up
+SHIFT 	:fire left
+DEL	:  "  up
+TRIG	:  "  right
+CURSOR	:  "  down
+
+You'll soon realise that something
+else is happening between the irrescapable
+walls - a mean monsterbaby has been born.
+The longer you play the game the longer will
+the babies be alive chasing you. Note that
+you can't shoot any babies, only their parents.
+In the end you can't escape anymore and the baby will
+simply eat you up (you'll even hear it burp).	
+Now you're dead meat.
+To return from your results to the stack
+press ENTER.
+
+Before playing the game the first time you
+must run the program DRW in order to create the
+playfield.
+
+Order your directory so that you'll have the 
+BLOB - program to the left.
+I hope you'll find the game worth being tested on your HP28S.
+
+                            Rickard Petersson M89-LTH.
+                            (Machine-engineers have more fun).
+
+I've used this program to check the sums
+(The things between the ""):
+
+        CHECK  "1142"
+
+<< RCLF STD HEX 64
+STWS 48 CF SWAP RCL
+->STR 16 STWS DUP
+# 0h 1 ROT SIZE
+FOR j OVER j j SUB
+NUM R->B XOR RL
+NEXT ->STR 3 OVER
+SIZE 1 - SUB ROT
+STOF SWAP DROP
+>>
+
+Here are the programs:
+    
+	BLOB  "5F5D"
+  	
+<< CLLCD FAST
+SQUARE ->LCD 0 
+'AGE' STO 0 'NBABY' STO
+PMONST P LIST-> 7
+DROPN 'Y' STO 'X' STO
+.01 'HLTH' STO 0 'PTS'
+STO MAKEKOORD DUP
+'G' STO SWAP DUP
+'H' STO R->C PIXEL
+WHILE 1 REPEAT
+  DO  .005 
+  'HLTH' STO+ BIRTH
+  BMOV BMOV
+  UNTIL KEY END
+  "COM" + STR-> CLEAR 
+END >>
+
+
+	BCHK  "7C97"
+
+<< G H R->C -> pl
+  <<
+    IF X Y R->C pl ==
+    THEN 20 1 BEEP
+    CLLCD PTMAX
+    "GAME OVER" 1 DISP
+    "YOU SHOT " PTS
+    ->STR + " BLOBS" + 2
+    DISP "BEST IS "
+    MAXPT ->STR + 3 DISP
+    "           PRESS ENTER"
+    4 DISP  ENTER?
+CLMF { T S
+HLTH P H G Q PTS HIT
+X Y NBABY AGE }
+PURGE CLEAR ABORT
+  END
+  >>
+>>
+
+	BMOV  "8219"
+
+<< IF NBABY 1 == AGE
+50 < AND RAND HLTH < 
+AND
+THEN G X - DUP ABS
+.0001 + / H Y - DUP
+ABS .0001 + / X 3
+ROLLD Y 3 ROLLD BLMV
+100 .01 BEEP .5 + IP
+`Y` STO .5 + IP `X`
+STO BCHK
+  ELSE
+  IF AGE 50 >=
+  THEN 0 `AGE` STO
+X Y R->C 500 .01 BEEP
+UNPIXEL 0 `NBABY` STO
+    END
+   END 1 `AGE` 
+   STO+
+>>
+
+	PTMAX  "EE6F"
+
+<< IF PTS MAXPT >=
+THEN 1 4
+START 2000 .1
+BEEP
+NEXT PTS `MAXPT`
+STO
+END
+>>
+
+	BIRTH  "83C0"
+
+<< IF RAND HLTH <
+NBABY 0 == AND 
+THEN P LIST-> 7
+DROPN `Y` STO `X`
+STO 0 `AGE` STO 1
+`NBABY` STO 100 .1
+BEEP 
+ELSE
+IF NBABY 1 ==
+AGE 5 <= AND
+THEN BUM
+END
+END
+>>
+
+	TCHECK  "C00A"
+
+<< S T R->C -> pl
+<< P LIST-> 1 SWAP 2
+/
+START 
+IF R->C pl ==
+THEN S T EXPL
+1 `HIT` STO REM
+PMONST 1 `PTS`
+STO+
+  END
+ NEXT
+ >>
+>>
+            
+	DRW  "D2FD"
+
+<< CLLCD 0 31
+FOR X 52 X R->C
+PIXEL
+NEXT 52 84
+FOR X X 31 R->C
+PIXEL
+NEXT 31 0
+FOR X 84 X R->C
+PIXEL -1
+STEP 84 52
+FOR X X 0 R->C
+PIXEL -1
+STEP LCD-> 'SQUARE'
+STO
+>>
+
+
+	SHOOT  "37B1"
+
+<< -> X Y
+<< 0 `HIT` STO 1000
+.01 BEEP G X 2 / +
+`S` STO H Y 2 / +
+`T` STO
+WHILE HIT 0 == 
+REPEAT S T X Y
+BLMV `T` STO `S` STO
+TCHECK
+END S T R->C
+UNPIXEL
+>>
+>>
+
+         EXPL  "8EC3"
+
+<< -> X Y
+<< X 1 + Y 5 + R->C
+X 3 + Y 2 - R->C X 1
++ Y 3 + R->C X 4 - Y
+1 - R->C X 3 - Y 3 +
+R->C 30 .1 BEEP 5 0 
+FOR T DUP PIXEL
+T ROLLD T 10 * .01
+BEEP -1 
+STEP 1 5
+START UNPIXEL
+NEXT
+>>
+>>
+
+
+        ENTER?  "1477"
+
+<< DO
+    DO
+    UNTIL KEY
+    END
+   UNTIL "ENTER" SAME
+   END
+>>
+    
+	PMONST  "F4B9"
+
+<< MAKEKOORD -> Y X
+<< X Y X 1 + Y X Y
+1 + X 1 + Y 1 + 8
+->LIST `P` STO BUM
+>>
+>>
+
+	REM  "63FA"
+
+<< P LIST-> 1 SWAP 2 /
+START R->C UNPIXEL
+NEXT
+>>
+
+	BUM  "F9B2"
+
+<< P LIST-> 1 SWAP 2 /
+START R->C PIXEL
+NEXT
+>>
+
+	MAKEKOORD  "24E2"
+
+<< RAND 29 * IP 1 +
+RAND 30 * 53 + IP
+>>
+
+	NEXTCOM  "31BE"
+
+<< G H 2 0 BLMV `H`
+STO `G` STO
+>>
+
+	SOLVCOM  "9809"
+
+<< G H -2 0 BLMV `H`  
+STO `G` STO
+>>
+
+	USERCOM  "2009"
+
+<< G H 0 -2 BLMV `H`
+STO `G` STO
+>>
+
+	LEFTCOM  "3BBE"
+
+<< G H 0 2 BLMV `H`
+STO `G` STO
+>>
+
+	CURSORCOM  "451C"
+
+<<  0 -2 SHOOT
+>>
+
+	TRIGCOM  "252F"
+
+<< 2 0 SHOOT
+>>
+
+	DELCOM  "312F"
+
+<< 0 2 SHOOT
+>>
+
+	SHIFTCOM  "351D"
+
+<< -2 0 SHOOT
+>>
+
+	BLMV  "AB88"
+
+<<FAST -> a b x y
+<< a b R->C UNPIXEL a
+x + b y + 
+IF OVER 68 - ABS
+16 < OVER 15.5 - ABS
+15.5 < AND
+THEN R->C DUP
+ELSE 1 'HIT' STO
+a b R->C DUP
+END PIXEL C->R
+>>
+>>	
+         PPAR
+
+{ (0,0) (136,31)
+constant 1 (0,0) }
+
+	MAXPT
+
+  0
+
+	UNPIXEL
+
+This is Toonen's  programs which lead to the UNPIXEL - command.
+This is a copy of the file.  
+
+Subject: SYS, MAKE, ->PROG, PROG->, UNPIXEL programs for the HP28S
+
+|							     |
+| Forwarded for Eric Toonen, who doesn't have USENET access. |
+|							     |
+
+The SYSEVAL command does exactly what its name suggests:
+It EVALuates a SYStem object.
+
+Instead of writing programs like
+	<< #A SYSEVAL #A SYSEVAL >>
+You should be able to write
+	<< System Object System Object >>
+To do the same job.
+
+Here are a small set of utilities and an example to generate those
+System Objects. These will work on VERSION 2BB ONLY!
+If you are not very interested in using SYSEVALS (and therefore SYS)
+a lot, DO NOT type them in, because they can be extremely dangerous!
+
+Please type them in exactly as they are written, because a typo
+can cause a Memory Lost !!
+
+First, save anything on stack you want to keep,
+and type
+----------------------------------------
+					|
+CLEAR HEX 64 STWS			| First, set correct modes
+					|
+<< #71BD SYSEVAL			| Make a temporary SYSEVAL-version
+   #3E9D7 SYSEVAL			|  of SYS.
+>>					|
+'SYS' STO				| chk[A4C8]
+					|
+<< #200E SYSEVAL			| Make a temporary SYSEVAL-version
+   #3EEB SYSEVAL			|  of MAKE.
+>>					|
+'MAKE' STO				| chk[1525]
+					| ** BEWARE THAT THE STACK IS EMPTY
+					|    AT THIS POINT !
+					|
+#71BD SYS				| Use SYS to generate two System 
+#3E9D7 SYS				|  Objects on the stack
+MAKE					| Use MAKE to generate them into
+'SYS' STO				|  a program, and we have the new SYS!
+					|
+					| ** STACK MUST BE EMPTY NOW!
+					|
+#200E SYS				| Again, use SYS to get the System
+#3EEB SYS				|  Objects
+MAKE					| And collect them into a program
+'MAKE' STO				| Called MAKE.
+					| Stack must be empty
+#C53B SYS				| Generate ->PROG program
+#3EEB SYS				|
+MAKE					|
+'->PROG' STO				|
+					| Stack must be empty
+#78A6 SYS				| Generate PROG-> program
+'PROG->' STO				| Because there is only one object,
+					| there is no need to MAKE
+----------------------------------------
+Sorry, posting the checksums of the system-object programs is nonsense,
+the checksum program doesn't see differences between System Objects. (Bob?)
+
+Now, you will have four DANGEROUS programs. These can be very handy,
+but can do enormous damage if you use them wrong.
+
+What they do:
+First, let me explain: Internally, lists and programs are stored in
+almost the same way (a list-structure). With these programs, you
+can do with programs what LIST-> and ->LIST do with lists,
+and thus can put any sequence of objects in a program.
+
+Why, you might ask, do I need this?
+Well, System Objects cannot be typed in. Actually, System Object
+appears on the screen, as soon as the display routines don't know
+how to display it in another way, therefore, in-line machine code,
+and actual system-objects are displayed as "System Object".
+
+To make quick-n-dirty programs (that is, use Syseval addresses
+that don't check arguments, instead of the user-functions),
+you just generate their objects by using SYS, and collect them
+into a program with MAKE or ->PROG. Because you cannot edit those
+programs, they can be put on stack with PROG->.
+
+PLEASE NOTE:
+Sys, ->Prog and Prog-> DO NOT CHECK STACK-DEPTH and ARGUMENT TYPES.
+
+Usage:
+
+SYS (Generate system-objects)
+	!!! Needs a binary integer in level 1. !!!
+	Returns a System-Object in level 1.
+
+	Example: 
+		#A SYS
+	 Returns a System Object, which can be EVAL'd. Try this!
+
+MAKE (Generate program from stack)
+	Takes total stack, and puts it into a program.
+	If the stack is empty, the program will be empty.
+	If there are no << and >> on stack, the program will
+	 not have them either.
+
+	Example1:
+		CLEAR MAKE 5 SWAP
+	 Generates an empty program, which is invisible for the user.
+	Example2:
+		CLEAR 2 5 { + } 1 GET MAKE
+	 Generates the program 2 5 + (without << and >>)
+
+->PROG (to program)
+	!! Takes a real <n> from level1, and stack depth should be <n>+1 !!
+	Returns a program with <n> objects.
+
+	Example:
+		2 5 { + } 1 GET 3 ->PROG
+	 Generates the same program as in Example2 of MAKE.
+
+PROG-> (program out)
+	!! Takes a program in level1 !!
+	Returns all objects separate to stack, and then the number of
+	 objects.
+
+	Example1:
+		<< 2 5 + >> PROG->
+	Example2:
+		<< 2 5 + >> PROG-> ->PROG
+
+
+Example using SYS and MAKE, generating an UNPIXEL function,
+which is exactly compatible with PIXEL.
+
+'UNPIXEL'
+Type in the following, and check the checksum!
+----------------------------------------------------------------
+
+<< CLEAR { C->R } 1 GET
+#2484B SYS #3D5F6 SYS #020E5 SYS #24927 SYS
+#3D7F8 SYS #11D1D SYS 31
+#020E5 SYS #11D82 SYS #020E5 SYS #3D815 SYS
+#11D1D SYS 136
+#020E5 SYS #11D82 SYS #3D6B8 SYS #3D682 SYS
+#11D1D SYS #11D48 SYS #3D72C SYS #3D636 SYS
+#11D1D SYS #11D48 SYS 31
+#020E5 SYS #11D1D SYS #0206E SYS #11B17 SYS
+#020E5 SYS #11B17 SYS #06CB9 SYS #3D636 SYS
+#0C1DD SYS #0206E SYS #072E9 SYS #06E55 SYS
+#020E5 SYS #3ECC2 SYS #06E55 SYS #06CB9 SYS
+#3D65C SYS #06CB9 SYS #18A85 SYS #3DC5F SYS
+#1ADF2 SYS #0211A SYS 
+MAKE 'UNPIXEL' STO >>
+'MUNPIXEL' STO
+
+----------------------------------------------------------------
+The checksum of MUNPIXEL is [8237]
+
+(I have tried it again from this text, and am sure there are
+no typo's)
+
+-----------------------------------------------------------------------------
+           Eric Toonen
+
+Snailmail: Djept-Zuid 6	      | Hogeschool-Eindhoven: s89406143@hsepm1.hse.nl
+           5502 RP Veldhoven  | (Not an uucp-address)
+	   The Netherlands    | (Might work on SURFNET (?))
+-----------------------------------------------------------------------------
+
+
+	
+
+You also need a program that sets the highest speed
+on the calculator. Here is how to make it:
+Type in this program (make sure that you doesn't do anything
+wrong). This program will only work on version 2BB.
+
+        MFAST  "D000"
+
+<<
+# 1FFF00F1F0302331h
+# C8084612411310D5h
+# 3B82h SYSEVAL
+# 7195h SYSEVAL
+# 44A4h SYSEVAL
+>>
+
+When you run it a "System Object" turns up.
+Store this under the name FAST.
+Now the highest speed will be set whenever you
+run FAST.

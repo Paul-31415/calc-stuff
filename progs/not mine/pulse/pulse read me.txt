@@ -1,0 +1,67 @@
+PULSE DOCUMENTATION 
+==================== 
+
+Version 1.0 Released 11/17/03 
+Produced By: Outer Limit Software 
+Programmed By: Bryan Thomas 
+Webpage: www.outerlimit.tk 
+
+Contents 
+----------- 
+1. About Pulse
+2. Files Included in Zip 
+3. System Requirements 
+4. Installation 
+5. Instructions 
+6. Game Controls 
+7. Further Information 
+
+1. About Hangman X83
+--------------------- 
+Pulse is a TI-BASIC game created by Outer Limit Software for the TI-83 and TI-83 Plus graphing calculators. The features of Pulse include: Fast paced
+gameplay, and High score.
+
+2. Files Included in Zip 
+-------------------------- 
+pulse.zip 
+-Pulse.8xg the game (TI-83 Plus)
+-Pulse read me.txt Readme file 
+
+3. System Requirements 
+---------------------------- 
+The total size of the memory used is around 1000 bytes
+
+4. Installation 
+---------------- 
+1) Send Pulse.8xg to your calculator 
+2) Run the program entitled PULSE
+3) ***Reset high score***
+4) Start playing
+
+5. Instructions 
+----------------- 
+The object is to cancel out the incoming pulses with that pulses opposite.
+The more pulses you cancel out the closer you get to ita origin, thus getting harder and harder to play. When the explosion reaches you, you lose.
+
+6. Game Controls 
+-------------------- 
+Menu: 
+UP/DOWN Moves through the menu selections 
+ENTER Confirms the highlighted selection 
+
+In game: 
+F1-F5 - Change Pulses
+
+7. Further Information 
+-------------------------- 
+Outer Limit Software (OLS) is a group of programmers who program for the TI-83/+/SE calculators in the TI-BASIC language. OLS aim to continually provide high-quality TI-BASIC programs. OLS is an affiliate of United TI (unitedti.org). 
+
+If you have any suggestions, comments, or find any bugs in this game, you may contact Bryan Thomas at the following E-mail address: breemum@aol.com. If you are writing to report a bug, please be sure to state exactly what the problem is and describe exactly what you did before the problem occurred. If you don't do so, it will be very hard for to tell what is going wrong! 
+
+You can get the latest version of this game, as well as other programs of ours, from our web page – www.outerlimit.tk 
+
+Outer Limit Software would like to thank everyone who supports OLS. 
+
+========================== 
+Copyright 2003 Outer Limit Software 
+Read Me written by Bryan Thomas

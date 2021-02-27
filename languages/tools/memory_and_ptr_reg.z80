@@ -1,0 +1,178 @@
+;handles movement of memory
+
+;must have defined macros: getPtrRegistryStart(reg)
+;and getPtrRegistryEnd(reg)
+
+
+;ptr registry: have top bit clear to 
+
+mov_ptrs_ldir: ;converts ldir's args to mov_ptr's args
+	;inputs : hl - source
+    ;		: de - destination
+    ;		: bc - bytes
+    
+    ;delta = dest-source
+    ex de,hl
+    or a
+    sbc hl,de
+    ex de,hl
+    ;end = source + bytes
+    push hl
+    add hl,bc
+    ld b,h
+    ld c,l
+    pop hl
+	;start = source
+mov_ptrs:
+	;inputs : hl - start
+    ;		: de - delta
+    ;		: bc - end
+    ld (_mov_ptrs_loop_start+1),hl
+    ld (_mov_ptrs_loop_delta+1),de
+    ld (_mov_ptrs_loop_end+1),bc
+    ld (_mov_ptrs_loop_start2+1),hl
+    ld (_mov_ptrs_loop_delta2+1),de
+    ld (_mov_ptrs_loop_end2+1),bc
+    getPtrRegistryEnd(hl)
+    ld (_mov_ptrs_loop_endCond+1),hl
+    push hl
+    getPtrRegistryStart(hl)
+    pop bc
+    push hl
+    or a
+    sbc hl,bc ;if bc > hl, c set, aka if end > start
+    pop hl
+    ret nc ;if end ≤ start, no work needed
+    
+    
+_mov_ptrs_loop:
+	ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    bit 7,d
+    set 7,d
+    ld bc,1
+    jr nz,_mov_ptrs_not_run
+	 ld c,(hl)
+     inc hl
+     ;or b
+     ld b,(hl)
+     inc hl
+_mov_ptrs_not_run:
+	push hl
+	
+	;check if in adjust domain
+    
+_mov_ptrs_loop_start:
+	ld hl,0
+    
+    or a
+    sbc hl,de ;if de > hl, cont
+    ;c set
+    jr nc,_mov_ptrs_loop_Ind
+_mov_ptrs_loop_end:
+	ld hl,0
+    or a
+    sbc hl,de
+    ;if de <= hl, cont
+    ;c clear
+    jr c,_mov_ptrs_loop_Ind
+    
+
+_mov_ptrs_loop_delta:
+	ld hl,0 ;apply delta
+    add hl,de
+    ex de,hl
+
+
+	pop hl
+    push hl
+    dec hl
+	;mask rle back in
+    ld a, (hl)
+    xor d
+    and $80
+    xor d
+    ld (hl),d
+    ; put e back
+    dec hl
+    ld (hl),e
+
+
+	; protection for allowing pointer arrays of size 0
+	ld a,b
+    or c
+    jr z,_mov_ptrs_loop_Ind_exit
+_mov_ptrs_loop_Ind:
+	;de is thing
+    ex de,hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    push hl
+    
+    
+    
+	;check if in adjust domain
+    
+_mov_ptrs_loop_start2:
+	ld hl,0
+    
+    or a
+    sbc hl,de ;if de > hl, cont
+    ;c set
+    jr nc,_mov_ptrs_loop_cond
+_mov_ptrs_loop_end2:
+	ld hl,0
+    or a
+    sbc hl,de
+    ;if de <= hl, cont
+    ;c clear
+    jr c,_mov_ptrs_loop_cond
+    
+
+_mov_ptrs_loop_delta2:
+	ld hl,0 ;apply delta
+    add hl,de
+    
+	pop hl
+    push hl
+	dec hl
+    ld (hl),d
+    dec hl
+    ld (hl),e
+    
+    
+_mov_ptrs_loop_cond:
+    pop hl
+    dec bc
+    ld a,b
+    or c
+    jr nz,_mov_ptrs_loop_Ind
+_mov_ptrs_loop_Ind_exit:
+    
+    pop hl
+    
+_mov_ptrs_loop_endCond:
+	;;;;;;;;;;;
+    ex de,hl
+	getPtrRegistryEnd(hl)
+    scf
+    sbc hl,de ;end if hl <= de
+    ;keep going if hl > de -> nc
+    ex de,hl
+    jr nc,_mov_ptrs_loop
+    ret
+
+
+
+
+
+
+
+
+
+
+

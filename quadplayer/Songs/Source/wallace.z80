@@ -1,0 +1,82 @@
+.org $0000
+
+#include "notes.inc"
+
+title:	.db "Wallace & Gromit Theme",0
+artist:	.db "BBC",0
+album:	.db "Wallace & Gromit",0
+
+
+song:
+
+tempo = 80
+
+	playsection(startbit)
+	playsection(lastA)
+	playsection(startbit)
+	playsection(lastB)
+	endsong
+
+startbit:
+	note(rest,rest,	c3,f2,	eighth)
+	note(f2,a2,	c3,f2,	eighth)
+	note(rest,rest,	bb2,c2,	eighth)
+	note(f2,a2,	a2,c2,	eighth)
+	note(rest,rest,	c3,f2,	eighth)
+	note(f2,a2,	c3,f2,	eighth)
+	note(rest,rest,	bb2,c2,	eighth)
+	note(f2,a2,	a2,c2,	eighth)
+
+	note(rest,rest,	c3,c2,	eighth)
+	note(e2,g2,	g2,c2,	eighth)
+	note(rest,rest,	g2,g1,	eighth)
+	note(e2,g2,	g2,c2,	eighth)
+	note(rest,rest,	g2,e2,	eighth)
+	note(e2,g2,	g2,e2,	eighth)
+	note(rest,rest,	rest,c2,eighth)
+	note(e2,g2,	rest,c2,eighth)
+	endsection
+
+
+lastA:
+	note(d2,f2,	d3,bb1,	eighth)
+	note(d2,f2,	c3,bb1,	eighth)
+	note(d2,f2,	d3,bb1,	eighth)
+	note(e2,g2,	e3,c2,	eighth)
+	note(e2,g2,	e3,c2,	eighth)
+	note(e2,g2,	d3,c2,	eighth)
+	note(rest,rest,	c3,c2,eighth)
+	note(e2,g2,	bb2,c2,eighth)
+
+
+	note(rest,rest,	a2,f2,	eighth)
+	note(f2,a2,	a2,f2,	eighth)
+	note(rest,rest,	a2,e2,	eighth)
+	note(f2,a2,	a2,e2,	eighth)
+	note(rest,rest,	a2,d2,	eighth)
+	note(f2,a2,	a2,d2,	eighth)
+	note(rest,rest,	a2,c2,	eighth)
+	note(f2,a2,	a2,c2,	eighth)
+
+	endsection
+
+
+lastB:
+	note(d2,f2,	d3,bb2,	eighth)
+	note(d2,f2,	c3,bb2,	eighth)
+	note(rest,rest,	d3,bb2,	eighth)
+	note(e2,g2,	e3,c3,	eighth)
+	note(rest,rest,	e3,c3,	eighth)
+	note(e2,g2,	d3,c3,	eighth)
+	note(rest,rest,	d3,c3,	eighth)
+	note(e2,g2,	e3,c3,	eighth)
+
+	note(f2,a2,	f3,f3,	quarter)
+	note(rest,rest,	c3,c3,	eighth)
+	note(rest,rest,	d3,c3,	sixteenth)
+	note(rest,rest,	e3,c3,	sixteenth)
+	note(f2,a2,	f3,f3,	quarter)
+
+	endsection
+
+.end

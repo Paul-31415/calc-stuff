@@ -1,0 +1,380 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	saveSScreen $86EC
+.org        progStart-2
+.db         $BB,$6D
+
+
+
+getCVar: 
+	;inputs a   - expected flash page
+    ;		de  - expected STE ptr
+    ;		OP1 - name with type 
+	;outputs same as _chkFindSym
+	;    F	 Carry set if not found, reset if exists.
+	;	 A	 Object type.
+	;	 B	 Archive status. 0 if in RAM
+	;	 DE	 Address of first byte of data
+	;	 HL	 Address of symbol table entry
+    push de	;save STE ptr
+    push af
+    ld hl,$8478 ; op1
+    ld a, (de)
+    and $1f ;bits 0-4
+    ld c,a	;save for name length
+	cp (hl)	;check type
+    jr nz,findVar2Pop
+    
+    ex de,hl; now hl is STE PTR
+    
+    dec hl ;skip t2 and ver
+    dec hl
+    
+    ld e,(hl) ;data ptr if this is the correct vat entry
+    dec hl
+    ld d,(hl)
+    
+    dec hl
+    pop af	
+    cp (hl) ;flash page
+    jr nz,findVarPop
+    ld ixl,a	;save arc status for later
+    
+    
+    ld b,2	;short name length (excludes null terminus)
+    ld a,c
+    ccf		; carry reset if exists
+    push af	;save type & flags
+    ;Program, AppVar, list, and Group have long names
+    ;$05,$06,$16, $15, $01,$0D,	 $17
+    cp $01
+    jr z,getVarLongName
+    cp $0D
+    jr z,getVarLongName
+    dec a	;5,6 -> 4,5  15,16,17 -> 14,15,16
+    or $11	;4,5 -> 15	 14,15,16 -> 15,17
+    cp $15
+    jr z,getVarLongName
+    cp $17	;group
+    jr nz,getVarShortName
+getVarLongName:
+    dec hl		;name length
+    ld b,(hl)
+getVarShortName:
+    
+    ld c,b		;save for later (no null if len = 8)
+    ld a,b
+    cp 9		;A < 9 ? C flag is set, length is legal
+    jr nc,findVar2Pop	;illegal NL
+    
+    ;name comparison
+    push de	;save potential pointer
+    ld de,$8478 ; op1
+getVarNameComp:
+    dec hl
+	inc de
+    ld a,(de)
+    cp (hl)		;works for 0==0 also
+    jr nz,findVar3Pop ;not match
+    dec b
+    jr nz,getVarNameComp ;loop
+    ; vat entry is correct if (de+1) is 0 or len was 8
+    ld a,c
+    cp 8
+    jr z, getVarCorrectSTE
+    inc de
+    ld a,(de)
+    or a	;set F
+    jr nz, findVar3Pop
+getVarCorrectSTE:
+    ;vat entry is correct!
+    pop de
+    ;	 DE	 Address of first byte of data
+    pop af
+    ;    F	 Carry set if not found, reset if exists.
+	;	 A	 Object type.
+    ld b,ixl
+	;	 B	 Archive status. 0 if in RAM
+    pop hl
+	;	 HL	 Address of symbol table entry
+    ret
+
+findVar3Pop:
+	pop af ;waste pop
+findVar2Pop:
+	pop af ;waste pop
+findVarPop:
+	pop af ;waste pop
+findVar:
+	B_CALL ChkFindSym
+	ret
+
+
+
+
+
+
+DE_mul_A:          ; HL = DE × A
+    LD     HL, 0      ; Use HL to store the product
+    LD     B, 8       ; Eight bits to check
+DE_mul_A_loop:
+    RRCA             ; Check least-significant bit of accumulator
+    JR     NC, _skip  ; If zero, skip addition
+    ADD    HL, DE
+DE_mul_A_skip:
+    SLA    E         ; Shift DE one bit left
+    RL     D
+    DJNZ   _loop
+    RET
+
+H_mul_L_safe:
+  push bc
+  push de
+  call HmulL
+  pop de
+  pop bc
+  ret
+H_mul_L: ; destroys b,a,de
+  ld e,l
+H_mul_E:
+  ld d,0
+  ld l,d
+  ld b,8
+H_mul_L_loop:  
+  add hl,hl
+  jr nc,H_mul_L_noAdd
+  add hl,de
+H_mul_L_noAdd:
+  djnz H_mul_L_loop
+  ret
+
+  
+hl_add_de_len_b: ; little endian
+  ccf
+hl_adc_de_len_b:
+  ld a,(de)
+  ld c,(hl)
+  adc a,c
+  ld (hl),a
+  inc hl
+  inc de
+  djnz hl_adc_de_len_b
+  ret
+
+
+
+
+;rnd:
+;        ASL random
+;        ROL random+1
+;        ROL random+2
+;        ROL random+3
+;        BCC .nofeedback
+;        LDA random
+;        EOR #$B7
+;        STA random
+;        LDA random+1
+;        EOR #$1D
+;        STA random+1
+;        LDA random+2
+;        EOR #$C1
+;        STA random+2
+;        LDA random+3
+;        EOR #$04
+;        STA random+3
+;.nofeedback:
+;        RTS
+;random: .BYTE $FF,$FF,$FF,$FF
+  numLength:
+	ld d,0
+numLengthTokLoop:
+	 inc d
+	 call getTok
+     ld e,1
+     jr z,numLengthTokLoop1B
+      inc e
+numLengthTokLoop1B:
+     inc hl
+     ;check is valid digit
+     call digitValue
+     jr c,numLengthTokLoop
+    ;go back 1 tok
+    dec hl
+    dec e
+    jr z,numLength1BEnd
+     dec hl
+numLength1BEnd:
+   	
+    ret;hl is end, d is length (tok)
+  
+mulAHLC: ;a * hl-> hl, carry in c
+	;
+    ;a * hl + 256*de -> hl
+    ;carry(prev) -> c
+    ;hl input -> de
+    ;0 -> b
+	;d must be 0 to keep carry enough for all hl,a,e
+    ;
+	ld b,8
+    ex de,hl
+mulAHLCloop:
+	 add hl,hl
+	 rl c
+     rlca
+	 jr nc,mulAHLCloopNCA
+	  add hl,de
+      jr nc,mulAHLCloopNCA
+       inc c
+mulAHLCloopNCA:
+    djnz mulAHLCloop
+	ret
+
+
+  
+      
+topBitA:	;top bit position of a into b (1 based)
+    ld b,8
+topBitABitShiftLoop:
+    rlca
+    ret c
+	dec b
+    jr nz,topBitABitShiftLoop
+	ret
+    
+    
+  
+  
+      push hl
+    call numLength
+    ;length in d
+    ld a,(numBase)
+    ;log2 estimation
+    dec a
+    call topBitA
+    ;b is num of bits per digit
+    ;b*d	max b is 6
+    ld a,b
+    ld h,0
+	ld l,h
+    ld e,d
+    ld d,h
+    
+    rlca
+    rlca
+    rlca
+    rlca
+    rlca
+    
+    rlca
+    jr nc,parseNumbMuldNoAdd1
+     add hl,de
+parseNumbMuldNoAdd1:
+	add hl,hl
+    
+    rlca
+    jr nc,parseNumbMuldNoAdd2
+     add hl,de
+parseNumbMuldNoAdd2:
+	add hl,hl
+    
+    rlca
+    jr nc,parseNumbMuldNoAdd3
+     add hl,de
+parseNumbMuldNoAdd3:
+	add hl,hl
+    
+    
+    ;hl is num size in bits
+    
+    
+    
+    ld a,(numBase)
+    
+    
+   
+    
+parseVarNameLen:
+.db 0
+parseVarNameStart:
+.db 0,0
+    
+findVarGlobal:
+    ;is it a one tok var?
+    ld a,(parseVarNameLen)
+    cp 1
+   jr nz,findVarGlobalLongName
+   ;short name 2-106
+    ld de,(findVarGlobalNameStart) ;start
+    scf ;carry was reset from cp
+    sbc hl,de ;length in bytes - 1
+    jr nz, findVarGlobalLowercase
+    ld a,(de) ; 41h-5Bh
+    sub $40   ; 01h-1Bh offset for size
+    jr findVarGlobalShortNameGetPtr ;02h-36h
+findVarGlobalLowercase:
+	inc de
+    ld a,(de)	;B0-CA
+    sub $94		;1Ch-36h
+    cp  $27	    ;BB unused -> 27h 
+    jr c,findVarGlobalLowercaseNoDecA
+    dec a
+findVarGlobalLowercaseNoDecA:
+findVarGlobalShortNameGetPtr: ;38h-6Ah
+	rlca	; mul by 2
+    ld hl,(vatPtr)
+    add a,l
+    ld l,a
+    ret nc 
+	inc h
+ 	ret
+findVarGlobalLongName: ;108-end
+	
+	;vat entry length of 0 means end of vat
+    ld hl,(vatPtr)
+    ld a,108	;fastvars offset
+   	add a,l
+    ld l,a
+    jr nc,findVarGlobalLongNameNoCarryToH
+    inc h
+findVarGlobalLongNameNoCarryToH:
+
+findVarGlobalVatLoop:
+	ld de,(parseVarNameStart) ;ptr to start of name
+    ld a,(hl);size byte
+    jp z,ERRUNDEFINED
+    ld c,a
+    push hl ;save for early exit
+    ld a,(parseVarNameLen)
+    ld b,a
+    add a,3;length includes self and ptr
+    cp c ; lengths have to be same
+    jr nz,findVarGlobalVatLoopNoMatch
+findVarGlobalVatLoopNameLoop:
+    call getTokToAsciiVarName
+    inc de; name tokens, inc'd after
+    
+    inc hl; name
+    cp (hl)
+    jr nz,findVarGlobalVatLoopNoMatch
+    dec b
+    jr nz,findVarGlobalVatLoopNameLoop
+    ;match!
+    pop de; waste pop
+    inc hl
+    ;hl is now ptr to value/ptr
+    ret
+    
+findVarGlobalVatLoopNoMatch:
+	pop hl ;get start of tbl entry
+    ld a,(hl);length
+    add a,l;add to
+    ld l,a
+    jr nc,findVarGlobalVatLoopNoMatchNoCarry
+    inc h
+findVarGlobalVatLoopNoMatchNoCarry:
+	jr findVarGlobalVatLoop
+    ;vat will always end in 00 for if it gets completely full to avoid this crawler escaping it
+	
+    
+    
+

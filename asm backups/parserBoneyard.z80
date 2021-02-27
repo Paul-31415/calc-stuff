@@ -1,0 +1,917 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	Ans 		$72
+#define 	ramCode		$8100
+
+
+ansCalcName:
+.db $15 ;appv
+.db $70 ; 'p'
+.db Ans,0
+
+
+MathStack:
+.db $15	;appv
+.db $70	; 'p'
+.db 1	;reserved for mathStack
+Depth:
+.db 1	;1 - 255
+.db 0 
+
+
+
+doMath:	;does the math at (pc)
+
+	ret
+
+
+
+
+
+numBase: ;finds base of num at (hl) into a, nc if unprefixed, carry if prefix with valid digit
+	call getTok
+    push bc
+    inc hl
+    call getTok
+    ld a,b
+    cp $42	;'B'
+    jr z,numBaseDefined
+    cp $BB
+    jr nz,numBaseDecimal
+    ld a,c
+    cp $B1	;'b'
+    jr z,numBaseDefined
+numBaseDecimal:
+	pop bc
+    ld a,10
+	ret
+numBaseDefined:
+	pop bc
+    call digitValue
+    inc a 
+    ret
+
+digitValue: ;outputs a as value of digit in bc, nc is unknown 
+	;digits are 0-9,A-theta,a-z,? (up to base 64)
+	call isNumber
+    ret c
+digitValueNotNum:
+    call isUppercaseLetter
+    jr nc,digitValueNotUpper
+    add a,10
+    scf
+    ret
+digitValueNotUpper:
+    call isLowercaseLetter
+    jr nc,digitValueNotLower
+    cp $0B ;unused one
+    jr c,digitValueNoDecA
+     dec a
+digitValueNoDecA:
+	add a,36
+    scf
+    ret
+digitValueNotLower:
+	ld a,b
+    cp $AF	;'?'
+	ccf
+    ret nz
+    scf
+    ld a,63
+	ret
+    
+parseNumWithBase:;parses (hl) with base a
+    ld (parseNumBase+1),a
+	jr parseNumPrefixed
+parseNum:	;parses number at (hl) of form [nums] or  [base-1 (1 digit)][b/B][number in base] 
+	push hl
+    call numBase
+    ld (parseNumBase+1),a
+    pop de
+    jr c,parseNumPrefixed
+    ex de,hl ;restore start pos
+parseNumPrefixed:;don't restore
+	call zeroNumSpace
+parseNumTokLoop:
+	 ld (parseNumPrevTok),hl
+	 call getTok
+     inc hl
+     ;check is valid digit
+     call digitValue
+     jr nc,parseNumEndParse
+      ;add digit
+      push hl
+      ld hl,ramCode
+parseNumBase:	;the ten gets overwritten earlier (SMC!)
+      ld b,10
+parseNumAddDitCall:
+      call addDitToHL
+      ;extend num with c
+      or c	;a already 0
+      jr z,parseNumNoExtend
+       inc hl;to get new digit
+       ld (hl),c ;store digit
+       ld hl,ramCode
+       inc (hl)
+       jp z,exit	;num too big, EXIT!
+parseNumNoExtend:
+      pop hl
+     jr parseNumTokLoop
+parseNumEndParse:
+    ;go back 1 tok
+    ld hl,(parseNumPrevTok)
+    
+    ret
+    
+parseNumPrevTok:
+.db 0,0
+    
+    
+    
+zeroNumSpace:;stores bigint 0 to num space
+	xor a
+    ld (ramCode+1),a
+    inc a
+    ld (ramCode),a
+    ret
+  
+
+topBitA:
+	ld b,8
+topBitALoop:
+	rlca
+    ret c
+	djnz topBitALoop
+    ret
+    
+    
+BCDitSize:
+.db 0
+addBCDitToHL: ;adds a binary coded digit to bigint at (hl)
+	;input 	a - digit
+    ;		b - base
+    ld c,a
+    dec b
+    ld a,b
+    call topBitA
+    ;supported spacing: 0,1,2,4,8 bits per dit
+    ;0 for unary
+    ;1 - bin
+    ;2 - 3,4
+    ;4 - 5-16
+    ;8 - 17-256
+	;0-8 to 0,1,2,4,8 rounding up
+    ;0000 - 0-8  un
+    ;0001 - 1-0	 bin
+    ;0010 - 2-1  3,4
+    ;0011 - 3-2  5-8
+    ;0100 - 4-2  9-16
+    ;0101 - 5-3  17-32
+    ;0110 - 6-3  33-64
+    ;0111 - 7-3  65-128
+    ;1000 - 8-3  129-256
+	ld a,b
+    dec a
+    call topBitA ;I've never seen a double log anywhere else
+    ;this doesn't really count tho because I'm just using it for rounding
+    ld a,b
+    inc a
+    cp 9
+    jr nz,addBCDitToHLNoUn
+	 xor a
+addBCDitToHLNoUn:
+    ld (BCDitSize),a
+    
+    ;actual part
+    ld a,(hl)
+    ld b,0
+addBCDitToHLLoop:
+   push af	;save counter
+   
+    inc hl   
+    ld a,(BCDitSize)
+    push hl
+	 ld l,(hl)
+     ld h,0
+     
+     cp 4
+     jr z,addBCDitToHLLoop8Shift
+     
+     or a
+     jr z,addBCDitToHLLoop0Shift
+     dec a
+     jr z,addBCDitToHLLoop1Shift
+     dec a
+     jr z,addBCDitToHLLoop2Shift
+     add hl,hl
+     add hl,hl
+addBCDitToHLLoop2Shift:
+     add hl,hl
+addBCDitToHLLoop1Shift:
+     add hl,hl
+addBCDitToHLLoop0Shift:
+     
+     add hl,bc;b is 0
+     ld c,h	;store carry
+     ld e,l
+     
+	pop hl
+    ld (hl) ,e	;store result
+   
+   pop af
+   dec a
+   jr nz ,addBCDitToHLLoop
+   ret
+
+addBCDitToHLLoop8Shift:
+	ld h,l
+    ld l,0
+    jr addBCDitToHLLoop0Shift
+
+    
+    
+    
+  
+    
+
+addDitToHL:	;adds digit to bigint at (hl), stores 0 to a, end of bigint at hl
+	;digit a, base b
+    ;mul bigint by b, add a
+    ld c,a	;carry in
+    ld a,b
+    ld (addDitToHLBase),a	;save base
+    ld a,(hl)
+addDitToHLMulLoop:
+
+   push af ;save counter
+    
+    inc hl   
+    ld a,(addDitToHLBase)
+    ;a*(hl) -> de
+	ld e,(hl)
+    push hl
+     ld h,a
+	 call H_Times_E
+     add hl,bc 	;add hl,c because b is 0
+     ex de,hl	;put result in de
+	pop hl
+    ld (hl) ,e	;store result
+    ld c,d		;store carry
+   
+   pop af
+   dec a
+   jr nz ,addDitToHLMulLoop
+   ret
+    
+addDitToHLBase:
+.db 0
+    
+    
+H_Times_E:           ; HL = H × E
+    LD     D, 0       ; Zero D and L
+    LD     L, D
+    LD     B, 8
+_loop:
+    ADD    HL, HL     ; Get most-significant bit of HL
+    JR     NC, _skip
+    ADD    HL, DE
+_skip:
+    DJNZ   _loop
+    RET
+    
+    
+
+
+
+HasOpenParen:	;op of type <op>( args
+	ld a,c
+	or a
+    jr nz,HasOpenParen2B
+HasOpenParen1B:
+	ld a,b
+    ;10 '('
+	sub $10
+    scf		;A < num 	C flag is set
+    ret z
+    ;12-28 (26 unused) 
+    sub $02	;12
+    cp $17 
+    ret c
+    ;93	
+    sub $81	;93
+    scf
+    ret z
+    ;9C
+    sub $09	;9C
+    scf
+    ret z
+    ;9E-A5
+    sub $02 ;9E
+   	cp $08
+    ret c
+    ;A7
+    sub $09 ;A7
+    scf
+    ret z
+    ;B1-BA
+    ;BC-CD
+    sub $0A	;B1
+    cp $1D
+    ret c
+    ;D3
+    sub $22	;D3
+    scf
+    ret z
+    ;DA-DB
+    sub $07	;DA
+    cp 2
+    ret c
+    ;E0
+    sub $06	;E0
+    scf
+    ret z
+    ;E2-E4
+    sub $02	;E2
+    cp 3
+    ret c
+    ;E6-E8
+    sub $04	;E6
+    cp 3
+    ret c
+    ;EC-EE
+	sub $06 ;EC
+    cp 3
+    ret
+
+HasOpenParen2B:
+	ld	a,b
+    cp $BB
+    jr z,HasOpenParen2BMiscToks
+    cp $7E
+    ccf
+    ret nz
+    ld a,c
+    ;7E13-7E15
+    sub $13
+    cp 3
+    ret
+
+HasOpenParen2BMiscToks:
+    ld a,c
+	;00-1F
+    cp $20
+    ret c
+	;25-2E
+    sub $25 ;25
+    cp $0A
+    ret c
+	;35-3B
+    sub $10	;35
+    cp $07
+    ret c
+	;3D-40
+    sub $08	;3D
+    cp 4
+    ret c
+ 	;42-45
+    sub $05	;42
+    cp 4
+    ret c
+    ;53
+    sub $11	;53
+    scf
+    ret z
+    ;55-56
+    sub $02	;55
+    cp 2
+    ret c
+    ;58-59
+    sub $03	;58
+    cp 2
+    ret c
+    ;6A-6B
+    sub %12	;6A
+    cp 2
+    ret
+    
+    
+
+
+Is1o1Operation: ;operation of type arg1 <op> arg2
+	xor a
+    or c
+    ccf
+    ret nz
+    ld a,b
+    ;04 	->
+    sub $04	;04
+    scf
+    ret z
+	;2B 	,
+    sub $27	;2B
+    scf
+    ret z
+    ;3A-3D	.E or  xor
+    sub $0F	;3A
+    cp 4
+    ret c
+    ;40 	 and 
+    sub $06	;40
+    scf
+    ret z
+    ;6A-71	=<>≤≥≠+-
+    sub $2A	;6A
+    cp 8
+    ret c
+    ;82-83	*/
+    sub $18	;82
+    cp 2
+    ret c
+    ;F0-F1	^x√
+    sub $6E	;F0
+    cp 2
+    ret
+    
+    
+    
+
+
+lookupOperation:
+	;type of operand1 in a
+    ;operation in opstring
+    ;8-length in b
+    ld c,a
+    ld a,b
+    cp 7
+    jr z,_lookupOperation_oneByte
+     ;search for operation call addr in optable, TODO
+     ;output hl as op addr
+     jp NotImplementedError
+    
+_lookupOperation_oneByte:
+    ;this is easier
+    ;is A a class?
+    ld a,c
+    bit 4,a ; is it primitive?
+    jr z,_lookupOperation_oneByte_primitive
+     
+     jp NotImplementedError
+_lookupOperation_oneByte_primitive:
+     ld hl,PrimitiveTypeTable
+     ld a,(OpString)
+     ;collapse operation
+     jp NotImplementedError
+     
+    ret
+
+
+
+
+
+
+
+ParseBinaryOperation:; anything of the type <a><op><b>
+	;Binary operation allowed chars: + - * / ^  and   or   xor  = ≠ < > ≤ ≥ x√ E . -> (,?)
+    ; ' ' not allowed
+    
+	;			  -> ,  .  E  or xor and = <  >  ≤  ≥  ≠  +  -  *  /  ^  x√
+    ;codes (hex): 04,2B,3A,3B,3c,3D,40,6a,6b,6c,6d,6e,6f,70,71,82,83,f0,f1
+    
+	;de is basic_pc
+    ;a is tok
+    
+    
+    ;push ans to stack
+    call pushAns
+    
+    ;get op tok string (max length in chars is 8)
+    ld hl,OpString
+    ld (hl),a
+    ld b,7 ;max 7 more chars
+_ParseBinaryOperation_opstring_loop:
+	 inc de
+     inc hl
+     ld a,(de)
+     ld (hl),a ;assume true so we can destroy a in test
+     
+     ;is it a valid opchar? (for this we use the jump table to check)
+     push hl
+	 push de    
+     ld l,a
+     ld h,0
+     add hl,hl	;times 2
+     ld de,TokVecTable
+     add hl,de
+     ld e,(hl)
+     inc hl
+     ld d,(hl)
+     ;compare to ParseBinaryOperation
+     ld hl,ParseBinaryOperation
+     or a ;zcf
+     sbc hl,de ;ok now hl should be 0
+     
+     ld a,h
+     or l
+     pop de
+     pop hl
+     
+     jr nz,_ParseBinaryOperation_opstring_loop_end
+     
+    djnz _ParseBinaryOperation_opstring_loop
+    ;right here hl is OpString + 7 and last char is valid
+    inc hl
+    inc de
+_ParseBinaryOperation_opstring_loop_end:
+    ld (hl),0 ;zero terminate
+    
+    dec de ;fix bpc
+    ld (basic_pc),de ;store it
+    
+    ;b is 7 if len(opstr) was 1
+   
+	 ;get ans type
+     ld a,(AnsType)
+     call lookupOperation
+     
+     
+     
+     
+     
+    ;push op addr to stack
+	push hl
+    ;push op type to stack
+    ld h,t_operation
+    push hl
+    inc sp
+    
+	jp ParseEnd
+
+
+
+
+
+
+;also has optable
+
+PrimitiveTypeTable: ;pointers to type's optables
+.dw uint_optable
+.dw unimplemented_optable
+.dw unimplemented_optable
+.dw unimplemented_optable
+;4
+.dw unimplemented_optable
+.dw unimplemented_optable
+.dw unimplemented_optable
+.dw unimplemented_optable
+;8
+.dw unimplemented_optable
+.dw unimplemented_optable
+.dw unimplemented_optable
+.dw unimplemented_optable
+;12
+.dw unimplemented_optable ;call
+;end of primitive types
+
+
+
+
+
+
+;optables are length prefixed arrays of jumpstrings
+;jumpstrings are zero terminated strings followed by an address ([str][0][addr])
+uint_optable:
+.db
+
+
+
+
+
+
+
+
+
+
+
+unimplemented_optable:
+.dw 0
+
+
+
+;TODO: just be a normal person and define the operations directly, use functions if you want to make new ops.
+
+BinaryOperation:
+	ld (_BinaryOperation_saveBPC+1),de
+	call doStackOp
+    jp nz,ParseEnd ;dont store pc if there was an operation
+    
+    call pushAns
+    ;get routine addr in hl
+    ;
+    
+_BinaryOperation_saveBPC:
+	ld de,$ffff ;re-get pc
+    dec de
+    ld hl,OpString-1
+    ld b,8
+_BinaryOperation_strLoop:
+	 inc de
+     inc hl
+     ld a,(de)
+     
+     push hl
+     push de
+     ;ok, check if a is a binary operation
+     ;by using the table
+     ld l,a
+     ld h,0
+     add hl,hl	;times 2
+     ld de,TokVecTable
+     add hl,de
+     ld e,(hl)
+     inc hl
+     
+     ld d,(hl)
+     
+     ;de is the table's jp addr
+     dec de
+     ld a,(de)
+     
+     
+     ld hl,-BinaryOpsStart+1 ;plus 1 to offset the dec de
+     add hl,de
+     
+     ;hl should be 0 to < BinaryOpsEnd-BinaryOpsStart
+     ;now we do a cp
+     ld de,-(BinaryOpsEnd-BinaryOpsStart)
+     add hl,de
+     ;now has carry if totals to 0 or more
+     ;nc if hl < de (hl valid)
+     pop de
+     pop hl
+     ld (hl),a
+     
+     jr c,_BinaryOperation_strLoop_end
+    djnz _BinaryOperation_strLoop
+    
+    ;throw op too long error
+    
+    ld a,41+128 ;E_Length
+    bjump(_JError)
+    
+_BinaryOperation_strLoop_end:
+	ld (hl),0;null terminate string
+    dec de
+    ;store basicPC
+    ld (basic_pc),de
+    
+    ld a,8
+    sub b ;8-b is how many chars it is
+    ;a is how long the string is
+    
+    
+    ;now we find the corresponding operations
+    
+    cp 1; is the len 1?
+    jr nz,_BinaryOperation_OpLenAbove1
+     ld a,(OpString)
+     ld l,a
+     ld h,0
+     dec hl
+     ld de,len1OpTable
+     add hl,hl
+     add hl,de
+     ld e,(hl)
+     inc hl
+     ld h,(hl)
+     ld l,e
+
+    call pushOp
+    jp ParseEndStoPc
+    
+_BinaryOperation_OpLenAbove1:
+    ;
+    
+
+
+    
+    
+
+    jp NotImplementedError
+    
+    
+OpString:
+.db 0,0,0,0,0,0,0,0
+.db 0 ;null termination
+    
+    
+    
+    
+len1OpTable: ;-> ,  .  E  or xor and = <  >  ≤  ≥  ≠  +  -  *  /  ^  x√
+.dw NotImplementedError		;	->
+.dw NotImplementedError		;	,
+.dw NotImplementedError		;	.
+.dw NotImplementedError		;	E
+.dw NotImplementedError		;	 or 
+
+.dw NotImplementedError		;	 xor 
+.dw NotImplementedError		;	 and 
+.dw NotImplementedError		;	=
+.dw NotImplementedError		;	<
+.dw NotImplementedError		;	>
+
+.dw NotImplementedError		;	≤
+.dw NotImplementedError		;	≥
+.dw NotImplementedError		;	≠
+.dw plusTmpRoutine			;	+
+.dw NotImplementedError		;	-
+
+.dw NotImplementedError		;	*
+.dw NotImplementedError		;	/
+.dw NotImplementedError		;	^
+.dw NotImplementedError		;	x√
+    
+    
+    
+
+
+
+
+
+
+
+
+parseVar: 
+	call parseVarToName
+	ld hl,parseVarCalcName
+    rst 20h ;mov 9 op1
+    B_CALL ChkFindSym
+    ret
+
+parseVarCalcName:
+.db $15 ;appv
+.db $70 ; 'p'
+parseVarName:
+.db 0,0,0,0,0,0,0
+.db 0 ; safety
+
+
+parseVarPrevTok:
+.db 0,0
+
+parseVarToName: ;vars are up to 7 alphanumeric chars in program, in calculator they are appars with name prefixed by 'p' (lowercase p)
+    
+    ;returns name in parseVarCalcName
+	
+    
+    ;vars are composed of letter,[alphanumeric]
+	;this assumes the proper checks have happened ( (pc) is a letter ) 
+    
+    
+    
+    ld d,0 ;name length (in tokens)
+    ld hl,(basic_pc) 
+    ;ld (parseVarNameStart),hl	;save start of name
+parseVarToNameTokLoop:
+	 ;store tok to name place
+     ld bc,parseVarName
+     
+	 ld a,d
+	 add c
+     jr nc,parseVarToNameTokLoopNoIncB
+      inc b
+parseVarToNameTokLoopNoIncB:
+	 ld c,a
+     
+     call getTokToAsciiVarName
+     ld (bc),a
+     
+	 inc d ;next tok
+     ld a,d
+     cp 7;max name length
+     jr z,parseVarToNameTokLoopEnd
+     
+     
+     ld (parseVarPrevTok),hl; keep track of how much to step back
+     call getNextTok
+     jr z,parseVarToNameOneByteTok
+      call isLowercaseLetter
+      jr c,parseVarToNameTokLoop
+parseVarToNameOneByteTok:
+     call isUppercaseLetter
+     jr c,parseVarToNameTokLoop
+     call isNumber
+     jr c,parseVarToNameTokLoop
+    ; go back one tok:
+    ld hl,(parseVarPrevTok)
+    
+	ld a,d
+parseVarToNameTokLoopEnd:
+    ld (basic_pc),hl
+    
+    ld bc,parseVarName ; this section zero terminates name
+    add c
+    jr nc,parseVarToNameNoIncB
+     inc b
+parseVarToNameNoIncB:
+	ld c,a
+    xor a
+  	ld (bc),a      
+    
+    ret
+ 
+    
+getTokToAsciiVarName:; only works for alphanumeric
+	;returns a, ascii val of tok at (hl)
+    ;destroys a
+	ld a,(hl)
+    cp $bb	;lowercase
+    ret nz
+    inc hl
+    ld a,(hl)
+    dec hl	;fix hl
+    sub $4F	;0xB0 -> 0x61
+    cp $5A	;0xbb->0x5A (unused one)
+    ret nc
+    dec a
+    ret
+
+isAlphaNumeric:;carry if true
+	call isLetter
+    ret c
+    call isNumber
+    ret
+
+
+isNumber: ; carry if it is, and digit in a
+	;30h-39h
+    ld a,b
+    sub $30 ; 0-9
+    cp  $0A
+	ret
+
+isLetter: ;outputs to carry
+	call isUppercaseLetter
+    ret c
+    call isLowercaseLetter
+    ret
+
+isUppercaseLetter: ;outputs carry if is uppercase letter or theta
+	;41h-5Bh uppercase
+    ;this doesn't include accented
+	ld a,b
+    sub $41 ;00-1A
+    cp  $1B  ;A < num 	C flag is set
+	ret
+    
+isLowercaseLetter:
+    ;BBB0-BBCA but not BBBB (unused)  lowercase
+	ld a,b
+    cp $BB
+    jr z, isLowercaseLetterCorrectPrefix
+	 ccf
+     ret
+isLowercaseLetterCorrectPrefix:
+    ld a,c
+    sub $B0 ; 00-1A , unused one won't show up (they can't type it)
+    cp  $1B
+	ret
+
+
+
+
+
+
+popControl: ;throws error if stack isn't clear of parse junk (ie operations,parens,commands)
+	pop hl
+    ld (popControl_ret+1),hl
+    
+    ld a,(CmdsOnStack)
+    or a
+    jp nz,Error_IllegalNest ;for future, can make inline controls allowed
+    ld a,(Parens)
+    or a
+    jp nz,Error_IllegalNest
+    ld a,(OpsOnStack)
+    or a
+    jp nz,Error_IllegalNest
+    
+    ld hl,(LocalVarBytesOnStack) ;dealloc all local vars at this level
+    add hl,sp
+    ld sp,hl	;bam!
+    
+    dec sp
+    pop af
+    cp t_word
+    jp nz,Error_Invalid
+    pop hl
+    ld (LocalVarBytesOnStack),hl
+    
+    dec sp
+    pop af
+    cp t_CONTROL
+    jp nz,Error_Invalid
+    pop hl
+    ;hl, this is our opcode, our answer
+    
+popControl_ret:
+	jp Error_Invalid

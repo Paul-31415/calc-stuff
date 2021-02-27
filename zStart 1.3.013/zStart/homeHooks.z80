@@ -1,0 +1,1616 @@
+omnicalcRawKey	equ	$6270
+cursorDuration	equ	85
+confirmDuration	equ	200
+
+
+rawKeyHookEntry:
+	add	a, e
+	ld	b, a
+	bcall(_runIndicOff)
+	di
+
+	set	lwrCaseActive, (iy + appLwrCaseFlag)
+
+	in	a, (04)
+	bit	3, a
+	jr	nz, notContextFree
+
+	ld	a, b
+
+	cp	kStat
+	jr	z, doAPD
+	cp	kAppsMenu
+	jr	z, gotoMirage
+	cp	kPrgm
+	jr	z, gotoDCS
+	jr	notContextFree
+
+
+gotoMirage:
+	ld	hl, mirageName
+	rst	20h
+	call	findAppRestore14
+	jr	nc, runAShell
+	xor	a
+	ret
+
+
+
+doAPD:	
+	ld	hl, 1*256+1
+	ld	(apdSubTimer), hl
+noKeyQuit:
+	xor	a
+	ret
+
+gotoDCS:
+	ld	hl, DCS7Name
+	rst	20h
+	ld	a, $39
+findDCSLoop:
+	push	af
+	ld	(op1+8), a
+	call	findAppRestore14
+	jr	c, thisDCSNotFound
+	pop	af
+runAShell:
+	ld	a, (cxCurApp)
+	cp	kExtApps
+	jr	z, noKeyQuit
+	call	closeEditEquSaveOp1
+	jp	runOp1
+thisDCSNotFound:
+	pop	af
+	dec	a
+	cp	$34
+	jr	nz, findDCSLoop
+	xor	a
+	ret				
+
+	
+notContextFree:
+
+
+
+
+	ld	a, (cxCurApp)
+	cp	$46
+	jp	z, programEditorHook
+	cp	$40
+	jp	nz, rawKeyChain
+approved:
+
+	ld	hl, (editCursor)
+	ld	de, (editTop)
+	or	a
+	sbc	hl, de
+	ld	(op6Ext), hl
+
+	call	handleHomeMessage
+
+	in	a, (04)
+	bit	3, a
+	jp	nz, nonOnButtons
+
+
+
+
+	ld	a, (menuCurrent)
+
+	cp	3
+	jp	nz, notProgramMenu
+
+
+;VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV	;program menus
+
+	ld	a, ($85DF)		;subMenu
+	or	a
+	jp	z, firstProgmenu
+
+	dec	a
+	jp	z, editProgMenu
+	jp	menuIndependentHooks
+
+
+
+editProgMenu:
+	ld	a, b
+	cp	kMul
+	jp	z, archiveThisProg
+	cp	kEnter
+	jp	z, compilingFromMenu
+	cp	k1
+	jr	c, cantBeEditNumbers
+	cp	k9+1
+	jr	c, numberInEdit
+cantBeEditNumbers:
+	jp	menuIndependentHooks
+numberInEdit:
+	sub	k1-2
+	ld	c, b
+	ld	b, a
+	ld	a, (matrixDimensions+3)
+	or	a
+	jp	z, needConfirmation
+
+	push	bc
+	ld	hl, progCurrent-1
+	ld	de, op6
+	ld	a, (hl)
+	bcall(_mov9B)
+	set	7, a
+	ld	(op6), a
+	pop	bc
+	jp	saveNumericalHot
+	
+
+
+firstProgMenu:
+	ld	a, b
+	cp	kEnter
+	jp	z, runThisProg
+	cp	kMul
+	jp	z, archiveThisProg
+	cp	kDecPnt
+	jp	z, setRCProg
+	cp	kChs
+	jp	z, setOnProg
+	cp	k0
+	jr	z, setZStartProg
+	cp	k1
+	jr	c, cantBeNumbers
+	cp	k9+1
+	jp	c, numberInProgram
+cantBeNumbers:
+	jp	menuIndependentHooks
+
+
+compilingFromMenu:
+	ld	hl, progCurrent-1
+	rst	20h
+
+	
+
+compileThisProg:
+	bcall(_closeEditEqu)
+	xor	a
+	call	compileOp1
+	jp	c, errorInvalidz
+
+	xor	a
+	ld	(menuCurrent), a
+	call	newScreen
+
+	bcall(_jForceCMDNoChar)
+
+
+
+
+
+
+
+setZStartProg:
+	ld	a, $FF
+	jr	setProgNumFound
+
+setRCProg:
+	xor	a
+	jr	setProgNumFound
+
+setOnProg:
+	ld	a, 1
+	jr	setProgNumFound
+
+
+numberInProgram:
+	sub	k1-2
+setProgNumFound:
+	ld	c, b
+	ld	b, a
+	ld	a, (matrixDimensions+3)
+	or	a
+	jr	z, needConfirmation
+	
+	push	bc
+
+	ld	hl, progCurrent-1
+	ld	de, op6
+	bcall(_mov9B)
+
+	pop	bc
+
+saveNumericalHot:
+	call	takesAWhile
+	push	bc
+
+	bcall(_closeEditEqu)
+	ld	hl, appVarName
+	rst	20h
+	bcall(_chkFindSym)
+	jr	nc, appVarFoundzz
+	call	fixEditBuffer
+	pop	af
+	xor	a
+	ret
+appVarFoundzz:
+	ld	a, b
+	or	a
+	jr	z, appVarIsInRam
+	call	arcUnarcSaveOp1
+	bcall(_chkFindSym)
+appVarIsInRam:
+	pop	af
+	push	af
+	cp	$FF
+	jr	nz, notZStartProg
+	ld	a, avZStartProg-avRCProg
+	jr	foundOffsetToData
+notZStartProg:
+	ld	c, a
+	add	a, a
+	add	a, a
+	add	a, a
+	sub	c
+foundOffsetToData:
+	ld	hl, avRCProg+2
+	ex	de, hl
+	add	hl, de
+	ld	e, a
+	add	hl, de
+
+	push	hl
+	rst	18h
+	ld	hl, op6
+	rst	20h
+	pop	de
+	ld	hl, op1
+	ld	a, (hl)
+	inc	a
+	call	nz, storeName
+
+	jr	nz, wasntAToken
+	ld	bc, 7
+	ldir
+wasntAToken:
+	bcall(_popRealO1)
+	
+	bcall(_arc_unarc)
+	pop	bc
+	ld	a, c
+	cp	kChs
+	call	z, makeOffScrpt
+
+	ld	hl, setText
+	ld	e, 83
+	jp	homeMessage
+
+
+
+
+needConfirmation:
+	ld	e, 67
+	ld	hl, confirmText
+	call	homeMessage
+	ld	hl, 1*256+confirmDuration
+	ld	(matrixDimensions+2), hl
+homeNullRet:
+	xor	a
+	ret
+
+
+archiveThisProg:
+	ld	hl, progCurrent-1
+	rst	20h
+	bcall(_chkFindSym)
+	jp	c, rawKeyChain
+
+	bcall(_runIndicOn)
+
+	call	closeEditEquSaveOp1
+	call	arcUnarcSaveOp1
+
+
+	ld	hl, (curRow)
+	push	hl
+	bcall(_clrScrnFull)
+	ld	hl, 0
+	ld	(curRow), hl
+	bcall(_dispMenuTitle)
+	pop	hl
+	push	hl
+	ld	(curRow), hl
+	ld	hl, $85F2
+	rst	20h
+
+	bcall($505F)
+	ld	hl, 0
+	ld	(curRow), hl
+
+	pop	hl
+	ld	(curRow), hl
+
+	call	fixEditBuffer
+
+	xor	a
+	ret
+
+
+
+runThisProg:
+	ld	hl, progCurrent-1
+	rst	20h
+runAHomeProg:
+	call	closeEditEquSaveOp1
+	call	nicelyRunOp1
+	bcall(_jForceCMDNoChar)
+
+
+;^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+notProgramMenu:
+	cp	2
+	jr	nz, notAppMenu
+
+
+;VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+
+	ld	a, b
+	cp	kChs
+	jp	z, setOnProg
+	cp	kDecPnt
+	jp	z, setRCProg
+	cp	k1
+	jr	c, cantBeAnAppNumber
+	cp	k9+1
+	jp	c, numberInProgram
+cantBeAnAppNumber:
+	jp	menuIndependentHooks
+
+
+
+
+;^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+notAppMenu:
+	or	a
+	jp	nz, notHomeMenu
+
+
+;VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+
+	ld	a, b
+	cp	k1
+	jr	c, cantBeHomeNumber
+	cp	k9+2
+	jr	c, homeNumber
+cantBeHomeNumber:
+	jp	menuIndependentHooks
+
+homeNumber:
+	sub	k1
+	ld	b, a
+	add	a, a
+	add	a, a
+	add	a, a
+	sub	b
+	
+	push	af
+	call	findArcAppvar
+	ld	de, avHotKeys+2
+	add	hl, de
+	pop	af
+	ld	e, a
+	add	hl, de
+	call	fast_bhl
+	ld	a, b
+	ld	bc, 7
+	ld	de, $8000
+	bcall(_flashToRam)
+
+	ld	hl, $8000
+	call	unpackName
+		
+
+	ld	a, (op1)
+	ld	b, a
+	and	%01111111
+	ld	(op1), a
+	ld	a, b
+	jp	z, homeNullRet
+	cp	5
+	jp	z, runAHomeProg
+	cp	6
+	jp	z, runAHomeProg
+	cp	appObj
+	jr	z, runAnApp
+	cp	$FF
+	jr	z, recallAToken
+	cp	$85
+	jp	z, editHome
+	cp	$86
+	jp	z, editHome
+	jp	homeNullRet
+	
+
+recallAToken:
+	ld	a, ($8002)
+	ld	(keyExtend), a
+	ld	a, ($8001)
+	or	a
+	ret
+
+editHome:
+	bcall(_closeEditEqu)
+	call	editProgram
+	jp	goHomeNoMessage
+	
+
+runAnApp:
+	call	findAppRestore14
+	jp	c, homeNullRet
+	call	closeEditEquSaveOp1
+	res	curAble, (iy + curFlags)
+	jp	runOp1
+
+
+
+
+
+
+;^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+notHomeMenu:
+	ld	c, a
+	push	bc
+	bcall(_getBaseVer)
+	ld	a, b
+	pop	bc
+	cp	50
+	ld	a, c
+	jr	nc, isMPOS		;lol POS
+	cp	$45
+	jr	nz, notTheCatalog
+	jr	isTheCatalog
+isMPOS:
+	cp	$46
+	jr	nz, notTheCatalog
+
+;VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+isTheCatalog:
+	ld	a, b
+	cp	k1
+	jr	c, cantBeCataNumber
+	cp	k9+1
+	jr	c, isCataNumber
+cantBeCataNumber:
+	jp	menuIndependentHooks
+
+
+isCataNumber:
+	sub	k1-2
+	ld	b, a
+	ld	a, (matrixDimensions+3)
+	or	a
+	jp	z, needConfirmation
+	ld	hl, (catalogCurrent)
+
+	di
+	call	translate7B
+	out	(07), a
+	ld	a, (_dispCatalogEnd+2+$4000)
+	out	(07), a
+
+	ld	de, $4000
+	add	hl, de
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+	out	(07), a
+	ei			;if we're in the catalog, this should be safe
+	
+	jp	cataEntryForHot
+
+
+
+
+;^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+notTheCatalog:
+	cp	$45			;mCatalog
+	jp	nc, weDontWantThismenu
+
+;VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+
+
+	ld	a, b
+	cp	k1
+	jr	c, cantBeMenuNumber
+	cp	k9+1
+	jr	c, menuNumber
+cantBeMenuNumber:
+	jp	menuIndependentHooks
+
+menuNumber:
+	sub	k1-2
+	ld	b, a
+	ld	a, (matrixDimensions+3)
+	or	a
+	jp	z, needConfirmation
+
+	push	bc
+	call	getThisMenuToken
+	pop	bc
+cataEntryForHot:
+	ld	a, $FF
+	ld	(op6), a
+	ld	a, e
+	or	a
+	jr	nz, not1ByteTok
+	ld	e, d
+	ld	d, a
+not1ByteTok:
+	ld	(op6+1), de
+	jp	saveNumericalHot
+	
+
+
+
+
+
+
+;^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+weDontWantThisMenu:
+
+
+
+
+
+menuIndependentHooks:
+
+;VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+
+	ld	a, b
+	cp	kSin
+	jp	z, swapAngle
+	cp	kAdd
+	jp	z, enableBaseConv
+	cp	kClear
+	jp	z, resetApp
+	cp	kVars
+	jp	z, doArchiveAllProgs
+	cp	kYEqu
+	jp	z, toggleLinkPort
+	cp	kExpon
+	jp	z, killAllHookz
+	cp	kDiv
+	jr	z, changingAxeMode
+	cp	kMath
+	jr	z, toggleMathPrint
+
+	jp	rawKeyChain
+
+
+toggleMathPrint:
+	ld	c, b
+	bcall(_getBaseVer)
+	ld	a, b
+	ld	b, c
+	cp	53
+	jp	c, rawKeyChain
+
+	ld	hl, (editTop)
+	ld	(editCursor), hl
+	ld	hl, (editBtm)
+	ld	(editTail), hl
+
+
+	call	fixForMathPrint
+
+	bcall(_cxPutAway)
+
+
+
+	ld	a, (iy + $44)
+	xor	%00100000
+	ld	(iy + $44), a
+
+
+	ld	a, $40
+	bcall(_newContext)
+	
+	bit	5, (iy + $44)
+	ld	hl, mathprint
+	ld	e, 61
+	jr	nz, wasMpp
+	ld	hl, classic
+	ld	e, 71
+wasMpp:
+
+	call	safeHomeMessage
+
+	xor	a
+	ret
+
+
+
+
+
+
+;	ld	a, kExtApps
+;	ld	(cxCurApp), a
+;	ld	a, $40
+;	bcall(_newContext0)
+;
+;	bcall(_jForceCmdNoChar)
+
+
+
+changingAxeMode:
+	bcall(_closeEditEqu)
+	ld	hl, appVarName
+	rst	20h
+	bcall(_chkFindSym)
+	jr	nc, appVarFoundsz
+	call	fixEditBuffer
+	xor	a
+	ret
+appVarFoundsz:
+	ld	a, b
+	or	a
+	jr	z, itsAlreadyInRam
+	call	arcUnarcSaveOp1
+	bcall(_chkFindSym)
+itsAlreadyInRam:
+	ld	hl, avAxeMode+2
+	add	hl, de
+	ld	a, (hl)
+	inc	a
+	cp	5
+	jr	nz, notOverFlowz
+	xor	a
+notOverFlowz:
+	ld	(hl), a
+
+	push	af
+	bcall(_arc_unarc)
+	pop	af
+
+	ld	b, a
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, b
+	ld	hl, axeOptions
+	add	a, l
+	ld	l, a
+	jr	nc, $+3
+	inc	h
+;$$
+	rst	20h
+	xor	a
+	ld	(op1+9), a
+	ld	hl, op1
+	ld	e, (hl)
+	inc	hl
+	jp	homeMessage
+
+
+killAllHookz:
+	call	findArcAppvar
+	ld	a, b
+	ld	bc, avSize
+	ld	de, $8000-2
+	bcall(_flashToRam)
+	ld	ix, $8000
+	call	killAllHooks
+	
+	ld	e, 53
+	ld	hl, hooksKilledText
+	jp	homeMessage
+	
+
+toggleLinkPort:
+	bit	7, (iy + $36)
+	jr	z, enablingSilentLinkHook
+	ld	a, ($9BD2)
+	ld	b, a
+	in	a, (06)
+	cp	b
+	jr	z, disablingSilentLinkHook
+enablingSilentLinkHook:
+	in	a, (06)
+	ld	hl, silentLinkHook
+	bcall(_enableSilentLinkHook)	
+	ld	hl, headPhoneText
+	ld	e, 53
+	jr	homeMessage
+
+
+
+disablingSilentLinkHook:
+	call	disableThisSilentLinkHook
+
+	ld	hl, normalText
+	ld	e, 69
+	jr	homeMessage
+	
+
+;####################################
+doArchiveAllProgs:
+	call	archiveAllPrograms
+	ld	hl, saveSScreen
+	ld	b, 64
+	bcall(_restoreDisp)
+	ld	hl, archedText
+	ld	e, 17
+	jr	homeMessage
+
+
+
+;###################################
+enableBaseConv:
+	call	locateParserFV
+	jr	c, regularParser2
+
+	set	7, (hl)
+	jr	dispHexText
+
+regularParser2:
+	in	a, (06)
+	ld	hl, hexHook
+	bcall(_enableParserHook)
+
+dispHexText:
+	ld	hl, baseText
+	ld	e, 40
+	jr	homeMessage
+
+resetApp:
+	bcall(_closeEditEqu)
+
+	call	foreignInstall
+
+	ld	hl, resetText
+	ld	e, 64
+	jr	homeMessage
+
+
+	
+
+
+
+swapAngle:
+	ld	a, (iy + trigFlags)
+	xor	%000000100
+	ld	(iy + trigFlags), a
+
+	ld	hl, radians
+	ld	e, 69
+	bit	2, a
+	jr	z, isRadians
+
+	ld	hl, degrees
+	ld	e, 67
+isRadians:
+
+
+homeMessage:
+
+	call	safeHomeMessage
+
+goHomeNoMessage:
+	call	fixEditBuffer
+
+
+
+aWayToRetZ:
+	xor	a
+	ret
+
+
+
+;##############
+nonOnButtons:
+	ld	a, (menuCurrent)
+	cp	3
+	jp	nz, notProgMenuz
+
+	ld	a, ($85DF)
+	cp	1
+	jp	nz, notProgMenuz
+
+	ld	a, b
+
+	cp	kEnter
+	jr	z, enterToEdit
+	cp	k0
+	jr	c, notProgMenuz
+	cp	k9+1
+	jr	nc, notProgMenuz
+
+	sub	k0
+	jr	nz, notTheZeroButton
+	ld	a, 10
+notTheZeroButton:
+	ld	hl, fakeFirstVar
+	rst	20h
+	ld	b, a
+findThatProgram:
+	push	bc
+	bcall(_findAlphaUp)
+	pop	bc
+	jr	c, aWayToRetZ
+	ld	a, (op1)
+	cp	5
+	jr	nz, findThatProgram
+	djnz	findThatProgram
+
+	call	closeEditEquSaveOP1
+	jr	gotTheEdit
+	
+fakeFirstVar:
+	.db	05, 'A'-1, 0
+
+enterToEdit:
+	ld	a, ($85E2)		;items in menu
+	or	a
+	jr	z, returnEnter
+	bcall(_closeEditEqu)
+	ld	hl, progCurrent-1
+	rst	20h
+gotTheEdit:
+	call	editProgram		;this won't return if it work
+	call	fixEditBuffer
+returnEnter:
+	ld	a, kEnter
+	or	a
+	ret
+
+
+
+
+
+
+
+
+
+
+notProgMenuz:
+	jr	rawKeyChain
+
+
+
+
+
+
+
+
+
+
+
+
+;#############
+rawKeyChain:
+	push	bc
+	push	ix
+	ld	ix, omnicalcRawKey+$4000
+
+	call	checkOmniChain
+	pop	ix
+	jr	nc, omniChainGood
+
+	pop	af
+	or	a
+	ret
+omniChainGood:
+
+	ld	hl, runOmniRunner
+	ld	de, $8000
+	ld	bc, runOmniRunnerEnd-runOmniRunner
+	ldir
+
+	jp	$8000
+
+runOmniRunner:
+	out	(06), a
+	pop	af
+	jp	omnicalcRawKey+1
+runOmniRunnerEnd:
+	
+
+
+
+		
+
+;################################
+checkOmniChain:
+	ld	c, fvOmniPage
+	call	fakeVarOffset
+	jr	nz, cantChain
+
+	ld	a, (hl)
+	cp	$FF
+	jr	z, cantChain
+	
+	or	a
+	jr	nz, mightHaveCorrectPage
+incorrectPage:
+	push	hl
+	call	findArcAppVar
+	jr	c, setOmniAbort
+
+	ld	de, f_(avbOmni)+2
+	add	hl, de
+	call	fast_bhl
+
+	bcall(_loadCIndPaged)
+	bit	b_(avbOmni), c
+	scf
+	jr	z, setOmniAbort
+
+	ld	hl, omniName
+	rst	20h
+	bcall(_findApp)
+
+setOmniAbort:
+	pop	hl
+	jr	nc, appDoesExist
+	
+	ld	(hl), $FF
+cantChain:
+	scf
+	ret
+	
+appDoesExist:
+	ld	(hl), a
+mightHaveCorrectPage:
+
+	push	af
+	ld	c, 7
+	ld	b, a
+	ld	a, i
+	jp	pe, $+5
+	ld	a, i
+;$$
+	di
+	out	(c), b
+	ld	a, (ix)
+#if	_84
+	ld	b, $81
+#else
+	ld	b, $41
+#endif
+	out	(c), b
+	jp	po, notIntz
+	ei
+notIntz:
+	cp	$83
+	pop	bc
+	ld	a, b
+	jr	nz, incorrectPage
+	ret				;this has NC
+
+
+;############################################
+actuallyDispHomeMessage:
+	ld	bc, (penCol)
+	push	bc
+	ld	d, 0
+	ld	(penCol), de
+
+	ld	a, (iy + fontFlags)
+	ld	d, a
+	res	fracDrawLFont, (iy + fontFlags)
+	ld	a, (iy + sGRFlags)
+	ld	b, a
+	res	textWrite, (iy + sGRFlags)
+	ld	a, (iy + textFlags)
+	ld	c, a
+	set	textInverse, (iy + textFlags)
+	set	textEraseBelow, (iy + textFlags)
+	ld	a, $20
+	call	myVPutC
+	call	myVPutS
+	ld	a, c
+	ld	(iy + textFlags), a
+	ld	a, b
+	ld	(iy + sGRFlags), a
+	ld	a, d
+	ld	(iy + fontFlags), a
+
+	pop	hl
+	ld	(penCol), hl
+	ret
+
+
+;###############################################
+safeHomeMessage:
+	push	hl
+	bcall(_runIndicOff)
+	ld	hl, saveSScreen
+	bcall(_saveDisp)
+	pop	hl
+
+	call	actuallyDispHomeMessage
+
+	ld	hl, $9669
+	ld	(matrixDimensions), hl
+	ld	hl, cursorDuration
+	ld	(matrixDimensions+2), hl
+
+	ld	hl, 0
+	ld	(vendorID+2), hl
+	ld	hl, (getCSCHookPtr)
+	ld	a, (getCSCHookPtr+2)
+	bit	0, (iy + $34)
+	jr	z, noGetCSCHookActive
+	ld	(vendorID), hl
+	ld	(vendorID+2), a
+noGetCSCHookActive:
+	ld	hl, homeGetCSCHook
+	in	a, (06)
+	bcall(_enableGetCSCHook)
+	ret
+	
+
+
+;###############################################
+handleHomeMessage:
+	ld	a, (matrixDimensions)
+	cp	$69
+	jr	nz, notForTurnOff
+	ld	a, (matrixDimensions+1)
+	cp	$95
+	jr	z, thatsOneOfThem
+	cp	$96
+	jr	nz, notForTurnOff
+thatsOneOfThem:
+
+	ld	hl, 0
+	ld	(matrixDimensions), hl
+	ld	hl, saveSScreen
+	push	bc
+	ld	b, 64
+	bcall(_restoreDisp)
+	call	restoreOldCSCHook
+	pop	bc
+	ret
+
+notforTurnOff:
+	ld	hl, 0
+	ld	(matrixDimensions+2), hl
+	ret
+
+;############################################
+locateParserFV:
+	call	findArcAppvar
+	ret	c
+
+	ld	de, f_(avbParser)+2
+	add	hl, de
+	call	fast_bhl
+	bcall(_loadCIndPaged)
+	bit	b_(avbParser), c
+	jr	nz, dontRetC
+retCC:
+	scf
+	ret
+dontRetC:
+	ld	c, fvParserPage
+	call	fakeVarOffset
+	jr	nz, retCC
+	push	hl
+	in	a, (06)
+	ld	hl, parserHook
+	bcall(_enableParserHook)
+	or	a
+	pop	hl
+	ret
+
+
+;#########################################
+fixEditBuffer:
+	bcall(_closeEditEqu)
+
+	bit	5, (iy + $44)
+	jr	z, notMathPrintEnabled
+
+	ld	hl, saveSScreen
+	ld	bc, 768
+	call	clearMem
+
+	xor	a
+	ld	(menuCurrent), a
+	bcall(_clrLCDFull)
+	call	clrForMathPrint
+	bcall(_homeUp)
+
+	ld	hl, $40
+	bcall(_pullDownChk)
+	bcall($5125)
+	set	curAble, (iy + curFlags)
+	res	curLock, (iy + curFlags)
+	ret	
+
+
+
+isAtHomeScreen:
+	ld	(curRow), hl
+	ret
+notMathPrintEnabled:
+
+	bcall(_setupEditCmd)
+tryIt:
+	ld	bc, (op6Ext)
+	ld	a, b
+	or	c
+	jr	z, bufferIsZero
+
+	ld	hl, (editTail)
+	ld	de, (editCursor)
+	ldir
+	ld	(editTail), hl
+	ld	(editCursor), de
+bufferIsZero:
+
+	ret
+
+
+
+;########################################
+homeGetCSCHook:
+	add	a, e
+	cp	$1B
+	ret	nz
+
+	ld	a, (matrixDimensions)
+	cp	$69
+	jr	nz, restoreOldCSCHook
+	ld	a, (matrixDimensions+1)
+	cp	$96
+	jr	nz, restoreOldCSCHook
+	ld	a, (matrixDimensions+2)
+	dec	a
+	ld	(matrixDimensions+2), a
+	or	a
+	jr	nz, cscRet
+
+	push	bc
+	ld	hl, saveSScreen
+	ld	b, 64
+	bcall(_restoreDisp)
+
+
+	pop	bc
+	ld	hl, 0
+	ld	(matrixDimensions+2), hl
+
+restoreOldCSCHook:
+	ld	hl, 0
+	ld	(matrixDimensions), hl
+	bcall(_disableGetCSCHook)
+	ld	hl, (vendorID)
+	ld	a, (vendorID+2)
+	or	a
+	jr	z, cscRet
+	bcall(_enableGetCSCHook)
+cscRet:
+	or	1
+	ld	a, b
+	ret
+
+
+;#######################################
+silentLinkHook:
+	add	a, e
+
+	in a,(9)
+	ld a,80h	;omnicalc	
+	out (8),a
+
+
+	res	0, (iy + $3E)
+	bcall(_kdbScan)
+	xor	a
+	ret
+
+;######################################
+disableThisSilentLinkHook:
+	ld	a, ($9BD2)
+	ld	b, a
+	in	a, (06)
+	cp	b
+	ret	nz
+disableSilentLinkHookRet:
+	bcall(_disableSilentLinkHook)
+	ret
+
+
+
+
+;#######################################
+getThisMenuToken:
+	ld	a, ($85E0)
+	push	af
+	ld	a, ($85DF)
+	push	af
+	ld	a, (menuCurrent)
+	push	af
+	di
+#if	_84
+	ld	a, $7B
+#else
+	ld	a, $1B
+#endif
+	out	(07), a
+	ld	a, ($505F+2+$4000)
+#if	_84
+#else
+	and	$1F
+#endif
+	out	(07), a
+
+	ld	hl, $8000
+findMenuTable:
+	ld	a, $3A
+	ld	bc, $FFFF
+	cpir
+	ld	b, 3
+	ld	de, menuSearchData
+	call	compareMenu
+	jr	nz, findMenuTable
+	
+	ld	c, (hl)
+	inc	hl			;returns 5C2C in 2.53
+	ld	b, (hl)
+	inc	hl
+
+	push	bc
+	ld	b, 4
+	call	compareMenu
+	pop	de
+	jr	nz, findMenuTable
+	pop	af
+
+	add	a, a
+	ld	l, a
+	ld	h, $40
+	add	hl, de
+
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a
+;%%%
+		
+	ld	de, $4000		;math in 2.53 is 5E70
+	add	hl, de
+	pop	af
+	or	a
+	ld	b, a
+	ld	a, (hl)
+	jr	z, firstPartOfMenu
+	push	hl
+getOffsetToStartLp:
+	inc	hl
+	add	a, (hl)
+	djnz	getOffsetToStartLp
+	pop	hl
+firstPartOfMenu:
+	add	a, a
+	inc	hl
+	ld	e, a
+	ld	d, 0
+	add	hl, de
+;%%
+
+	pop	af
+
+	add	a, a
+	ld	d, 0
+	ld	e, a
+	add	hl, de
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+	out	(07), a
+	ei		; it's probably ok to enable these here
+	ret
+
+;###
+compareMenu:
+	ld	a, (de)
+	cp	(hl)
+	inc	hl
+	inc	de
+	ret	nz
+	djnz	compareMenu
+	ret
+
+
+menuSearchData:
+	.db	$DE, $85, $21
+	.db	$CB, $27, $16, $00
+
+
+;#######################################
+;input: hl = start of op1, or similar
+
+getLastLetter:
+	push	af
+	push	bc
+
+	ld	bc, 10
+	xor	a
+	cpir
+	dec	hl
+	dec	hl
+
+	pop	bc
+	pop	af
+	ret
+
+
+
+;###########################################
+appChangeHook:
+	add	a, e
+	cp	kPrgmEd		;these are all part of editing
+	ret	z		
+	cp	kMode
+	ret	z		
+	cp	kTblSet
+	ret	z
+	cp	kFormat
+	ret	z
+	
+finishEditing:			;Z for ram, NZ for archive
+
+	push	af
+	push	bc
+	push	hl
+
+	or	a
+	ld	a, b
+	jr	nz, notOmnicalcFix
+	cp	$58
+	jr	z, omnicalcFixEntry
+notOmnicalcFix:
+
+	cp	$46
+	jr	nz, killAppChangeHook	;this is in case a weird switch happens
+
+omnicalcFixEntry:
+	ld	hl, varType
+	push	hl
+	rst	20h
+	pop	hl
+	call	isHLSpecial
+	ld	d, 0
+	jr	z, killAppChangeHook
+
+	call	takesAWhile
+
+	rst	18h
+	ld	hl, op1
+	call	getLastLetter
+	res	7, (hl)
+	call	deleteOp1
+	jr	c, killAppChangeHook	;this could happen with omnicalc
+	
+	bcall(_popRealO1)
+	ld	hl, op1
+	call	getLastLetter
+	ld	de, -op1-1+7
+	add	hl, de
+	push	hl
+	bcall(_chkFindSym)	;if this is gone, we let it crash
+	pop	de
+	or	a
+	sbc	hl, de
+	res	7, (hl)
+	ld	hl, op1
+	call	getLastLetter
+	res	7, (hl)
+	call	arcUnarcSaveOp1
+	ld	d, 1
+
+killAppChangeHook:
+	xor	a
+	ld	(varClass), a
+	bcall(_disableAppChangeHook)
+	pop	hl
+	pop	bc
+	pop	af
+	bit	0, d
+	ret
+
+
+
+;##########################
+errorInvalidz:
+	xor	a
+	bcall(_errInvalid)
+
+
+;############################
+editProgram:
+	ld	hl, 0
+editProgramCustomOffset:
+	push	hl
+	ld	hl, 0
+	ld	(errOffset), hl
+	bcall(_chkFindSym)
+	pop	hl
+	ret	c
+	push	hl
+
+	ld	a, b
+	or	a
+	jr	nz, itIsArchived
+
+	call	isOp1Special
+	jr	z, doTheEdit
+	jr	setTheHook		;idiot
+
+
+itIsArchived:
+	call	findStartInRom
+
+	bcall(_loadDEIndPaged)
+	inc	hl
+	call	fast_bhl
+
+	push	hl
+	ld	a, e
+	or	d
+	ld	a, b
+	push	af
+	push	de
+
+	call	takesAWhile
+
+	ld	hl, op1
+	call	getLastLetter
+	set	7, (hl)
+
+	call	deleteOp1
+
+	pop	hl
+	push	hl
+	call	pushOp1
+	bcall(_createProg)
+	call	popOp1
+	inc	de
+	inc	de
+	pop	bc
+	pop	af
+	pop	hl
+	jr	z, zeroSizes
+	bcall(_flashToRam)
+zeroSizes:
+
+
+setTheHook:
+	ld	hl, appChangeHook
+	in	a, (06)
+	bcall(_enableAppChangeHook)
+	ld	a, $69
+	ld	(varClass), a
+
+doTheEdit:
+	ld	hl, op1
+	ld	de, varType
+	push	hl
+	bcall(_mov9B)
+
+	ld	a, $58
+	ld	(cxCurApp), a
+
+
+
+	ld	a, kPrgmEd
+	bcall(_pullDownChk)
+	bcall(_clrTR)
+
+	pop	hl
+	ld	de, progToEdit-1
+	bcall(_mov9B)
+
+#if	_2Page
+	bcall(bOpenEditor)
+#endif
+	
+	bcall(_newContext0)
+	pop	hl
+	call	editorToOffset
+
+	ld	sp, (onSP)
+	bcall(_resetStacks)
+	bcall(_mon)
+
+
+;#########################################
+findAppRestore14:
+	bcall(_findApp)
+	ld	a, appObj
+	ld	(op1), a
+	ret
+
+
+
+;#########################################
+closeEditEquSaveOp1:
+	call	pushOp1
+	bcall(_closeEditEqu)
+	jp	popOp1Ret
+
+;#########################################
+arcUnarcSaveOp1:
+	rst	18h
+	bcall(_arc_unarc)
+popRealO1Ret:
+	bcall(_popRealO1)
+	ret
+
+
+;#########################################
+isOp1Special:
+	ld	hl, op1
+isHLSpecial:
+	push	hl
+	call	getLastLetter
+	bit	7, (hl)
+	pop	hl
+	ret
+
+;########################################
+takesAWhile:
+	bcall(_runIndicOn)
+skiFastLosePass:
+	ld	a, 3
+	out	($20), a
+	ret
+
+
+archedText:
+	.db	"All  programs  archived", 0
+;chemText:
+;	.db	"Molar  mass", 0
+baseText:
+	.db	"Base  conversion", 0
+resetText:
+	.db	"Restored", 0
+normalText:
+	.db	"Normal", 0
+headPhoneText:
+	.db	"Head  phones", 0
+confirmText:
+	.db	"Confirm", 0
+setText:
+	.db	"Set", 0
+hooksKilledText:
+	.db	"Hooks  killed", 0
+copiedText:
+	.db	"Copied", 0
+notEnoughMemoryText:
+	.db	"Not enough memory", 0
+mirageName:
+	.db	appObj, "MirageOS"
+DCS7Name:
+	.db	appObj, "DoorsCS7"
+
+

@@ -1,0 +1,260 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	saveSScreen 86ECh
+.org        progStart-2
+.db         $BB,$6D
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+write1ByteLSDISR: ;writes one byte to screen, must take less than 150 tstates to be usefull
+	;c is $31 and d is 3
+	exx				;4
+	ex af,af'		;4	:8
+    inc hl			;6	:14
+    ld a,(hl)		;7	:21
+    out ($11),a		;11	;32
+    dec b			;4	;36
+    jr z,NextColLSDISR	;usually no so 7 ;43
+	out (c),d		;12	;55
+    
+	exx				;4	;59
+	ex af,af'		;4	;63
+    ei				;4	;67
+	ret				;10	;77
+
+
+
+
+Install_ISR:
+
+;Disabling interrupts prior to installation.
+;This is in case an im 2 interrupt is already running.
+;(MirageOS would present such a case.)
+;
+	di
+
+;A 257 byte vector table(located in StatVars) is 
+;filled with the same byte.  This byte will determine 
+;the location of the interrupt code's start.
+;If the table is filled with $XY then the code must be
+;located at $XYXY.
+;
+	ld hl,$8B00
+	ld (hl),$8A
+	ld de,$8B01
+	ld bc,256
+	ldir
+
+;The interrupt code is copied to a safe code buffer(StatVars).
+;If the interrupt code is to large, you may alternatively
+;place jp instruction in this code buffer that jumps to your
+;interrupt code. Interrupt code should be located in ram. While
+;nothing physically prevents use of bank4000 area, it is 
+;commonly swapped out and so at the very least precautions
+;would be required to use that area.
+;
+	ld hl,Interrupt_Start
+	ld de,$8A8A
+	ld bc,Interrupt_End-Interrupt_Start
+	ldir
+
+;You must designate what hardware will generate an interrupt.
+;For safety, acknowledging any waiting requests may
+;also be done.
+;
+	ld a,%00001000		;Acknowledge and disable
+	out (3),a
+	ld a,%00001010		;Set 1st timer active
+	out (3),a
+	ld a,%00000110		;Slowest frequency, ~110hz
+	out (4),a
+
+;i is the higher byte of the address that points to the
+;vector table.  The lower byte, for all practicality,
+;should be considered random.
+;
+	ld a,$8B
+	ld i,a
+	im 2
+	ei
+	ret
+
+
+;This small function simply ends the installed interrupt.
+;This should be done prior to exit, or when it is not safe
+;to have a custom interrupt running.
+;
+Kill_ISR:
+	di
+	im 1
+	ret
+
+
+Interrupt_Start:
+	exx
+	ex af,af'
+    
+    ld hl,(timeV1)
+    ex de,hl
+    ld hl,(timeV2)
+    ld (timeV1),hl
+    ex de,hl
+    ld (timeV2),hl
+    
+    ld a,(timeD1)
+    out ($30),a
+    ld a,2      ; no loop, interrupt
+    out ($31),a
+    ld a,(timeV1)
+    out ($32),a
+    
+    ld a,(intParity)
+    xor 1
+    jr z,noEndInt
+     ld a,%00001000		;Acknowledge and disable
+	 out (3),a
+	 ex af,af'
+	 exx
+	 ei
+	 ret
+noEndInt:
+	
+    ld a,(ScreenWritten)
+    inc a
+    ld (ScreenWritten),a
+    ;write to screen
+    
+    
+    
+    
+    
+    
+    
+    
+  ;end
+	ld a,%00001000		;Acknowledge and disable
+	out (3),a
+	ex af,af'
+	exx
+	ei
+	ret
+Interrupt_End:
+
+ScreenPtr:
+.db 0,0
+ScreenWritten:
+.db 0
+
+
+intParity:
+.db 0
+timeV1:
+.db 181
+timeD1:
+.db $40
+timeV2:
+.db $80
+timeD2:
+.db $84
+
+
+testLoop:
+	
+   
+longtimeLoop:
+    in a,(4)
+    bit 5,a       ;bit 5 tells if timer 1 is done
+   jr z,longtimeLoop
+   
+   ld a,(timeD2)
+   out ($30),a
+   ld a,0        ; no loop, no interrupt
+   out ($31),a
+   ld a,(timeV2)
+   out ($32),a
+shorttimeLoop:
+    in a,(4)
+    bit 5,a       ;bit 5 tells if timer 1 is done
+   jr z,shorttimeLoop
+  	bit 3,a
+    ret z
+;write to screen
+	ld b,8
+    ld hl,screendat
+    ld a,$05
+    out ($10),a
+    ld a,$88
+   bit 0,(ix)
+   bit 0,(ix)
+   bit 0,(ix)
+    out ($10),a
+    ld a,$21
+   bit 0,(ix)
+   bit 0,(ix)
+   bit 0,(ix)
+    out ($10),a
+drawLoop:
+	 ld a,(hl)
+   bit 0,(ix)
+   bit 0,(ix)
+   bit 0,(ix)
+     out ($11),a
+     cpl
+     ld (hl),a
+     
+     inc hl
+    djnz drawLoop
+
+
+
+
+
+
+    
+   jr testLoop
+	
+   xor a
+   out ($30),a   ;Turn off the timer.
+   out ($31),a
+    
+
+
+screendat:
+.db %11111000
+.db %11100111
+.db %11100110
+.db %00011001
+.db %00011010
+.db %00010101
+.db %10101010
+.db %01010101
+    
+    

@@ -1,0 +1,102 @@
+
+;C0, log(  10^  sin sin-1 cos cos-1 tan tan-1
+
+;ln = BE
+
+
+
+longTokens:
+	bcall(_disableTokenHook)
+	ld	a, (appShadow+appLongTokens)
+	xor	1
+	ld	(appShadow+appLongTokens), a
+	ld	a, 1
+	ld	(appDirty), a
+	jp	title2
+
+
+
+
+
+
+tokenHook:
+	add	a, e
+	
+	push	hl
+	ex	de, hl
+	ld	de, $BE*2
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, notLN
+	ld	hl, zLn
+	jr	gotPtr
+notLN:
+	ld	de, $C0*2
+	or	a
+	sbc	hl, de
+	jr	c, notInterested
+	ld	de, 8*2
+	sbc	hl, de
+	add	hl, de
+	jr	nc, notInterested
+
+	ld	de, tokenPtrs+1
+	add	hl, de
+	ld	a, (hl)
+	dec	hl
+	ld	l, (hl)
+	ld	h, a
+	or	a
+	jr	z, notInterested
+gotPtr:
+	pop	af
+	ld	de, $8000
+copyToRam:
+	ld	a, (hl)
+	ldi
+	or	a
+	jr	nz, copyToRam
+	ld	hl, $7FFF
+	ret
+
+notInterested:
+	pop	hl
+	ret
+
+
+
+
+tokenPtrs:
+	.dw	zLog
+	.dw	0
+	.dw	zSin
+	.dw	zArcSin
+	.dw	zCos
+	.dw	zArcCos
+	.dw	zTan
+	.dw	zArcTan
+	
+
+zLog:
+	.db	10, "logarithm(", 0
+zSin:
+	.db	5, "sine(", 0
+zArcSin:
+	.db	8, "arcSine(", 0
+zCos:
+	.db	7, "cosine(", 0
+zArcCos:
+	.db	10, "arcCosine(", 0
+zTan:
+	.db	8, "tangent(", 0
+zArcTan:
+	.db	11, "arcTangent(", 0
+zLN:
+	.db	17, "naturalLogarithm(", 0
+
+
+
+
+
+

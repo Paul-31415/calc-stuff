@@ -1,0 +1,229 @@
+
+;##################
+getDelay:
+	in	a, ($29)
+	and	3
+	ld	e, a
+
+	xor	a
+	out	($20), a
+	
+	ld	a, $2E
+	out	($10), a
+
+	ld	c, $0C-$04
+
+
+
+delayTest:
+	ld	d, 100
+	ld	b, 255
+	ld	a, 4
+	add	a, c
+	ld	c, a
+	out	($29), a
+testLoop:
+	inc	hl
+	dec	hl
+	inc	hl
+	dec	hl
+	nop
+	ld	a, (hl)
+		
+	in	a, ($10)	;60 tstates
+	or	a
+	jp	m, delayTest
+
+	out	($11), a
+	djnz	testLoop
+	
+	ld	b, 255
+	dec	d
+	jr	nz, testLoop	;25500 trials, 
+	
+	
+	ld	a, c
+	or	e
+	ld	(avShadow+avDelay), a
+	
+
+	call	skiFastLosePass
+
+	jr	hardwareReturn
+
+
+;##################
+toggleFastMem:
+	toggle_(avbFastMem)
+	ld	a, $45
+	out	($2E), a
+hardwareReturn:
+	call	makeAVDirty
+;$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;#####################
+hardware:
+	bcall(_grBufClr)
+
+
+
+	ld	hl, (avShadow + avContrast)
+	ld	d, 8
+	call	displayMenuNumber
+
+
+#if	_84
+
+	ld	hl, (avShadow + avDelay)
+	call	displayMenuNumber
+
+	bit_(avbC000)
+	ld	d, 32
+	call	yesOrNo
+
+	bit_(avbFastMem)
+	call	yesOrNo
+
+#else
+	bit_(avbC000)
+	ld	d, 24
+	call	yesOrNo
+#endif
+
+	ld	hl, hardwareText
+	jp	menu
+
+
+
+
+;##################
+saveContrast:
+	ld	a, (contrast)
+	ld	(avShadow+avContrast), a
+	jr	hardwareReturn
+
+;###################
+toggleC000:
+	toggle_(avbC000)
+
+	call	unlockFlashApp
+
+#if	_84
+	ld	a, $10
+	out	($25), a
+	ld	a, $20
+	out	($26), a
+#else
+	ld	a, $1F
+	ld	hl, $46D8
+	call	makeAnOffPageJump
+	ld	hl, $8010
+	ld	a, $1F
+	ld	(hl), a	;should be $0F
+	dec	hl
+	out	(05), a		;should be 7
+	call	$8000
+#endif
+	bcall(_flashWriteDisable)
+	jr	hardwareReturn
+
+;#####################
+resetThose:
+	ld	hl, 0
+	ld	(avShadow+avContrast), hl
+	jr	hardwareReturn
+
+#if	avContrast + 1 != avDelay
+.echo	"problem over in hardware.z80"
+#endif
+
+
+
+
+
+;################################
+onScrptEntry:
+	push	bc
+	call	findArcAppvar
+	jr	c, onScrptLeave
+
+	ld	a, b
+	ld	de, $8016
+	ld	bc, avSize+2
+	bcall(_FlashToRam)
+
+	ld	ix, $8018
+
+	ld	a, ($8018+avDelay)
+	or	a
+	jr	z, notSettingDelayz
+	out	($29), a
+notSettingDelayz:
+	
+	bit_(avbC000)
+	call	nz, unlockC000
+
+	bit_(avbFastMem)
+	jr	z, notFastMemz
+	xor	a
+	out	($2E), a
+notFastMemz:
+
+onScrptLeave:
+	pop	af
+	ret
+
+
+;####################################
+killOnscrpt:
+	res	0, (iy + 33h)
+	ld	hl, onScrptName
+	jp	deleteHL
+
+
+
+
+
+
+;####################################
+unlockC000:
+	call	unlockFlashApp
+#if	_84
+	xor	a
+	out	($25), a
+	dec	a
+	out	($26), a
+#else
+	ld	a, $1F
+	ld	hl, $46D8
+	call	makeAnOffPageJump
+	ld	a, $1F
+	out	(05), a		;should be 7
+	ld	hl, $8010
+	ld	(hl), 0
+	dec	hl
+	call	$8000
+#endif
+
+flashWriteDisableRet:
+	bcall(_flashWriteDisable)
+	ret
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

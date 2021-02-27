@@ -1,0 +1,73 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	saveSScreen 86ECh
+.org        progStart-2
+.db         $BB,$6D
+
+
+;engine test tone
+	ld bc, 4
+	ld (osc+2),bc
+
+	
+;sound engine
+	di
+    ld (spSave),sp
+    
+	ld de,endOsc
+Loop:
+	in a,(4)
+     bit 3,a
+     jr z,noExit
+     	ld sp,(spSave)
+     	ret
+noExit:
+	ld b,(endOsc - osc)/4
+    ld sp,osc
+    ld ix,0
+addLoop:
+	pop hl
+    pop de
+    push de
+    add hl,de
+    push hl
+    pop de
+    pop de
+    ld a,h
+    rrca
+    rrca
+    rrca
+    inc a
+    rrca
+    and 15
+    ld hl,SineVT
+    add a,l
+    ld l,a
+    jr nc, noAddh
+    	inc h
+noAddh:
+	ld a,(hl)
+    
+    add a,ixl
+    ld ixl,a
+    jr nc, noAddixh
+    	inc ixh
+noAddixh:
+    
+    djnz addLoop
+    
+    ;output
+    
+    
+    
+    
+    jr Loop
+
+spSave:
+.db 0,0
+osc:; (16 bits value, 16 bits dv):
+.db 0,0,0,0
+endOsc:
+
+SineVT:
+.db 0,24,45,59,64,59,45,24,0,232,211,197,192,197,211,232

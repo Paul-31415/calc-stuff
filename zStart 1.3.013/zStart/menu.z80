@@ -1,0 +1,363 @@
+
+
+;######################
+;menu button handler
+;output:
+;c  --	z   --	clear
+;   --	nz  --  arrows	
+;nc --	z   --	enter
+;   --  nz  --	2nd
+
+
+menuButtonHand:
+	ei
+buttonHandLoop:
+	halt
+	bcall(_getCSC)
+	or	a
+	jr	z, buttonHandLoop
+
+	cp	skClear
+	scf
+	ret	z
+
+	cp	skEnter
+	ret	z
+
+	cp	sk2nd
+	jr	nz, not2ndz
+	or	a
+	ret
+
+not2ndz:
+	cp	5
+	jr	nc, menuButtonHand
+
+	ld	hl, setFlags
+	push	hl
+
+	dec	a
+	jp	z, downz
+	dec	a
+	jp	z, upz
+	dec	a
+	jp	z, downz
+	jp	upz
+
+setFlags:
+	xor	a
+	inc	a
+	scf
+	ret
+
+	
+;#####################
+;find and create a list of items
+;input: hl = ptr to tag
+;output: saveSScreen has table
+;type 1 | name 8
+
+findItems:
+	ld	(tagPtr), hl
+	bcall(_DisableAPD)
+
+	ld	hl, saveSScreen
+	ld	bc, 767
+	call	clearMem
+
+
+	xor	a
+	ld	(itemsFound), a
+
+	ld	hl, (progPtr)
+findLoop:
+	ld	de, (pTemp)
+	or	a
+	sbc	hl, de
+	ret	z
+	ret	c
+	add	hl, de
+	
+	ld	a, (hl)
+	and	%00011111
+	cp	protProgObj
+	jr	z, itsAProg
+	cp	progObj
+	jr	z, itsAProg
+	cp	appVarObj
+	jr	z, itsAProg
+;not a prog
+	ld	de, 6
+	or	a
+	sbc	hl, de
+	ld	e, (hl)
+	scf
+	sbc	hl, de
+	jr	findLoop
+
+itsAProg:
+	ld	de, -3
+	add	hl, de
+	ld	e, (hl)
+	dec	hl
+	ld	d, (hl)
+	dec	hl
+	ld	b, (hl)
+	dec	hl
+
+	push	hl
+	push	af
+
+	ld	a, b
+	or	a
+	jp	nz, itsInRom
+
+itsInRam:
+	inc	de
+	inc	de
+	ld	hl, (tagPtr)
+	ex	de, hl
+inRamLoop:
+	ld	a, (de)
+	or	a
+	jr	z, isValidFile
+	cp	(hl)
+	jr	nz, notWhatWeWant
+	inc	hl
+	inc	de
+	jr	inRamLoop	
+
+
+itsInRom:	
+	call	FindStartInRom
+	inc	hl
+	inc	hl
+	call	fast_BHL
+	ld	de, (tagPtr)
+
+
+isRomLoop:
+	ld	a, (de)
+	or	a
+	jr	z, isValidFile
+	bcall(_loadCIndPaged)
+	cp	c
+	jr	nz, notWhatWeWant
+	inc	hl
+	inc	de
+	call	fast_bhl
+	jr	isRomLoop
+
+
+isValidFile:
+	ld	a, (itemsFound)
+	cp	85
+	jr	z, notWhatWeWant
+	inc	a
+	ld	(itemsFound), a
+	dec	a
+	ld	e, 9
+	bcall(_MultAbyE)
+	ld	de, saveSScreen
+	add	hl, de
+
+	pop	af
+	ld	(hl), a
+	inc	hl
+
+	pop	de
+	ex	de, hl
+	call	copyVatName
+
+	
+	jp	findLoop
+
+notWhatWeWant:
+	pop	af
+	pop	hl
+	ld	e, (hl)
+	ld	d, 0
+	scf
+	sbc	hl, de
+	jp	findLoop
+
+;############################
+copyVatName:
+	ld	b, (hl)
+	dec	hl
+nameCopyLoop:
+	ld	a, (hl)
+	ld	(de), a
+	inc	de
+	dec	hl
+	djnz	nameCopyLoop
+	ret
+
+
+;##############################
+;menu of items
+;input: table in saveSScreen
+;output: carry - quit
+;	zero - enter
+;	nz - 2nd
+;	(selected)
+
+newItemsMenu:
+	ld	a, (itemsFound)
+	or	a
+	scf
+	ret	z
+	xor	a
+	ld	(scrolled), a
+	inc	a
+	ld	(selected), a
+
+itemsMenu:
+
+menuLoopz:
+	bcall(_GrBufClr)
+	ld	a, (selected)
+	dec	a
+	ld	hl, scrolled
+	sub	(hl)
+	ld	e, 7*12
+	bcall(_multAbyE)
+	ld	de, plotSScreen
+	add	hl, de
+	ld	d, h
+	ld	e, l
+	inc	de
+	ld	bc, 7*12-1
+	ld	(hl), $FF
+	ldir
+
+
+	ld	a, (itemsFound)
+	ld	b, a
+	cp	10
+	jr	c, noChange
+	ld	b, 9
+noChange:
+	ld	a, (scrolled)
+	inc	a
+	ld	c, a
+	ld	hl, $0001
+	ld	(penCol), hl
+menuPicLoop:
+	push	bc
+	res	3, (iy + 5)	;notInverse
+	ld	a, (selected)
+	cp	c
+	jr	nz, notSelectedz
+	set	3, (iy + 5)	;inverse
+notSelectedz:
+	dec	c
+	ld	a, c
+	ld	e, 9
+	bcall(_multAbyE)
+	ld	de, saveSSCreen+1
+	add	hl, de
+	ld	b, 8
+myVPutS2:
+	ld	a, (hl)
+	or	a
+	jr	z, puttingDone
+	call	myVPutC
+	inc	hl
+	djnz	myVPutS2
+puttingDone:
+	ld	a, (penrow)
+	add	a, 7
+	ld	(penRow), a
+	ld	a, 1
+	ld	(penCol), a
+	pop	bc
+	inc	c
+	djnz	menuPicLoop
+
+	res	3, (iy + 5)	;not inverse
+
+	bcall(_grBufCpy)
+
+	ei
+itemButtonLoop:
+	halt
+	bcall(_getCSC)
+	or	a
+	jr	z, itemButtonLoop
+	cp	skClear
+	scf
+	ret	z
+	cp	skUp
+	call	z, upz
+	cp	skDown
+	call	z, Downz
+	cp	skEnter
+	ret	z
+	cp	sk2nd
+	jp	nz, menuLoopz
+
+	or	a
+	ret
+
+upz:
+	push	af
+	push	hl
+	ld	a, (selected)
+	dec	a
+	ld	(selected), a
+	jr	nz, goodz
+	ld	a, (itemsFound)
+	ld	(selected), a
+	sub	9
+	jr	nc, goodz5
+	xor	a
+goodz5:
+	ld	(scrolled), a
+	jr	goodz2
+goodz:
+	ld	hl, scrolled
+	dec	a
+	sub	(hl)
+	jr	nc, goodz2
+	dec	(hl)
+goodz2:
+	pop	hl
+	pop	af
+	ret
+
+downz:
+	push	af
+	push	hl
+	ld	a, (selected)
+	inc	a
+	ld	(selected), a
+	ld	b, a
+	ld	a, (itemsFound)
+	cp	b
+	ld	a, b
+	jr	nc, goodz3
+	xor	a
+	ld	(scrolled), a
+	inc	a
+	ld	(selected), a
+	jr	goodz4
+goodz3:
+	ld	hl, scrolled
+	sub	(hl)
+	cp	10
+	jr	c, goodz4
+	inc	(hl)
+goodz4:
+	pop	hl
+	pop	af
+	ret
+
+
+;#####################################
+;menu in zStart.z80
+
+
+
+
+

@@ -1,0 +1,140 @@
+
+
+;##############################
+archiveAllPrograms:
+	bcall(_closeEditEqu)
+
+	ld	hl, archiveText
+	ld	e, 62
+	call	homeMessage
+
+	di
+#if	_84
+	ld	a, $82
+	out	(07), a
+	ld	hl, $A000-10
+	ld	de, $A000-10+1
+	ld	bc, $2000-1+10
+	ld	(hl), 0
+	ldir
+#endif
+
+	ld	ix, $E000
+
+#if	_84
+	ld	a, $81
+	out	(07), a
+#endif
+
+	ld	hl, (progPtr)
+safeArchiveLoop:
+	ld	de, (pTemp)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	ret	z
+	ret	c
+
+	ld	a, (hl)
+	and	%00011111
+	ld	c, a
+	cp	progObj
+	jr	z, goodType
+	cp	protProgObj
+	jr	z, goodType
+;	cp	appVarObj
+;	jr	z, goodType
+
+	ld	de, -6
+	add	hl, de
+alreadyArchived:
+	ld	d, 0
+	ld	e, (hl)
+	scf
+	sbc	hl, de
+	jr	safeArchiveLoop
+
+goodType:
+	ld	de, -5
+	add	hl, de
+	ld	a, (hl)
+	dec	hl
+	or	a
+	jr	nz, alreadyArchived
+
+	ld	b, (hl)
+	dec	hl
+	ld	de, op1
+	ld	a, c
+	ld	(de), a
+	inc	de
+copyTheNameLoop:
+	ld	a, (hl)
+	ld	(de), a
+	dec	hl
+	inc	de
+	djnz	copyTheNameLoop
+	xor	a
+	ld	(de), a
+	push	hl
+
+	ld	a, (op1+1)
+	cp	'#'
+	jr	z, dontArchiveThis
+	cp	'!'
+	jr	z, dontArchiveThis
+
+
+
+
+	push	ix
+#if	_84
+	pop	de
+
+	ld	a, 2
+	out	(05), a
+
+	ld	hl, op1
+	ld	bc, 9
+	ldir
+
+	ld	hl, $E000-1
+	inc	(hl)
+
+	xor	a
+	out	(05), a
+
+	push	de
+#endif
+
+	bcall(_arc_unarc)
+	di
+	pop	ix
+	
+dontArchiveThis:
+
+	pop	hl
+	jr	safeArchiveLoop
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

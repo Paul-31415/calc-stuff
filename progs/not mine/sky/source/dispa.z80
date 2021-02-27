@@ -1,0 +1,33 @@
+
+; display_a_1			0 is displayed as a space
+; display_a_2			first 0 is displayed as a space
+
+display_a_1:
+	or	a
+	call	z, display_a_space
+display_a_1_0:
+	xor	$30
+	bcall(VPutMap)
+	ret
+
+display_a_2:
+	call	display_a_calc
+	push	af
+		ld	a, b
+		call	display_a_1
+	pop	af
+	jr	display_a_1_0
+
+display_a_space:
+	ld	a,$36 ;$06 = "    "
+	ret
+
+display_a_calc:
+	ld	b,0
+_
+	cp	10
+	ret	c
+	sub	10
+	inc	b
+	jr	-_
+

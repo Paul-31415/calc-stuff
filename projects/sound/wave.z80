@@ -1,0 +1,45 @@
+
+
+
+playBuff:	
+	;; plays buff at hl in the form 0bllllrrrr or so
+
+	ld c,0
+buffLoop:
+	ld a,(hl)
+	ld d,a
+	and %11110000 		;length
+	ret z			;length 0 is return
+	ld e,a
+	xor d 			;this = ld a,d / and $0f
+	ld d,a
+playLoop:
+	ld a,d
+	or a
+	
+	ld b,a
+	jr z,noDelay1
+	out (c),1
+delay1:
+	djnz delay1
+noDelay1:	
+	//sub 16 			; 1111-16 = -1
+	//cpl			; -1 => 0
+
+	cpl			; 15 => -16 ,need flags affected last
+	add a,16		
+	
+	ld b,a
+	jr z,noDelay2
+	out (c),2
+delay2:
+	djnz delay2
+noDelay2:
+	ld a,e
+	sub 16
+	ld e,a
+	jp nz,playLoop
+	
+	inc hl
+	jp buffLoop
+	

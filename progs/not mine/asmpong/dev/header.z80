@@ -1,0 +1,184 @@
+#ifdef TIOS
+#include	"ti83plus.inc"
+.LIST						
+	.org	$9d93				
+	.db	$BB,$6D	
+randData		equ		$9000
+INT_BALL_COL		equ 		$9872
+INT_COL_VECTOR 		equ 		$9873
+INT_BALL_ROW 		equ 		$9874
+INT_ROW_VECTOR 		equ 		$9875
+INT_PADDLE_ROW 		equ 		$9876
+INT_END 		equ 		$9877
+INT_AI_PADDLE_ROW 	equ 		$9878
+INT_PLAYER_SCORE 	equ 		$9879
+INT_AI_SCORE 		equ 		$987B
+INT_DIFFICULTY 		equ 		$987D
+INT_MENU 		equ 		$987E
+SPEED			equ		$987F
+COUNTER			equ		$9880
+TEMP_CONTRAST		equ		$9881
+SHOTL			equ		$9882
+SHOTR			equ		$9883
+SHOTLROW		equ		$9884
+SHOTRROW		equ		$9885
+PLAYER_PADDLE_BYTE	equ		$9886
+AI_PADDLE_BYTE		equ		$9887
+saferam2		equ		savesscreen
+	bcall(_PUSHREALO1)
+#endif
+#ifdef MALLARD
+#include "mallard.inc"
+#define ifastcopy ionFastCopy
+#define irandom ionRandom
+.list
+.org userMem
+	.db $D9,$00,"Duck"
+	.dw Start
+	.db "Pong v1.2 by Jon Martin",0
+Start:		
+INT_BALL_COL		equ 		saferam1	
+INT_COL_VECTOR 		equ 		saferam1+1 
+INT_BALL_ROW 		equ 		saferam1+2
+INT_ROW_VECTOR 		equ 		saferam1+3
+INT_PADDLE_ROW 		equ 		saferam1+4
+INT_END 		equ 		saferam1+5
+INT_AI_PADDLE_ROW 	equ 		saferam1+6
+INT_PLAYER_SCORE 	equ 		saferam1+8
+INT_AI_SCORE 		equ 		saferam1+10
+INT_DIFFICULTY 		equ 		saferam1+12
+INT_MENU 		equ 		saferam1+13
+SPEED			equ		saferam1+14
+COUNTER			equ		saferam1+15
+TEMP_CONTRAST		equ		saferam1+16
+SHOTL			equ		saferam1+17
+SHOTR			equ		saferam1+18
+SHOTLROW		equ		saferam1+19
+SHOTRROW		equ		saferam1+20
+PLAYER_PADDLE_BYTE	equ		saferam1+21
+AI_PADDLE_BYTE		equ		saferam1+22
+#endif
+#ifdef ASH
+#define equ .equ
+.ORG $9104
+.DB "Pong v1.2 by Jon Martin",0
+saferam2		equ		$8228
+contrast		equ		$8008
+plotsscreen		equ		$88B8
+randData		equ		$9000			
+INT_BALL_COL		equ 		$808F 	
+INT_COL_VECTOR 		equ 		$8090
+INT_BALL_ROW 		equ 		$8091
+INT_ROW_VECTOR 		equ 		$8092
+INT_PADDLE_ROW 		equ 		$8093
+INT_END 		equ 		$8094
+INT_AI_PADDLE_ROW 	equ 		$8095
+INT_PLAYER_SCORE 	equ 		$8096 
+INT_AI_SCORE 		equ 		$8098
+INT_DIFFICULTY 		equ 		$809A
+INT_MENU 		equ 		$809B
+SPEED			equ		$809C
+COUNTER			equ		$809D
+TEMP_CONTRAST		equ		$809E
+SHOTL			equ		$809F
+SHOTR			equ		$80A0
+SHOTLROW		equ		$80A1
+SHOTRROW		equ		$80A2
+PLAYER_PADDLE_BYTE	equ		$80A3
+AI_PADDLE_BYTE		equ		$80A4
+indicflags		equ		$000C
+indicrun		equ		$0000
+#endif
+#ifndef ASH
+#ifndef MALLARD
+#ifndef TIOS
+#ifndef MIRAGE
+#include "ion.inc"
+#define ifastcopy ionFastCopy
+#define irandom   ionRandom
+#define equ .equ
+.list
+#ifdef TI83P
+	.org    progstart-2
+        .db     $BB,6D
+#else
+        .org    progstart
+#endif
+        ret				
+        jr      nc,begin			;where to go to start the program
+
+	.db "Pong v1.2 by Jon Martin",0
+begin:		
+INT_BALL_COL		equ 		saferam1	
+INT_COL_VECTOR 		equ 		saferam1+1 
+INT_BALL_ROW 		equ 		saferam1+2
+INT_ROW_VECTOR 		equ 		saferam1+3
+INT_PADDLE_ROW 		equ 		saferam1+4
+INT_END 		equ 		saferam1+5
+INT_AI_PADDLE_ROW 	equ 		saferam1+6
+INT_PLAYER_SCORE 	equ 		saferam1+8
+INT_AI_SCORE 		equ 		saferam1+10
+INT_DIFFICULTY 		equ 		saferam1+12
+INT_MENU 		equ 		saferam1+13
+SPEED			equ		saferam1+14
+COUNTER			equ		saferam1+15
+TEMP_CONTRAST		equ		saferam1+16
+SHOTL			equ		saferam1+17
+SHOTR			equ		saferam1+18
+SHOTLROW		equ		saferam1+19
+SHOTRROW		equ		saferam1+20
+PLAYER_PADDLE_BYTE	equ		saferam1+21
+AI_PADDLE_BYTE		equ		saferam1+22
+CONTRAST		equ		curcont
+#endif
+#endif
+#endif
+#endif
+#ifdef MIRAGE
+#include "ti83plus.inc"
+#include "mirage.inc"
+		
+
+	.org $9d93				;Origin
+	.db $BB,$6D				;Compiled AsmPrgm token
+	ret						
+	.db	1					
+	.db %00000001,%00000000
+	.db %00000001,%00000000
+	.db %00000001,%00000000
+	.db %00000001,%00000000
+	.db %10000001,%00000000
+	.db %10000001,%00110000
+	.db %10000001,%01011010
+	.db %10000001,%01111010
+	.db %10000001,%00110010
+	.db %10000001,%00000010
+	.db %00000001,%00000010
+	.db %00000001,%00000010
+	.db %00000001,%00000000
+	.db %00000001,%00000000
+	.db %00000001,%00000000
+						;Description - zero terminated
+	.db "Pong v1.2 by Jon Martin",0
+			
+INT_BALL_COL		equ 		$9872 	
+INT_COL_VECTOR 		equ 		$9873 
+INT_BALL_ROW 		equ 		$9874
+INT_ROW_VECTOR 		equ 		$9875
+INT_PADDLE_ROW 		equ 		$9876
+INT_END 		equ 		$9877
+INT_AI_PADDLE_ROW 	equ 		$9878
+INT_PLAYER_SCORE 	equ 		$9879 
+INT_AI_SCORE 		equ 		$987B
+INT_DIFFICULTY 		equ 		$987D
+INT_MENU 		equ 		$987E
+SPEED			equ		$987F
+COUNTER			equ		$9880
+TEMP_CONTRAST		equ		$9881
+SHOTL			equ		$9882
+SHOTR			equ		$9883
+SHOTLROW		equ		$9884
+SHOTRROW		equ		$9885
+PLAYER_PADDLE_BYTE	equ		$9886
+AI_PADDLE_BYTE		equ		$9887
+#endif

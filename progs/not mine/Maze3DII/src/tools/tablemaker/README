@@ -1,0 +1,7 @@
+Tablemaker reference
+
+tablemaker generates the tables needed by Mach3D to stdout.
+
+Usage:
+
+tablemaker >tables.inc 

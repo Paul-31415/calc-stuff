@@ -1,0 +1,163 @@
+	;; halffloat routines meant to be able to run from flash
+
+	;; round to evens
+
+
+	
+HPadd_hl_de:
+	;; inputs: hl - float 1
+	;; 	   de - float 2
+	;; outputs:hl - result
+	;;         f - flags {
+	;; 	c - result was ±∞ or ±NaN
+	;; 	n - undefined
+	;; 	p/v - sign changed by this operation
+	;; 	3 - undefined
+	;; 	h - undefined
+	;; 	5 - undefined
+	;; 	z - result was ±0
+	;; 	s - copy of sign bit
+	;; destroys: hl,f
+
+	;; SEEE:EEMM|MMMM:MMMM
+
+	push de
+	push bc
+	push af 		;save input a
+	inc sp 			;allow flags to be overwritten
+	;; check for hl nan
+	ld a,h
+	cpl
+	and %01111100 		;if z, then hl is inf or nan
+	jr z,_HPadd_hl_de__hl_exceptional
+
+	rrca
+	rrca
+	cpl
+	ld c,a 			;save the exp for later
+	;; hl is fine, so what about de?
+	
+	ld a,d
+	cpl
+	and %01111100
+	jr z,_HPadd_hl_de__de_exceptional
+	;; ok, both are fine, now we convert the exponents
+	rrca
+	rrca
+	cpl 			;these saved exponents look like %111eeeee
+	ld b,a
+	;; now we find the difference of exponents
+	sub c 			;a = exp(de) - exp(hl)
+
+	;; now if a < 0, swap args and continue
+  if(relocatable):
+	and $80			;z if positive
+	ld b,a
+	jr z,_HPadd_hl_de__exp_diff_positive
+	 ex de,hl
+	 ;; a must = c-b+c
+	 ld a,c
+	 sub b
+	 add a,c
+_HPadd_hl_de__exp_diff_positive:	
+	sub c
+	
+  else:
+	jp p,_HPadd_hl_de__exp_diff_positive
+	 ex de,hl
+	 neg
+_HPadd_hl_de__exp_diff_positive:	
+  end:
+	
+	;; if abs( a ) ≥ 12 , no effect	
+	cp 12
+	jr nc,_HPadd_hl_de__exp_diff_too_much
+	;; now we synthesize the addends in ahl and de
+	ld b,a
+
+
+	;; de
+	ld a,d
+	and %01111100
+	jr z,_HPadd_hl_de__hl_subnormal
+	 xor %00000100 		;this will cause a one in the implied place
+_HPadd_hl_de__de_subnormal:
+	xor d
+ if (relocatable):
+	cp $80			;c if positive
+	jr c,_HPadd_hl_de__de_positive
+ else:
+	jp p,_HPadd_hl_de__de_positive
+ end:
+	;; negate by subtracting from $8000
+	ld d,a
+	ex de,hl
+	push de
+	ld de,$8000
+	or a
+	sbc hl,de
+	add hl,hl		;this is for later to save on a zero-check
+	pop de
+	ex de,hl
+_HPadd_hl_de__de_positive:	
+	
+	
+	;; ahl
+	ld a,h
+	and %01111100 		
+	jr z,_HPadd_hl_de__hl_subnormal
+	 xor %00000100 		;this will cause a one in the implied place
+_HPadd_hl_de__hl_subnormal:	
+	xor h 			;this causes a to have h's mantissa
+
+ if (relocatable):
+	cp $80			;c if positive
+	jr c,_HPadd_hl_de__hl_positive
+ else:
+	jp p,_HPadd_hl_de__hl_positive
+ end:	
+	;; it is negative
+	;; hl = m + s
+	;; want: -m
+	;; -m = s - hl
+	ld h,a
+	push de
+	ld de,$8000
+	or a
+	sbc hl,de
+	pop de
+	ld a,h
+	or a			;zcf
+_HPadd_hl_de__hl_positive:	
+	ld h,a
+	ccf
+	sbc a,a			;
+
+	;; check for byte-shift
+	;; because b < 15
+	inc b
+	bit 3,b
+	jr z,_HPadd_hl_de__ahl_shift
+	;; shift ahl up one byte
+	ld a,h
+	ld h,l
+	ld l,0
+_HPadd_hl_de__ahl_shift:
+	add hl,hl
+	rla
+	djnz _HPadd_hl_de__ahl_shift
+
+
+	;; now the things are shifted, so we shall preform the add
+	add hl,de
+	adc a,0
+	;; ahl has the result
+
+	;; now get the max exponent from before
+	
+
+
+_HPadd_hl_de__exp_diff_too_much:	
+_HPadd_hl_de__hl_exceptional:
+_HPadd_hl_de__de_exceptional:	
+	

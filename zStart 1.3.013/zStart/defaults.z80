@@ -1,0 +1,74 @@
+
+
+
+toggleDiag:
+	toggle_(avbDiag)
+	jr	setDefaultsReturn
+
+toggleMP:
+	toggle_(avbMathPrint)
+	jr	setDefaultsReturn
+
+togglePopUp:
+	toggle_(avbPopup)
+	jr	setDefaultsReturn
+
+toggleWizard:
+	toggle_(avbWizard)
+	jr	setDefaultsReturn
+
+
+toggleAngle:
+	toggle_(avbAngle)
+setDefaultsReturn:
+	call	makeAVDirty
+;$$$$$$$$$$$$$$$$$$
+;	fall through
+;##################
+
+setDefaults:
+	bcall(_GrBufClr)
+	ld	hl, radians
+	bit_(avbAngle)
+	jr	z, wasRadians
+	ld	hl, degrees
+wasRadians:
+	ld	d, 8
+	call	putOnRight
+	
+	bit_(avbDiag)
+	call	yesOrNo
+
+#if	_84
+
+	ld	hl, mathPrint
+	bit_(avbMathPrint)
+	jr	z, wasMP
+	ld	hl, classic
+wasMP:
+	call	putOnRight
+
+	bit_(avbPopup)
+	call	yesOrNo
+
+	ld	a, (ix + f_(avbWizard))
+	and	1 << b_(avbWizard)
+	xor	1 << b_(avbWizard)
+	call	yesOrNo
+
+#endif
+	
+	ld	hl, defaultsText
+	jp	menu
+
+
+
+
+
+
+
+
+
+
+
+

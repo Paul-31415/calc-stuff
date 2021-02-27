@@ -1,0 +1,4490 @@
+.nolist
+    #include      "ti83plus.inc"
+.list
+.org    $4080
+.db    t2ByteTok, tAsmCmp
+
+
+
+	bcall(_clrLCDFull)
+	bcall(_grBufClr)
+	
+	ld	hl, 23*256+14
+	ld	de, 41*256+81
+	bcall(_drawRectBorder)
+
+	ld	hl, text
+	ld	de, 25*256+32
+	ld	(penCol), de
+	call	myVPutS
+	
+	ld	de, 33*256+17
+	ld	(penCol), de
+	call	myVPutS
+
+	di
+
+	ld	a, $FF
+	out	($20), a
+
+
+	ld	a, 3
+	out	(05), a
+
+;2.53 stuff
+
+	ld	hl, $D77E
+	ld	de, saveSScreen
+	ld	bc, $300
+	ldir
+
+;2.53 stuff end
+
+	ld	b, 0
+	ld	de, $C000
+	ld	hl, _22050
+copyLoop:
+	push	de
+	ld	c, 255
+copyString:
+	ld	a, (hl)
+	ldi
+	inc	a
+	jr	nz, copyString
+	ex	(sp), hl
+	ld	de, 32
+	add	hl, de
+	ex	de, hl
+	pop	hl
+	djnz	copyLoop
+
+	ld	hl, switcher
+	ld	bc, switcherEnd-switcher
+	ldir
+
+	ld	hl, _F000Redir
+	ld	de, $F000
+	ld	bc, _F000RedirEnd-_F000Redir
+	ldir
+
+	ld	hl, $FE00
+	ld	de, $FE01
+	ld	bc, 256
+	ld	(hl), $FD
+	ldir
+
+	ld	a, $C3	;pop bc jp
+	ld	($FDFD), a
+	ld	hl, interruptRet-switcher+$E000
+	ld	($FDFE), hl
+	
+	im	2
+	ld	a, $FE
+	ld	i, a
+	ld	a, %00001001
+	out	(03), a
+	ei
+	
+
+
+
+	in	a, (06)
+	ld	($DFFF), a
+	jp	$E000
+
+
+
+
+
+
+
+_F000Redir:
+normal:
+	exx			;4
+	ld	a, (hl)		;7
+	inc	hl		;6
+	or	a		;4
+	jr	nz, normalByte	;7
+
+	bit	7, h		;8
+	jr	nz, overage	;7
+overageRet:
+
+
+	rld			;18
+	
+	add	a, b		;4	;b is $78
+
+	.db	$DD		;4
+	ld	l, part2-_F000Redir	;7
+	jp	exxAndGo-switcher+$E000	;10
+
+overage:
+	ld	h, a
+	in	a, (06)
+	dec	a
+	out	(06), a
+	ld	a, h
+	ld	h, $40
+	jr	overageRet
+
+
+
+normalByte:
+	bit	7, h		;8
+	jr	z, notOverPage	;13
+	ld	h, a
+	in	a, (06)
+	dec	a
+	out	(06), a
+	ld	a, h
+
+	ld	h, $40
+	jp	exxAndGo-switcher+$E000	
+notOverPage:
+	
+	nop			;4
+	nop			;4
+	dec	de		;6
+	ld	d, (hl)		;7
+
+	jp	exxAndGo-switcher+$E000	;10
+
+
+
+
+
+
+part2:
+	exx			;4
+	ld	a, (hl)		;7
+	and	c		;4
+	add	a, b		;4
+
+	.db	$DD		;4
+	ld	l, compd-_F000Redir	;7
+
+	ld	d, (hl)		;7
+	ld	d, (hl)		;7
+	ld	d, (hl)		;7
+	ld	d, (hl)		;7
+	nop			;4
+
+
+
+	inc	hl		;6
+	bit	7, h		;8
+	jp	z, exxAndGo-switcher+$E000	;10
+	
+	ld	h, a
+	in	a, (06)
+	dec	a
+	out	(06), a
+	ld	a, h
+	
+	ld	h, $40
+
+	jp	exxAndGo-switcher+$E000
+
+
+
+
+	
+compd:
+	exx			;4
+	ld	a, (hl)		;7
+	or	a		;4
+	jr	z, leavingDecomp	;7
+
+	xor	a
+	rld			;18
+
+	add	a, b		;4
+	
+	.db	$DD		;4
+	ld	l, part2-_F000Redir	;7
+
+	nop			;4
+	nop			;4
+	dec	de		;6
+	ld	d, (hl)		;7
+
+	jp	exxAndGo-switcher+$E000
+
+
+
+leavingDecomp:
+	inc	hl		;6
+	ld	a, (hl)		;7
+	inc	hl		;6
+
+	.db	$DD		;4
+	ld	l, normal-_F000Redir	;7
+
+
+	inc	de		;6
+	nop			;4
+
+
+	bit	7, h		;8
+	jp	z, exxAndGo-switcher+$E000	;10	
+
+	ld	h, a
+	in	a, (06)
+	dec	a
+	out	(06), a
+	ld	a, h
+
+	ld	h, $40
+
+	dec	l
+	jr	z, leavingDecomp
+	inc	l
+	jp	exxAndGo-switcher+$E000
+
+
+_F000RedirEnd:
+
+
+
+
+
+
+
+
+
+;^ those routines take 86 each
+;v that routine takes 55
+;minimum 141 clocks per loop
+
+;141 + 514 + 41 = 696 total
+;15800000 / 696 = 22701 hz
+
+
+
+
+switcher:
+	ei
+	ld	ix, $F000
+
+
+	ld	hl, endOfExec
+	ld	bc, $780F
+	exx
+	ld	de, $8000
+	jp	(ix)
+
+
+
+
+
+decomp:
+#define lp2	decomp-switcher+$E000	
+	
+
+
+	
+	
+exxAndGo:
+	exx			;4
+andGo:
+
+;22050 hz
+;	nop
+;	nop
+;	inc	hl
+;	nop
+
+
+	ld	l, 3		;7
+	rra			;4	carry must be reset
+	rr	l		;8
+	rra			;4
+	rr	l		;8
+	rra			;4
+	rr	l		;8
+	ld	h, a		;4
+	jp	(hl)		;4
+				;51
+
+interruptRet:
+	pop	af
+toQuit:
+	ld	a, ($DFFF)
+	out	(06), a
+	jp	backHere
+backHere:
+
+	di
+
+	xor	a
+	out	(03), a
+	im	1
+	ld	a, %00001011
+	out	(03), a
+
+
+;2.53 stuff
+	ld	de, $D77E
+	ld	hl, saveSScreen
+	ld	bc, $300
+	ldir
+
+
+	ld	hl, $DA7E
+	ld	de, $DA7F
+	ld	bc, $2FF
+	ld	(hl), 0
+	ldir
+;2.53 stuff
+
+
+	xor	a
+	out	(05), a
+
+
+
+	xor	a
+	out	(00), a
+
+	bcall(_jForceCMDNoChar)
+
+
+switcherEnd:
+
+
+
+
+
+
+#define	delay(xxxx)	ld b, xxxx/13
+#defcont		\ djnz $
+
+#define	delay2(xxxx) ld b, xxxx-2/26 \ ld a, (hl) \ inc hl \ djnz $-2
+
+#define delay4	nop
+#define delay6	inc hl
+#define delay7	ld a, (hl)
+#define delay8	nop \ nop
+#define delay9	ld a, i
+#define delay10 inc hl \ nop
+#define delay11 ld a, (hl) \ nop
+#define delay12 inc hl \ inc hl
+#define delay13 ld a, (hl) \ inc hl
+#define delay14 ld a, (hl) \ ld a, (hl)
+#define delay15 ld a, (hl) \ nop \ nop
+#define delay16 inc hl \ inc hl \ nop
+#define delay17 ld a, (hl) \ inc hl \ nop
+#define delay18 inc hl \ inc hl \ inc hl
+#define delay19 ld a, (hl) \ inc hl \ inc hl
+#define delay20 ld a, (hl) \ ld a, (hl) \ inc hl
+#define delay22 nop \ nop \ ld a, (hl) \ ld a, (hl)
+#define delay24 ld a, (hl) \ ld a, (hl) \ inc hl \ nop
+#define delay26 ld a, (hl) \ ld a, (hl) \ inc hl \ inc hl
+#define delay28 ld a, (hl) \ ld a, (hl) \ ld a, (hl) \ ld a, (hl)
+#define delay30 ld a, (hl) \ ld a, (hl) \ inc hl \ inc hl \ nop
+
+
+
+
+
+
+_22050:
+	
+;0
+	jp	toQuit-switcher+$E000
+	.db	$FF
+
+;1
+	xor	a
+	out	(00), a
+	
+	delay2(496)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	nop
+
+	jp	(ix)
+	.db	$FF
+
+;2
+	xor	a
+	out	(00), a
+	
+	delay2(496)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;3
+	xor	a
+	out	(00), a
+	
+	delay2(496)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;4
+	xor	a
+	out	(00), a
+	
+	delay2(496)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;5
+	xor	a
+	out	(00), a
+	
+	delay2(496)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;6
+	xor	a
+	out	(00), a
+	
+	delay2(496)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;7
+	xor	a
+	out	(00), a
+	
+	delay2(496)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;8
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;9
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;10
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;11
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;12
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;13
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;14
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay30
+
+	jp	(ix)
+	.db	$FF
+
+;15
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;16
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;17
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;18
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;19
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;20
+	xor	a
+	out	(00), a
+	
+	delay2(470)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;21
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;22
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;23
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;24
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;25
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;26
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;27
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(28)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;28
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;29
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;30
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;31
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;32
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;33
+	xor	a
+	out	(00), a
+	
+	delay2(444)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;34
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;35
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;36
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;37
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;38
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;39
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;40
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(54)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;41
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;42
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;43
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;44
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;45
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;46
+	xor	a
+	out	(00), a
+	
+	delay2(418)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;47
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;48
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;49
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;50
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;51
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;52
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;53
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(80)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;54
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;55
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;56
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;57
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;58
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;59
+	xor	a
+	out	(00), a
+	
+	delay2(392)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;60
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;61
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;62
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;63
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;64
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;65
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;66
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(106)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;67
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;68
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;69
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;70
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;71
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;72
+	xor	a
+	out	(00), a
+	
+	delay2(366)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;73
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;74
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;75
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;76
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;77
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;78
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;79
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(132)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;80
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;81
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;82
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;83
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;84
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;85
+	xor	a
+	out	(00), a
+	
+	delay2(340)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;86
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;87
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;88
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;89
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;90
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;91
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;92
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(158)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;93
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;94
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;95
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;96
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;97
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;98
+	xor	a
+	out	(00), a
+	
+	delay2(314)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;99
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;100
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;101
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;102
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;103
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;104
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;105
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(184)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;106
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;107
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;108
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;109
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;110
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;111
+	xor	a
+	out	(00), a
+	
+	delay2(288)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;112
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;113
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;114
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;115
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;116
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;117
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;118
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(210)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;119
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;120
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;121
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;122
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;123
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;124
+	xor	a
+	out	(00), a
+	
+	delay2(262)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;125
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;126
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;127
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;128
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;129
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;130
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;131
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(236)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;132
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;133
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;134
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;135
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;136
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;137
+	xor	a
+	out	(00), a
+	
+	delay2(236)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;138
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;139
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;140
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;141
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;142
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;143
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;144
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(262)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;145
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;146
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;147
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;148
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;149
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;150
+	xor	a
+	out	(00), a
+	
+	delay2(210)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;151
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;152
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;153
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;154
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;155
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;156
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;157
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(288)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;158
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;159
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;160
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;161
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;162
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;163
+	xor	a
+	out	(00), a
+	
+	delay2(184)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;164
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;165
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;166
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;167
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;168
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;169
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;170
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(314)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;171
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;172
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;173
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;174
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;175
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;176
+	xor	a
+	out	(00), a
+	
+	delay2(158)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;177
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;178
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;179
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;180
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;181
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;182
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;183
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(340)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;184
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;185
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;186
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;187
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;188
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;189
+	xor	a
+	out	(00), a
+	
+	delay2(132)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;190
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;191
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;192
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;193
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;194
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;195
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;196
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(366)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;197
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;198
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;199
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;200
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;201
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;202
+	xor	a
+	out	(00), a
+	
+	delay2(106)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;203
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;204
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;205
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;206
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;207
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;208
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;209
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(392)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;210
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;211
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;212
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;213
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;214
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;215
+	xor	a
+	out	(00), a
+	
+	delay2(80)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;216
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;217
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;218
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;219
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;220
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;221
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;222
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(418)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;223
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;224
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;225
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;226
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;227
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;228
+	xor	a
+	out	(00), a
+	
+	delay2(54)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;229
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;230
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;231
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;232
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;233
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;234
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;235
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(444)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;236
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;237
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;238
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;239
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;240
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;241
+	xor	a
+	out	(00), a
+	
+	delay2(28)
+	delay4
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+;242
+	xor	a
+	out	(00), a
+	
+	delay30
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay16
+
+	jp	(ix)
+	.db	$FF
+
+;243
+	xor	a
+	out	(00), a
+	
+	delay28
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay18
+
+	jp	(ix)
+	.db	$FF
+
+;244
+	xor	a
+	out	(00), a
+	
+	delay26
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay20
+
+	jp	(ix)
+	.db	$FF
+
+;245
+	xor	a
+	out	(00), a
+	
+	delay24
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay22
+
+	jp	(ix)
+	.db	$FF
+
+;246
+	xor	a
+	out	(00), a
+	
+	delay22
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay24
+
+	jp	(ix)
+	.db	$FF
+
+;247
+	xor	a
+	out	(00), a
+	
+	delay20
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay26
+
+	jp	(ix)
+	.db	$FF
+
+;248
+	xor	a
+	out	(00), a
+	
+	delay18
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(470)
+	delay28
+
+	jp	(ix)
+	.db	$FF
+
+;249
+	xor	a
+	out	(00), a
+	
+	delay16
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(496)
+	delay4
+
+	jp	(ix)
+	.db	$FF
+
+;250
+	xor	a
+	out	(00), a
+	
+	delay14
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(496)
+	delay6
+
+	jp	(ix)
+	.db	$FF
+
+;251
+	xor	a
+	out	(00), a
+	
+	delay12
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(496)
+	delay8
+
+	jp	(ix)
+	.db	$FF
+
+;252
+	xor	a
+	out	(00), a
+	
+	delay10
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(496)
+	delay10
+
+	jp	(ix)
+	.db	$FF
+
+;253
+	xor	a
+	out	(00), a
+	
+	delay8
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(496)
+	delay12
+
+	jp	(ix)
+	.db	$FF
+
+;254
+	xor	a
+	out	(00), a
+	
+	delay6
+
+	ld	a, 3
+	out	(00), a
+
+	delay2(496)
+	delay14
+
+	jp	(ix)
+	.db	$FF
+
+
+
+;new255
+	jp	toQuit-switcher+$E000
+
+
+
+;255
+	xor	a
+	out	(00), a
+	delay4
+	ld	a, 3
+	out	(00), a
+
+	
+	delay2(496)
+	delay16
+
+	jp	lp
+	.db	$FF
+
+
+
+;############################################
+;my vPutS
+;input: same
+;output: same
+;destroys: none
+
+myVPutS:
+	push	af
+vPutSLoop:
+	ld	a, (hl)
+	inc	hl
+	or	a
+	jr	z, doneVPutting
+	bcall(_vPutMap)
+	jr	vPutSLoop
+doneVPutting:
+	pop	af
+	ret
+
+
+text:
+	.db	"truSound", 0
+	.db	"By:  Brian  Coventry", 0
+
+endOfExec:
+
+
+
+
+
+
+.end
+.end

@@ -1,0 +1,131 @@
+
+;######################################
+;cataHelp is in zStart.z80
+
+
+
+
+
+
+;####################################
+cataEntry:
+	.db	$83
+	push	bc
+	push	de
+	push	hl
+	push	af
+
+	call	keyScanFD
+	bit	1, b
+	jr	nz, outOfHere
+
+
+
+	ld	hl, cataName
+	rst	20h
+	bcall(_findApp)
+	jr	c, noCataFound
+
+	push	af
+
+	bcall(_fillBasePageTable)
+
+
+	ld	hl, getCSCHookPtr
+	ld	de, Op5
+	ld	bc, 3
+	ldir
+
+	ld	bc, 4
+	ld	hl, flags+$34	;address of hook flag
+	ldi
+
+
+	ld	hl, fontHookPtr
+	ld	de, Op5+4
+	ldir
+
+	ld	hl, flags+$35	;address of hook flag
+	ldi
+
+
+
+	ld	hl, cataRam
+	ld	de, $8000
+	ld	bc, cataRamEnd-cataRam
+	ldir
+
+	in	a, (06)
+	ld	hl, cataReturn
+	bcall(_enableGetCSCHook)
+
+	in	a, (06)
+	ld	b, a
+	pop	af
+
+	jp	$8000
+
+
+cataRam:
+	relocate($8000)
+	out	(06), a
+	ld	a, ($40CE)
+	cp	$83
+	jr	z, allGoodz
+	ld	a, b
+	out	(06), a
+	jp	noCataFound
+allGoodz: 
+	pop	af
+	pop	hl
+	pop	de
+	pop	bc
+	jp	$40CF
+	endRelocate()
+cataRamEnd:
+
+
+
+noCataFound:
+	bcall($504D)	;disable this hook
+outOfHere:
+	pop	af
+	cp	a
+	jp	popHLDEBC
+
+
+
+
+;##
+cataReturn:
+	.db	$83
+	push	af
+
+	ld	hl, op5
+	ld	de, getCSCHookPtr
+	ld	bc, 3
+	ldir
+	
+	ld	de, flags+$34
+	ld	bc, 4
+	ldi
+
+	ld	de, fontHookPtr
+	ldir
+
+	ld	de, flags+$35
+	ldi
+
+	ld	hl, cataEntry
+	in	a, (06)
+	bcall(_enableHelpHook)
+
+	pop	af
+	or	a
+	ret
+
+
+
+
+
+

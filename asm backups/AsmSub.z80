@@ -1,0 +1,72 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	saveSScreen 86ECh
+.org        progStart-2
+.db         $BB,$6D
+
+	;converts a string of hex to the data it encoded
+
+	bcall(_ansName)
+    rst 10h
+    and $1f
+    cp $04
+    ret nz ;only operate on strings
+    ex de,hl
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    
+    
+    ;bc has len
+    srl b
+    rl c ;div by 2
+    
+    ;writeback len
+    ld (hl),b
+    dec hl
+    ld (hl),c
+    inc hl
+    
+    inc hl
+    
+    ld d,h
+    ld e,l
+loop:
+	ld a,(hl)
+    inc hl
+    ;0-9 is $30-39
+	;A-F is $41-46
+    sub $30
+    cp $10
+    jr c,notLetter1
+     sub 7
+notLetter1: ;this is the high nibble so we rot it
+    rla
+    rla
+    rla
+    rla
+	ld (part+1),a ;store
+    ld a,(hl)
+    inc hl
+    ;0-9 is $30-39
+	;A-F is $41-46
+    sub $30
+    cp $10
+    jr c,notLetter2
+     sub 7
+notLetter2:
+part:
+    or 0
+    ;now a has result byte
+    ld (de),a
+    inc de
+    
+    ;loopcheck
+    dec bc
+    ld a,b
+    or c
+    jr nz,loop
+    
+    ret
+	
+    

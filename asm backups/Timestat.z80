@@ -1,0 +1,148 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	saveSScreen 86ECh
+.org        progStart-2
+.db         $BB,$6D
+
+;call and ret takes 27 tstates (outrageous!)
+
+;rst 10h finding ans on a calc with only this program takes 6432/6464 tstates
+;finding a when a-h were initialized in order:  6784/6816
+;finding b:										~160 tstates longer
+;finding c:										~192 tstates longer
+
+;moral: findsym takes a while
+
+
+
+
+   di
+   jr testStart
+;r1:
+;.db 0,0,$40,$40
+;r2:
+;.db 0,0,0,0   
+;ans:
+;.db 0,0,0,0
+   
+timeV:
+.db 1
+timeD:
+.db $80
+testStart:
+;put init code here
+	;ld hl,var
+    ;rst 20h; move 9 op1
+	
+testLoop:
+   ld a,(timeD)
+   out ($30),a
+   ld a,0        ; no loop, no interrupt
+   out ($31),a
+   ld a,(timeV)
+   out ($32),a  ; with no code in the test area: 11/12 t-states  (lo/hi)
+;put test code here:
+    ;rst 10h ;findsym
+   	call getNextTokDE
+    
+    
+   in a,(4)		
+   bit 5,a       ;bit 5 tells if timer 1 is done
+   ld a,0
+   out ($30),a   ;Turn off the timer.
+   out ($31),a
+   ld hl,(timeV)
+   jr z, guessLong
+    inc l
+    jr nz,guessShortNZ
+     inc h
+     ld l,$1
+guessShortNZ:
+	ld (timeV),hl
+   jr testLoop
+guessLong:
+	dec l
+    ld a,h
+    cp $40
+    jr z,guessLongNC ;cant decrease h here
+    ld a,l
+    cp $1
+    jr nc,guessLongNC
+     dec h
+     ld l,$ff
+guessLongNC:
+	ld (timeV),hl
+    
+   in a,(4)
+   bit 3,a
+   
+   jr nz,testLoop
+  ret
+	
+
+;var:
+;.db RealObj,tC,0
+
+
+
+#define		basic_pc	965Dh
+
+;time: 234 tstates
+
+getNextTokDE: ;next token -> de, 
+	ld hl,(basic_pc)	;16			;65 base
+    inc hl				;6
+    call getTokDE		;17 + __
+    ld (basic_pc),hl	;16
+    ret					;10
+    
+getTokDE: ;gets tok at hl -> de, affects hl, 
+	;2 byte tokens: 5c-5e, 60-63, 7e, aa, bb, ef
+    ;  Time Stats:
+    ;  1 byte < 5c	:	 33
+    ;  1 byte = 5f  :	 45
+    ;  1 byte 64-7d	:	128
+    ;  1 byte 7f-a9	:	128
+    ;  1 byte ab-ba	:	116
+    ;  1 byte bc-ee	:	 97
+    ;  1 byte f0-ff	:	 78
+    ;  2 byte 5c-63	:	 85
+    ;  2 byte 7e	:	149
+    ;  2 byte aa	:	137
+    ;  2 byte bb	:	118
+    ;  2 byte ef	:	 99
+    ;if 1 byte, d is preserved, value in e and a, ret nc if one byte
+    
+    ld a,(hl)											;7
+    ld e,a												;4
+    cp $5c												;7
+    ccf													;4
+    ret nc ;ret nc if 1 byte							;11/5
+    cp $5f												;7
+    ret z ;rets c if two bytes							;11/5
+	;5c-63
+	cp $64												;7
+    jr c,twoByteTok										;7/12
+    
+    cp $ef												;7
+	jr z,twoByteTok										;7/12
+    ret nc												;11/5
+    
+    cp $bb												;7
+	jr z,twoByteTok										;7/12
+    ret nc												;11/5
+    
+    cp $aa												;7
+	jr z,twoByteTok										;7/12
+    ret nc												;11/5
+    
+    and $81		;not 7e									;7
+	ret nz												;11/5
+
+twoByteTok:	;27
+    inc hl												;6
+	 ld d,(hl)											;7
+     scf ;yes it does									;4
+	ret													;10
+
+;#include "floatRoutines.z80"

@@ -1,0 +1,3 @@
+Plane game where the contrast changes if you are about to blackout/whiteout from acceleration
+
+dither-based greyscale with error-prop where you also propogate error forwards in time

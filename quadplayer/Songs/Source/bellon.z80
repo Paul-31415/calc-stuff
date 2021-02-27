@@ -1,0 +1,465 @@
+.org $0000
+#include "notes.inc"
+title:	.db "Bellon - Stage 7",0
+artist:	.db "Toaplan",0
+album:	.db "Zero Wing",0
+
+tempo = 100
+
+song:
+
+	playsection(intro)
+	playsection(mainTheme)
+	playsection(mainThemeEndA)
+	playsection(mainTheme)
+	playsection(mainThemeEndB)
+	playsection(mainThEndBEndA)
+	playsection(mainTheme)
+	playsection(mainThemeEndA)
+	playsection(mainTheme)
+	playsection(mainThemeEndB)
+	playsection(mainThEndBEndB)
+	playsection(lastThemeA)
+	playsection(lastThemeA)
+	playsection(lastThemeB)
+	playsection(lastThemeA)
+	playsection(lastThemeA)
+	playsection(lastThemeB)
+	playsection(endThemeA)
+	playsection(endThemeB)
+	playsection(endThemeA)
+	playsection(endSeq)
+	endsong
+
+
+intro:
+	note(a0,a1, e3,c3, sixteenth)
+	note(a0,a1, rest,rest, sixteenth)
+	note(a0,a1, d3,a2, sixteenth)
+	note(a0,a1, rest,rest, sixteenth)
+	note(a0,a1, a2,c3, sixteenth)
+	note(a0,a1, a2,d3, sixteenth)
+	note(a0,a1, a2,c3, sixteenth)
+	note(a0,a1, a2,d3, sixteenth)
+	note(g0,g1, a2,c3, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+	note(g0,g1, g2,b2, sixteenth)
+	note(g0,g1, rest, rest, sixteenth)
+	note(g0,g1, g2,d2, sixteenth)
+	note(a0,a1, rest,rest, sixteenth)
+	note(a0,a1, a2,e2, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+	
+	; just bass
+	
+	note(a1,a2, rest,rest, sixteenth)
+	note(a1,a2, rest,rest, sixteenth)
+	note(a1,a2, rest,rest, sixteenth)
+	note(a1,a2, rest,rest, sixteenth)
+	note(a1,a2, rest,rest, sixteenth)
+	note(a1,a2, rest,rest, sixteenth)
+	note(a1,a2, rest,rest, sixteenth)
+	note(a1,a2, rest,rest, sixteenth)
+	note(a1,a2, rest,rest, sixteenth)
+	note(a1,a2, rest,rest, sixteenth)
+	note(a1,a2, rest,rest, sixteenth)
+	note(a1,a2, rest,rest, sixteenth)
+	note(g1,g2, rest,rest, sixteenth)
+	note(a1,a2, rest,rest, sixteenth)
+	note(g1,g2, rest,rest, sixteenth)
+	note(g1,g2, rest,rest, sixteenth)
+
+	endsection
+
+mainTheme:
+
+	note(a0,a1, e2,a2, sixteenth)
+	note(a0,a1, e2,a2, sixteenth)
+	note(a0,a1, rest,rest, sixteenth)
+	note(a0,a1, a2,c3, sixteenth)
+	note(a0,a1, a2,c3, sixteenth)
+	note(a0,a1, rest,rest, sixteenth)
+	note(a0,a1, b2,d3, sixteenth)
+	note(a0,a1, b2,d3, sixteenth)
+	note(g0,g1, b2,d3, sixteenth)
+	note(g0,g1, b2,d3, sixteenth)
+	note(g0,g1, b2,d3, sixteenth)
+	note(g0,g1, b2,d3, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+	note(a0,a1, rest,rest, sixteenth)
+	note(a0,a1, rest,rest, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+
+	note(a0,a1, e2,a2, sixteenth)
+	note(a0,a1, e2,a2, sixteenth)
+	note(a0,a1, rest,rest, sixteenth)
+	note(a0,a1, a2,c3, sixteenth)
+	note(a0,a1, a2,c3, sixteenth)
+	note(a0,a1, rest,rest, sixteenth)
+	note(a0,a1, g2,b2, sixteenth)
+	note(a0,a1, g2,b2, sixteenth)
+	note(g0,g1, g2,b2, sixteenth)
+	note(g0,g1, g2,b2, sixteenth)
+	note(g0,g1, g2,b2, sixteenth)
+	note(g0,g1, g2,b2, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+	note(a0,a1, rest,rest, sixteenth)
+	note(d1,d2, rest,rest, sixteenth)
+	note(e1,e2, rest,rest, sixteenth)
+
+	note(a0,a1, a2,e2, sixteenth)
+	note(a0,a1, a2,e2, sixteenth)
+	note(a0,a1, a2,e2, sixteenth)
+	note(a0,a1, a2,c3, sixteenth)
+	note(a0,a1, a2,c3, sixteenth)
+	note(a0,a1, a2,c3, sixteenth)
+	note(a0,a1, b2,d3, sixteenth)
+	note(a0,a1, b2,d3, sixteenth)
+	note(g0,g1, b2,d3, sixteenth)
+	note(g0,g1, b2,d3, sixteenth)
+	note(g0,g1, b2,d3, sixteenth)
+	note(g0,g1, b2,d3, sixteenth)
+	note(g0,g1, c3,e3, sixteenth)
+	note(g0,g1, c3,e3, sixteenth)
+	note(f0,f1, e3,a3, sixteenth)
+	note(f0,f1, e3,a3, sixteenth)
+
+	endsection
+
+mainThemeEndA:
+
+	note(e0,e1, e3,b2, sixteenth)
+	note(e0,e1, e3,a3, sixteenth)
+	note(e0,e1, e3,a3, sixteenth)
+	note(e0,e1, e3,b2, sixteenth)
+	note(e0,e1, e3,a3, sixteenth)
+	note(e0,e1, e3,a3, sixteenth)
+	note(e0,e1, e3,ab3, sixteenth)
+	note(e0,e1, e3,ab3, sixteenth)
+	note(e0,e1, e3,ab3, sixteenth)
+	note(e0,e1, e3,ab3, sixteenth)
+	note(e0,e1, e3,ab3, sixteenth)
+	note(e0,e1, f3,a3, sixteenth)
+	note(e0,e1, e3,g3, sixteenth)
+	note(e0,e1, f3,c3, sixteenth)
+	note(e0,e1, e3,b2, sixteenth)
+	note(e0,e1, d3,a2, sixteenth)
+
+	endsection
+
+
+mainThemeEndB:
+	note(e0,e1, b2,e3, sixteenth)
+	note(e0,e1, e3,a3, sixteenth)
+	note(e0,e1, e3,a3, sixteenth)
+	note(e0,e1, b2,e3, sixteenth)
+	note(e0,e1, e3,a3, sixteenth)
+	note(e0,e1, e3,a3, sixteenth)
+	note(e0,e1, e3,ab3, sixteenth)
+	note(e0,e1, e3,ab3, sixteenth)
+	note(e0,e1, e3,ab3, sixteenth)
+	note(e0,e1, e3,ab3, sixteenth)
+	note(e0,e1, e3,ab3, sixteenth)
+	note(e0,e1, e3,ab3, sixteenth)
+	note(e0,e1, fs3,a3, sixteenth)
+	note(e0,e1, fs3,a3, sixteenth)
+	note(e0,e1, g3,b3, sixteenth)
+	note(e0,e1, g3,b3, sixteenth)
+
+	note(f0,f1, c3,f3, sixteenth)
+	note(f0,f1, c3,f3, sixteenth)
+	note(f0,f1, c3,f3, sixteenth)
+	note(f0,f1, c3,f3, sixteenth)
+	note(f0,f1, rest,rest, sixteenth)
+	note(f0,f1, rest,rest, sixteenth)
+	note(f0,f1, c3,f3, sixteenth)
+	note(f0,f1, c3,f3, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, d3,b2, sixteenth)
+	note(g0,g1, d3,b2, sixteenth)
+	note(g0,g1, d3,b2, sixteenth)
+	note(g0,g1, d3,b2, sixteenth)
+
+	note(c1,c2, c3,e3, sixteenth)
+	note(c1,c2, c3,e3, sixteenth)
+	note(c1,c2, c3,e3, sixteenth)
+	note(c1,c2, c3,e3, sixteenth)
+	note(b0,b1, d3,b2, sixteenth)
+	note(b0,b1, d3,b2, sixteenth)
+	note(b0,b1, d3,b2, sixteenth)
+	note(b0,b1, d3,b2, sixteenth)
+	note(a0,a1, c3,a2, sixteenth)
+	note(a0,a1, c3,a2, sixteenth)
+	note(a0,a1, c3,a2, sixteenth)
+	note(a0,a1, c3,a2, sixteenth)
+	note(a0,a1, rest,rest, sixteenth)
+	note(a0,a1, rest,rest, sixteenth)
+	note(a0,a1, c3,e3, sixteenth)
+	note(a0,a1, c3,e3, sixteenth)
+
+	note(f0,f1, c3,f3, sixteenth)
+	note(f0,f1, c3,f3,  sixteenth)
+	note(f0,f1, c3,f3, sixteenth)
+	note(f0,f1, c3,f3, sixteenth)
+	note(f0,f1, rest,rest, sixteenth)
+	note(f0,f1, rest,rest, sixteenth)
+	note(f0,f1, c3,f3, sixteenth)
+	note(f0,f1, c3,f3, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, g3,b3, sixteenth)
+	note(g0,g1, g3,b3, sixteenth)
+	note(g0,g1, g3,b3, sixteenth)
+	note(g0,g1, g3,b3, sixteenth)
+
+	endsection
+
+mainThEndBEndA
+
+	note(c1,c2, g3,c4, sixteenth)
+	note(c1,c2, g3,c4, sixteenth)
+	note(c1,c2, g3,c4, sixteenth)
+	note(c1,c2, g3,c4, sixteenth)
+	note(c1,c2, g3,c4, sixteenth)
+	note(c1,c2, g3,c4, sixteenth)
+	note(c1,c2, g3,c4, sixteenth)
+	note(c1,c2, g3,c4, sixteenth)
+	note(g0,g1, g3,d3, sixteenth)
+	note(g0,g1, g3,d3, sixteenth)
+	note(g0,g1, g3,d3, sixteenth)
+	note(g0,g1, g3,d3, sixteenth)
+	note(g0,g1, g3,d3, sixteenth)
+	note(g0,g1, g3,d3, sixteenth)
+	note(g0,g1, g3,d3, sixteenth)
+	note(g0,g1, g3,d3, sixteenth)
+
+	endsection
+
+mainThEndBEndB:
+
+	note(a0,a1, e3,a3, sixteenth)
+	note(a0,a1, e3,a3,  sixteenth)
+	note(a0,a1, e3,a3, sixteenth)
+	note(a0,a1, e3,a3, sixteenth)
+	note(a0,a1, c3,e3, sixteenth)
+	note(a0,a1, b2,d3, sixteenth)
+	note(a0,a1, a2,c3, sixteenth)
+	note(a0,a1, c3,e3, sixteenth)
+
+	note(a0,a1, e3,a3, quarter)
+
+	note(rest,rest,rest,rest, quarter)
+
+	endsection
+
+lastThemeA:
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+
+	note(g0,g1, rest,rest, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+	note(g0,g1, b2,d3, sixteenth)
+	note(g0,g1, b2,g2, sixteenth)
+	note(g0,g1, a2,b2, sixteenth)
+	note(g0,g1, b2,d3, sixteenth)
+
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+	note(g0,g1, d3,g3, sixteenth)
+	note(g0,g1, rest,rest, sixteenth)
+
+
+	note(f0,f1, c3,f3, sixteenth)
+	note(f0,f1, rest,rest, sixteenth)
+	note(f0,f1, c3,f3, sixteenth)
+	note(f0,f1, rest,rest, sixteenth)
+	note(c1,c2, c3,e3, sixteenth)
+	note(c1,c2, c3,e3, sixteenth)
+	note(c1,c2, rest,rest, sixteenth)
+	note(c1,c2, c3,e3, sixteenth)
+
+	endsection	
+	
+
+lastThemeB:
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, rest,rest, sixteenth)
+	note(d0,d1, a2,d3, sixteenth)
+
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+
+	note(d0,d1, rest,rest, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+
+	note(d0,d1, e3,rest, sixteenth)
+	note(d0,d1, f3,rest, sixteenth)
+	note(d1,d2, e3,rest, sixteenth)
+	note(d0,d1, c3,rest, sixteenth)
+
+	;
+
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, rest,rest, sixteenth)
+	note(d0,d1, a2,d3, sixteenth)
+
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+
+
+	; Sharps
+
+	note(bb0,bb1, f2,bb2, sixteenth)
+	note(bb0,bb1, rest,rest, sixteenth)
+	note(bb0,bb1, rest,rest, sixteenth)
+	note(bb0,bb1, rest,rest, sixteenth)
+
+	note(c1,c2, g2,c3, sixteenth)
+	note(c1,c2, rest,rest, sixteenth)
+	note(c1,c2, rest,rest, sixteenth)
+	note(c1,c2, rest,rest, sixteenth)
+
+	; \ /
+
+
+	note(d0,d1, d3,a3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, rest,rest, sixteenth)
+	note(d0,d1, d3,a2, sixteenth)
+
+
+	note(d0,d1, d3,a2, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, d3,a3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+
+
+	note(d0,d1, rest,rest, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+
+	note(d0,d1, e3,rest, sixteenth)
+	note(d0,d1, f3,rest, sixteenth)
+	note(d1,d2, e3,rest, sixteenth)
+	note(d0,d1, c3,rest, sixteenth)
+
+
+
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, rest,rest, sixteenth)
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+
+	note(bb0,bb1, f2,bb2, sixteenth)
+	note(bb0,bb1, rest,rest, sixteenth)
+	note(bb0,bb1, f2,bb2, sixteenth)
+	note(bb0,bb1, rest,rest, sixteenth)
+
+	note(c1,c2, g2,c3, sixteenth)
+	note(c1,c2, g2,c3, sixteenth)
+	note(c1,c2, rest,rest, sixteenth)
+	note(c1,c2, g2,c3, sixteenth)
+
+	endsection
+
+endThemeA:
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, rest,rest, sixteenth)
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+
+	note(bb0,bb1, f3,bb2, sixteenth)
+	note(bb0,bb1, rest,rest, sixteenth)
+	note(bb0,bb1, rest,rest, sixteenth)
+	note(bb0,bb1, rest,rest, sixteenth)
+
+	note(c1,c2, c3,e3, sixteenth)
+	note(c1,c2, rest,rest, sixteenth)
+	note(c1,c2, rest,rest, sixteenth)
+	note(c1,c2, rest,rest, sixteenth)
+
+	endsection
+
+endThemeB:
+
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, rest,rest, sixteenth)
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, a2,d3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+
+
+	note(bb0,bb1, f2,bb2, sixteenth)
+	note(bb0,bb1, rest,rest, sixteenth)
+	note(bb0,bb1, rest,rest, sixteenth)
+	note(bb0,bb1, rest,rest, sixteenth)
+
+	note(c1,c2, c3,g2, sixteenth)
+	note(c1,c2, rest,rest, sixteenth)
+	note(c1,c2, rest,rest, sixteenth)
+	note(c1,c2, rest,rest, sixteenth)
+
+	endsection
+
+endSeq:
+
+	note(d0,d1, d3,f3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(d1,d2, d3,f3, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+
+
+	note(d0,d1, rest,rest, sixteenth)
+	note(d0,d1, rest,rest, sixteenth)
+	note(e1,e2, e3,rest, sixteenth)
+	note(f1,f2, f3,rest, sixteenth)
+
+	note(e1,e2, e3,rest, sixteenth)
+	note(d1,d2, d3,rest, sixteenth)
+	note(c1,c2, c3,rest, sixteenth)
+	note(b0,b1, b2,rest, sixteenth)
+	note(a0,a1, a2,rest, sixteenth)
+	note(g0,g1, g2,rest, sixteenth)
+	note(f0,f1, f2,rest, sixteenth)
+	note(e0,e1, e2,rest, sixteenth)
+
+	endsection
+
+.end

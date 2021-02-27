@@ -1,0 +1,555 @@
+;Defines and subroutines that could probably go elsewhere.
+;
+;
+;
+
+
+readbuf   = appbackupscreen ;alternates between savesscreen and plotsscreen
+writebuf  = readbuf+2       ;
+rules     = writebuf+2      ;location pointer of ruleset
+stack     = rules+2         ;saved stack location for quick exit
+page      = stack+2         ;saved page location for safe exit
+temp1     = page+1          ;
+temp2     = temp1+2         ;
+temp3     = temp2+2         ;
+temp4     = temp3+2         ;
+counter   = temp4+2         ;4 byte counts how many generations this ran
+column    = counter+4       ;1 byte, keeps track of current column
+menutemp1 = column+4        ;4 bytes, main menu temp
+menutemp2 = menutemp1+4     ;4 bytes, save/load, change rulesets, or options
+menutemp3 = menutemp2+4     ;1 bytes, second main menu
+;plenty of space.
+
+backbuf   = $8B00           ;somewhere in the statvars area
+rulesLUT  = $9900           ;512 bytes appbackupscreen'd
+quadLUTs  = $8000           ;1024. This label isn't used but it's noted here.
+quadLUTB  = $80
+
+lookuppic:
+ ld (picvar+2),a
+ ld hl,picvar
+ rst 20h  ;mov9toOp1
+ rst 10h  ;findsym
+ ret
+picvar:
+.db $07,$60,$00,$00  ;last byte is written to with pic #
+getpic:  ;in: A=pic# (0-9) ; out: CA if n/a. Else, HL=AdrDat, BC=Size, (6) set
+ call lookuppic
+ ret c
+ ex de,hl ;put address of data in HL. VAT location can be discarded.
+ ld a,b
+ or a
+ jr z,_   ;skip if in RAM
+ out (6),a
+ call Add12toHLPaged
+_:
+ call GetHLInc
+ ld c,a
+ call GetHLInc
+ ld b,a
+ ret
+
+GetHLInc:
+ ld a,(hl)
+IncHL:
+ bit 7,h
+ inc hl
+ ret nz
+ bit 7,h
+ ret z
+FixPageFromInc:
+ ld h,$40
+ push af
+  in a,(6)
+  inc a
+  out (6),a
+ pop af
+ ret
+
+Add12toHLPaged:
+ bit 7,h
+ push af
+  ld a,12
+  add a,L
+  ld L,a
+  jr nc,_
+  inc h
+_ pop af
+ ret nz
+ bit 7,h
+ ret z
+ jr FixPageFromInc
+
+copytoreadbuf:
+ ld hl,(writebuf)
+ ld de,(readbuf)
+ ld bc,768
+ ldir             ;direct copy from the writebuf if loading a pic file
+ ret
+ 
+backupbufferstrings1:
+.dw plotsscreen-64
+.dw plotsscreen+768
+.dw savesscreen-64
+.dw savesscreen+768
+.dw $8300
+.dw $8400
+
+backupbufferstrings2:
+.dw backbuf+000
+.dw backbuf+064
+.dw backbuf+128
+.dw backbuf+192
+.dw tempswaparea
+.dw $FE70
+
+fetchandgetsides:
+ ld e,(iy+0)
+ ld d,(iy+1)
+ ld l,(ix+0)
+ ld h,(ix+1)
+ inc ix
+ inc ix
+ inc iy
+ inc iy
+ ret
+backupsides:
+ ld ix,backupbufferstrings1
+ ld iy,backupbufferstrings2
+ jr backupcollect
+restoresides:
+ ld ix,backupbufferstrings2
+ ld iy,backupbufferstrings1
+backupcollect:
+ ld a,4
+ ld bc,64
+ call _
+ ld a,2
+ ld bc,256
+_:
+ call fetchandgetsides
+ push bc
+  ldir
+ pop bc
+ dec a
+ jr nz,-_
+ ret
+
+ 
+backupbufferstrings3:
+.dw plotsscreen-64
+.dw plotsscreen+768
+.dw savesscreen-64
+.dw savesscreen+768
+
+clearsides:
+ ld a,4
+ ld hl,backupbufferstrings3
+_:
+ ld e,(hl)
+ inc hl
+ ld d,(hl)
+ inc hl
+ push hl
+  ld L,e
+  ld H,d
+  inc de
+  ld (hl),0
+  ld bc,63
+  ldir
+ pop hl
+ dec a
+ jr nz,-_
+ ret
+
+swapbuffers:  ;use at the END of a CA calculation, or when loading an image.
+ ld hl,(writebuf)
+ ld de,(readbuf)
+ ld (writebuf),de
+ ld (readbuf),hl
+ ret
+
+fixreadedge:  ;run shortly before CA calculation. Inline when you feel comfy.
+;fixing left edge by copying right visible to it.
+ ld hl,(readbuf)
+ ld bc,-64
+ add hl,bc
+ ex de,hl  ;move write pointer to DE (offscreen)
+ ld hl,(readbuf)
+ ld bc,768-64
+ add hl,bc
+ ld bc,64
+ ldir      ;HL will now point to right edge offscreen
+ ex de,hl  ;fixing right edge by copying left edge visible to it.
+ ld hl,(readbuf)
+ ld bc,64
+ ldir
+ ret
+
+clearwritebuf:
+ ld hl,(writebuf)
+ push hl
+  ld e,l
+  ld d,h
+  inc de
+  ld bc,767
+  ld (hl),$00  ;clear out the buffer
+  ldir
+ pop hl
+ ret
+
+loadinternalimage:  ;in: A=Image#(from zero). No results if exceed bounds
+ call clearwritebuf
+ ex de,hl
+ cp NUMINTERNALPICS
+ ret nc
+ push de
+  ld hl,$0001
+  ld (currow),hl
+  ld hl,imagesettable
+  call scraperuletable+3
+  bcall(_PutS)
+  xor a
+  ld d,(hl)
+  inc hl
+  srl d \ rra
+  srl d \ rra ;(256/4)=64
+  add a,(hl)
+  inc hl
+  ld e,a
+  ex de,hl
+ pop bc
+ add hl,bc
+ ex de,hl
+ ld b,(hl)
+ inc hl
+ ld c,(hl)
+ inc hl
+_:
+ push bc
+  ld b,0
+  ld a,c
+  ldir
+  ex de,hl
+  neg
+  add a,64
+  ld c,a
+  add hl,bc
+  ex de,hl
+ pop bc
+ djnz -_
+ ret
+
+packedAtoCurrow:
+ ld h,a
+ and %00001111
+ ld L,a
+ ld a,h
+ and %11110000
+ rlca
+ rlca
+ rlca
+ rlca
+ ld h,a
+ ld (currow),hl
+ ret
+
+;=============================================================================
+;=============================================================================
+;=============================================================================
+;=============================================================================
+;=============================================================================
+QuadLUTCollect4:
+ call QuadLUTCollect3
+QuadLUTCollect:
+ ld a,e
+ rlca
+ rlca
+ rlca
+ rlca
+ or d
+ ld (hl),a
+ inc L
+ ret
+QuadLUTCollect2:
+ ld de,0 ;D=right E=left
+ ld a,L
+ ld b,3  ;3 pairs of 2. Six bits. Don't care about the last two bits.
+ ret
+QuadLUTCollect3:
+_:
+ rrca
+ jr nc,$+3
+ inc d
+ djnz -_
+ ld b,3
+_:
+ rrca
+ jr nc,$+3
+ inc e
+ djnz -_
+ ret
+;Copy and pasted from old project.
+BuildLUTS:
+;Copy from the original spot near the main work routines
+;   ORIGINAL     CHERRY FLAVORED
+;1: x000 x000     1: x000 000x
+;2: 0x00 0x00     2: 00x0 0x00
+;3: 00x0 00x0     3: 0x00 x000
+;4: 000x 000x     4: 000x 00x0
+;These four LUTs are going to output the same 4.4 nibble count, BUT the input
+;bits will be varied such that we need to no longer do any shifts besides that
+;which rebuffers the new side bits. The input format will be in this order:
+;0: --LRLRLR (interleaved bits for the outside left/right bits)
+;1: LL----RR (2.4.2) for inside left/right bits
+;2: -LLLRRR- (1.3.3.1 for center testing, like our old LUT except ends cut)
+;3: LLLRRR-- (3.3.2 for left-ish testing)
+;4: --LLLRRR (2.3.3 for right-ish testing)
+;
+;Those ruleset LUTs need some tender loving care. Seriously. The old code is
+;absolutely atrocious, and I've learned so much more since the last time I set
+;eyes on that code.
+;
+ ld hl,quadLUTs  ;L=0. It has to be. Else this won't work.
+;-------------------------------------
+edgeLUT:
+ call QuadLUTCollect2
+_:
+ rrca
+ jr nc,$+3
+ inc d
+ rrca
+ jr nc,$+3
+ inc e
+ djnz -_
+ call QuadLUTCollect
+ jr nz,edgeLUT
+;-------------------------------------
+ inc h
+insideEdgeLUT:  ;this one is the odd one out. Fetching %xx0000xx
+ call QuadLUTCollect2
+ dec b   ;set to 2 instead of 3
+_:
+ rrca
+ jr nc,$+3
+ inc d
+ djnz -_
+ rlca
+ rlca
+ ld b,2
+_:
+ rlca
+ jr nc,$+3
+ inc e
+ djnz -_
+ call QuadLUTCollect
+ jr nz,insideEdgeLUT
+;-------------------------------------
+ inc h
+centerLUT:
+ call QuadLUTCollect2
+ rrca     ;prime to skip the first bit, which is a don't care. Right bits.
+ call QuadLUTCollect4
+ jr nz,centerLUT
+;-------------------------------------
+ inc h
+centerLeftLUT:
+ call QuadLUTCollect2
+ rrca
+ rrca
+ call QuadLUTCollect4
+ jr nz,centerLeftLUT
+;-------------------------------------
+ inc h
+centerRightLUT:
+ call QuadLUTCollect2
+ call QuadLUTCollect4
+ jr nz,centerRightLUT
+
+;ReturnToLife and KeepAlive tables in LUT format
+;interrupts are assumed to be disabled while this is running
+initRulesLUT:
+ ld hl,rulesLUT  ;clear out both LUTs
+ xor a
+ ld bc,$0200     ;set C to zero so CPIR below will work right
+_:
+ ld (hl),a
+ inc L
+ jr nz,-_
+ inc h
+ djnz -_
+
+ ld hl,(rules)
+ xor a
+ cpir   ;skip over zero-terminated prefix string
+ ld de,rulesLUT
+ ex de,hl
+ call _
+_:
+ ld a,(de)
+ ld b,a         ;ruleset prefixed by a count byte
+ inc de
+buildRulesMainLoop:
+ ld a,(de)      ;get rule.
+ inc de
+ ld c,a         ;duplicate this byte
+ rlca
+ rlca
+ rlca
+ rlca           ;shift to next nibble
+ or c           ;and duplicate this number.
+ ld c,a         ;save it back for re-use
+buildRulesSubLoop:
+ ld a,c
+ xor L          ;if both nibbles become zero, write $FF at L.
+ jr nz,_
+ ld (hl),$FF
+ jr bRSLEnd
+_:
+ and $0F        ;If just bottom nibble was zero, then write $0F to it.
+ jr nz,_
+ ld a,(hl)
+ or $0F
+ ld (hl),a
+ jr bRSLEnd
+_:
+ ld a,c
+ xor L
+ and $F0        ;If top nibble was zero, then write $F0, else do nothing.
+ jr nz,bRSLEnd
+ ld a,(hl)
+ or $F0
+ ld (hl),a
+bRSLEnd:
+ inc L
+ jr nz,buildRulesSubLoop
+ djnz buildRulesMainLoop
+ inc h
+ ret ;End LUT generator (on second iter)
+;=============================================================================
+;=============================================================================
+;=============================================================================
+;=============================================================================
+;=============================================================================
+RenderBlanks:
+ ex (sp),hl
+ ld a,(hl)
+ inc hl
+ push hl
+  ld h,a
+  and %00001111
+  ld L,a
+  ld a,h
+  and %11110000
+  rlca
+  rlca
+  rlca
+  rlca
+  ld h,a
+  ld (currow),hl
+ pop hl
+ ld b,(hl)
+ inc hl
+ ex (sp),hl
+StringOfBlanks:
+ ld a,' '
+ bcall(_PutC)
+ djnz StringOfBlanks
+ ret
+
+DispNew:
+ push hl
+  bcall(_ClrLCDFull)
+  bcall(_ClrScrnFull)
+  bcall(_HomeUp)
+ pop hl
+;1=newline
+;2=Check settings bit at next current. If it is set, display zero-terminated
+;  string right after. Else, display zero-terminated string right afterward
+;3=resets currow/curcol to a new spot
+;4=three spaces (quite specific, no?)
+;5=sixteen underscores. Super-specific.
+DispString:
+ ld a,(hl)
+ inc hl
+ or a
+ ret z
+ cp 1
+ jr nz,_
+ push hl
+  ld hl,(currow)
+  inc L
+  ld h,$00
+  ld (currow),hl
+ pop hl
+ jr DispString
+_:
+ cp 2
+ jr nz,+++++_
+ ld a,(hl)
+ inc hl
+ push hl
+  ld L,1
+  or a
+  jr z,++_
+_ rlc L
+  dec a
+  jr nz,-_
+_ ld a,(Options)
+  and L
+ pop hl
+ jr z,_   ;bit not set, display string thereafter.
+ call DispString
+ call SkipString
+ jr ++_
+_:
+ call SkipString 
+ call DispString
+_:
+ jr DispString
+_:
+ cp 3
+ jr nz,_
+ ld a,(hl)
+ inc hl
+ push hl
+  call packedAtoCurrow
+ pop hl
+ jr DispString
+_:
+ cp 4
+ jr nz,_
+ push bc
+  ld b,3
+  call StringOfBlanks
+ pop bc
+ jr DispString
+_:
+ cp 5
+ jr nz,++_
+ push bc
+  ld b,16
+_ ld a,'_'
+  bcall(_PutC)
+  djnz -_
+ pop bc
+ jr DispString
+_:
+ bcall(_PutC)
+ jr DispString
+  
+SkipString:
+ push bc
+  xor a
+  ld b,a
+  ld c,a
+  cpir
+ pop bc
+ ret
+
+
+
+
+
+
+

@@ -1,0 +1,230 @@
+
+
+
+
+#include "stdheader.h"
+
+IONHEADER("test")
+	xor	a
+	ret
+
+ 
+
+
+
+ jr C0001
+C0001:
+ jr C0003\C0003:
+ jr C0005\C0005:
+
+ 
+
+
+
+ jr z,C0007\C0007:
+ jr z,C0009\C0009:
+ jr z,C000B\C000B:
+
+ 
+
+
+
+
+	
+	ld	a,(IX+(2-3)) 
+
+	
+	ld	a,(IX+(2-3)) 
+ 
+	 
+
+
+	ld	a,(IX+(2-3))  
+	ld a,(IX+(2-3))
+	ld a,(IX+(2-3))
+
+
+ 
+
+
+
+ jr C000D\C000D:
+ jr z,C000F\C000F:
+ jp p,C0011\C0011:
+
+ jr C0013\C0013:
+ jr z,C0015\C0015:
+ jp p,C0017\C0017:
+
+ jp C0019\C0019:
+ jp z,C001B\C001B:
+ jp p,C001D\C001D:
+
+ jp C001F\C001F:
+ jr z,C0021\C0021:
+ jp p,C0023\C0023:
+
+ 
+
+
+
+C0024:
+
+ jr _C0027\_C0027:
+C0025:
+
+
+
+anon0001:	jr	anon0001
+
+
+
+ jr C0029\C0029:
+ jr z,C002B\C002B:
+ jp p,C002D\C002D:
+
+
+ jr C002F\C002F:
+ jr z,C0031\C0031:
+ jp p,C0033\C0033:
+
+
+ jp C0035\C0035:
+ jp z,C0037\C0037:
+ jp p,C0039\C0039:
+
+
+ jp C003B\C003B:
+ jr z,C003D\C003D:
+ jp p,C003F\C003F:
+
+ 
+
+
+
+	.db 'c','h','a','r','"','\'
+	.db "str","'quote'"
+	.db "label: @@"
+	.db "skip\\endskip"
+	.db "\"more qoutes\""
+	.db ";comments"
+	.db "//comments"
+	.db "/*comments*/"
+	.db "tricky escape\\"
+
+ 
+
+
+
+A0002:	jr A0002
+A0003:	jr A0002
+	jr A0005
+A0004:	jr A0005
+A0005
+
+ 
+
+
+
+ jp z,C0041\C0041:
+ jp z,C0043\C0043:
+
+ jp nz,C0045\C0045:
+ jp nz,C0047\C0047:
+
+ jp c,C0049\C0049:
+ jp c,C004B\C004B:
+ jp c,C004D\C004D:
+
+ jp nc,C004F\C004F:
+ jp nc,C0051\C0051:
+ jp nc,C0053\C0053:
+
+ jp p,C0055\C0055:
+
+ jp m,C0057\C0057:
+
+ jp pe,C0059\C0059:
+ jp pe,C005B\C005B:
+
+ jp po,C005D\C005D:
+ jp po,C005F\C005F:
+
+ djnz C0061\C0061:
+ djnz C0063\C0063:
+
+ 
+
+
+
+ jr C0065
+C0065:
+
+ jr C0067
+ jr C0069\C0067:
+C0069:
+
+ jr z,C006B
+ jr C006D\C006B:
+C006D:
+
+ jr C006F
+C006F:
+
+ jr C0071
+ jr C0073\C0071:
+C0073:
+
+ jr z,C0075
+ jr C0077\C0075:
+C0077:
+
+ 
+
+
+
+C0078:
+C0079:
+
+C007A:
+ jr C007A\C007B:
+
+C007C:
+ jr C007C\C007D:
+
+C007E:
+ djnz C007E\C007F:
+
+C0080:
+ djnz C0080\C0081:
+
+C0082:
+ jr z,C0082\C0083:
+
+C0084:
+ jr z,C0084\C0085:
+
+C0086:
+ jr z,C0086\C0087:
+
+C0088:
+C008A:
+ jr C008A
+ jr z,C008A
+ jr C0088
+			
+ jr C008B
+ jr z,C008B
+ jr C0089
+C008B:
+C0089:
+
+ 
+
+
+ jr z,DoStuff
+DoStuff:
+
+
+ jp C008D
+C008D:

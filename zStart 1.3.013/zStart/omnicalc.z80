@@ -1,0 +1,51 @@
+;##############
+
+omnicalc:
+	bcall(_GrBufClr)
+	bit_(avbOmni)
+	call	yesOrNo8
+
+	ld	hl, omniText
+	jp	menu
+
+toggleOmni:
+	bcall(_disableGetCSCHook)
+	bcall(_disableHomescreenHook)
+	bcall(_disableRawKeyHook)
+	toggle_(avbOmni)
+	call	deleteFakeVar
+	call	makeAVDirty
+	jr	omnicalc
+
+saveOmni:
+	ld	hl, omniVarName
+	rst	20h
+	bcall(_chkFindSym)
+	jr	c, noOmniVarFound
+	ld	a, b
+	or	a
+	jr	z, notArched
+	bcall(_arc_unarc)
+notArched:
+	ld	hl, omniVarName
+	rst	20h
+	bcall(_chkFindSym)
+	inc	de
+	inc	de
+	ex	de, hl
+	ld	de, avShadow+avOmniData
+	ld	bc, 3
+	ldir
+	ld	a, 1
+	ld	(avDirty), a
+	call	dispSuccess
+	jr	omnicalc+3
+
+
+
+noOmniVarFound:
+	ld	hl, notFoundText
+	ld	de, 40*256+32
+	call	myVPutSDE
+	jr	omniCalc+3
+

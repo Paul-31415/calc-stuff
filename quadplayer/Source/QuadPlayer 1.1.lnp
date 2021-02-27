@@ -1,0 +1,15 @@
+<project name="QuadPlayer 1.1" version="2" expanded="True" binary="QPLAYER" source="QuadPlayer 1.1.asm">
+  <build default="false">Build\TI-83 (Ion).cmd</build>
+  <build default="false">Build\TI-83 Plus (Ion).cmd</build>
+  <build default="true">Build\TI-83 Plus (MirageOS).cmd</build>
+  <help file="brass.xml" />
+  <help file="ion.xml" />
+  <help file="mirage.xml" />
+  <help file="ti83p.xml" />
+  <help file="tios_entrypoints.xml" />
+  <help file="tios_values.xml" />
+  <help file="z80.xml" />
+  <openfile default="True">QuadPlayer 1.1.asm</openfile>
+  <expandedfolder>\Includes</expandedfolder>
+  <expandedfolder>\Resources</expandedfolder>
+</project>

@@ -1,0 +1,144 @@
+#DEFINE K_Right      $FB
+#DEFINE K_Left       $FD
+#DEFINE K_Up         $F7
+#DEFINE K_Down       $FE
+#DEFINE K_Add        $FD
+#DEFINE K_Sub        $FB
+#DEFINE K_Exit       $BF
+
+#DEFINE IndicOff     RST 28H\ .DW $4570
+#DEFINE DispBuffer   RST 28H\ .DW $486A
+#DEFINE ClearBuffer  RST 28H\ .DW $4BD0
+#DEFINE WriteStr     RST 28H\ .DW $4561
+#DEFINE WriteChar    RST 28H\ .DW $455E
+#DEFINE Unpack       RST 28H\ .DW $400F
+#DEFINE LCD_H        64
+#DEFINE LCD_W        96
+#DEFINE PenCol       ($86D7)
+#DEFINE ProgStart    .org $9D93\ .DB $BB,$6D
+
+ProgStart
+
+	IndicOff
+Main:
+	ClearBuffer
+	ld	de,(circ_y)
+	ld	a,(circ_r)
+	ld	c,a
+	call	FastCircle
+	DispBuffer
+	ld	hl,0
+	ld	PenCol,hl
+	ld	hl,String1
+	WriteStr
+	ld	a,(circ_x)
+	call	DispA
+	ld	a,','
+	WriteChar
+	ld	a,(circ_y)
+	call	DispA
+	ld	hl,String2
+	WriteStr
+	ld	a,(circ_r)
+	call	DispA
+
+	ld	hl,Main
+	push	hl
+
+InKey:
+	ld	a,$FE
+	out	(1),a
+	in	a,(1)
+	cp	K_Up
+	jr	z,Up
+	cp	K_Down
+	jr	z,Down
+	cp	K_Left
+	jr	z,Left
+	cp	K_Right
+	jr	z,Right
+	ld	a,$FD
+	out	(1),a
+	in	a,(1)
+	cp	K_Add
+	jr	z,Grow
+	cp	K_Sub
+	jr	z,Shrink
+	cp	K_Exit
+	jr	nz,InKey
+	pop	af
+	ret
+
+Up:
+	ld	hl,circ_y
+	ld	a,(hl)
+	or	a
+	ret	z
+	dec	(hl)
+	ret
+Down:
+	ld	hl,circ_y
+	ld	a,(hl)
+	cp	LCD_H-1
+	ret	z
+	inc	(hl)
+	ret
+Left:
+	ld	hl,circ_x
+	ld	a,(hl)
+	or	a
+	ret	z
+	dec	(hl)
+	ret
+Right:
+	ld	hl,circ_x
+	ld	a,(hl)
+	cp	LCD_W-1
+	ret	z
+	inc	(hl)
+	ret
+Grow:
+	ld	hl,circ_r
+	ld	a,(hl)
+	cp	127
+	ret	z
+	inc	(hl)
+	ret
+Shrink:
+	ld	hl,circ_r
+	ld	a,(hl)
+	or	a
+	ret	z
+	dec	(hl)
+	ret
+
+circ_y  .db  LCD_H/2-1
+circ_x  .db  LCD_W/2-1
+circ_r  .db  20
+String1 .db  "C:",0
+String2 .db  " R:",0
+
+.module DispA
+DispA:
+	ld	b,0
+	ld	h,b
+	ld	l,a
+_loopA:
+	Unpack
+	push	af
+	inc	b
+	ld	a,h
+	or	l
+	jr	nz,_loopA
+_LoopB:
+	pop	af
+	or	$30
+	WriteChar
+	djnz	_LoopB
+	ret
+
+#include "fastcirc.inc"
+
+
+.end
+.end

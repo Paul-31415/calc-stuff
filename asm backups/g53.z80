@@ -1,0 +1,300 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	saveSScreen 86ECh
+.org        progStart-2
+.db         $BB,$6D
+
+	bcall(_ansName)
+    rst 10h
+    ex de,hl
+    rst 20h
+    bcall(_convOp1)
+    push af
+    
+;    ld hl,picn
+;    rst 20h
+;    ld hl,picn+2
+;    inc (hl)
+    
+;	rst 10h
+;    inc de
+;    inc de
+;    push de
+
+    
+    ld a,$40
+   out ($30),a
+   ld a,1        ; loop, no interrupt
+   out ($31),a
+   ld a,182
+   out ($32),a
+   
+;    pop hl
+;	ld (bufs),hl
+
+    pop af
+drawloop:
+
+    push af
+    ld hl,buff
+	call drawToScreen
+	pop bc 	
+
+	
+    
+longtimeLoop:
+    in a,(4)
+    bit 5,a       ;bit 5 tells if timer 1 is done
+   jr z,longtimeLoop
+   ld a,1        ; loop, no interrupt
+   out ($31),a
+    
+    in a,(4)
+    bit 3,a
+    ld a,b
+    
+    jr nz ,drawloop
+	xor a
+   out ($30),a   ;Turn off the timer.
+   out ($31),a
+    ret
+    
+    
+
+;picn:
+;.db $07,$60,0,0,0,0,0,0,0,0
+
+
+buff:
+.db %01010101,%00110011,%00001111,%00000000,%00000000,%00000000
+.db %01010101,%00110011,%00001111,%11111111,%00000000,%00000000
+.db %01010101,%00110011,%00001111,%00000000,%11111111,%00000000
+.db %01010101,%00110011,%00001111,%11111111,%11111111,%00000000
+.db %01010101,%00110011,%00001111,%00000000,%00000000,%11111111
+.db %01010101,%00110011,%00001111,%11111111,%00000000,%11111111
+.db %01010101,%00110011,%00001111,%00000000,%11111111,%11111111
+.db %01010101,%00110011,%00001111,%11111111,%11111111,%11111111
+
+
+
+
+
+
+drawToScreen: ;at 60hz, effectively reduces cpu speed to 3.5 mhz
+	;ld hl,(bufs)
+    ;ld (b1+1),hl
+    ;ld hl,(bufs+2)
+    ;ld (b2+1),hl
+    ;ld hl,(bufs+4)
+    ;ld (b3+1),hl
+    ;ld hl,(bufs+6)
+    ;ld (b4+1),hl
+    ;ld hl,(bufs+8)
+    ;ld (b5+1),hl
+    ;ld hl,(bufs+10)
+    ;ld (b6+1),hl
+    ;ld hl,(bufs+12)
+    ;ld (b7+1),hl
+    push hl
+    
+;    ld b,a
+    and 3
+    ld hl,logop2Table
+    add a,l
+    ld l,a
+    ld a,0
+    adc a,h
+    ld h,a
+    ld a,(hl)
+    ld (logop2),a
+;    ld a,b
+;    rra
+;    rra
+;    and 3
+;    ld hl,logop1Table
+;    add a,l
+;    ld l,a
+;    ld a,0
+;    adc a,h
+;    ld h,a
+;    ld a,(hl)
+;    ld (logop1),a
+    
+
+	ld a,1
+    out ($20),a;fast mode
+
+	
+	di
+    
+    ld a,$05
+    out ($10),a
+	
+    pop hl
+    exx
+r5mask:	;10001100
+		;00100001
+	ld hl,%1000110000100001
+    bit 4,l 
+    jr z,r5NClm
+     scf
+r5NClm:
+    rl l
+    bit 4,h 
+    jr z,r5NChm
+     scf
+r5NChm:
+    rl h
+    ld (r5mask+1),hl
+    
+    ld a,$80
+    out ($10),a
+    
+	ex de,hl
+;r4mask:
+;    ld hl,%1010101000010001
+;    rlc l
+;    rlc h
+;    ld (r4mask+1),hl
+    
+    
+r3mask:
+    ld a,%01001001
+    bit 2,a
+    jr z,r3NCam
+     scf
+r3NCam:
+    rla
+    ld (r3mask+1),a
+    ld c,a
+    exx
+    ;r3-c`
+    ;r4-hl`
+    ;r5-de`
+    ;hl is ptr to 6big thing
+    
+	ld c,$20
+    
+    ld b,12
+colLoop:
+    ld a,c
+    out ($10),a
+    push bc
+    ld (saveSP),sp
+    ld sp,hl
+    
+    ld b,64
+    
+core:	;what to do at each byte ;325 clock cycles max
+	;a = 1 and ((not d) and (not e)) or 2 and d or 3 and e
+	
+	;r5-3
+    pop de
+    exx 
+    ;a and ((not e))
+    ld a,e 	;a and ~e
+    cpl
+    exx
+    and e
+	ld c,a
+    
+	;r5-2
+    exx
+	ld a,d
+    exx
+    and d
+    or c
+    ld c,a
+	;r5-1
+	pop de
+    exx
+    ld a,e
+    
+    bit 4,e
+    jr z,r5NCe
+     scf
+r5NCe:
+    rl e
+    bit 4,d
+    jr z,r5NCd
+     scf
+r5NCd:
+    rl d
+    
+    exx
+    and e
+	or c
+    ld c,a
+    
+;	;r4-2
+;    ld a,d
+;    exx
+;	and h
+;    rlc h
+;    exx
+;    ld l,a
+	;r4-1
+;	pop af
+;    ld a,e
+;    exx
+;    and l
+;    rlc l
+;    exx
+;    or l
+;    ld l,a
+    
+    
+	;r3-2
+    ld a,d
+	exx
+    and c
+    bit 2,c
+    jr z,r3NCc
+     scf
+r3NCc:
+    rl c
+    exx
+    ld h,a
+	;r3-1
+	pop af
+    exx
+	and c
+    exx
+    or h
+	
+;logop1:
+;    or l
+    
+logop2:
+	or c
+    
+    
+    out ($11),a
+    
+	djnz core
+    or a
+    ld hl,0
+    adc hl,sp
+    
+	ld sp,(saveSP)
+	pop bc
+    inc c
+    
+    djnz colLoop
+    
+	
+    
+    
+    ret
+saveSP:
+.dw 0
+logop1Table:
+	or l
+    xor l
+    and l
+	or l
+logop2Table:
+	or c
+    xor c
+    and c
+	or c

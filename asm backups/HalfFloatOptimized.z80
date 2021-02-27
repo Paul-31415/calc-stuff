@@ -1,0 +1,602 @@
+
+
+
+;half float is 
+; seee eeMM  MMMM MMMM
+
+
+
+;time:
+;1+1	~780
+;n+n out of range ~712
+;-1-1	~916
+;nan+n	~444
+;∞+n	~252,336
+;∞-∞	~260
+;works as far as I can tell
+HPadd_hl_de:
+	ld (_HPadd_hl_de_saveHL+1),hl
+    ex de,hl
+    ld (_HPadd_hl_de_saveDE+1),hl
+    ex de,hl
+	push de 
+    push de
+    ld a,h ;extract exponent and mantissa
+    and $3
+    ld d,a
+    ld a,h
+    rra
+    rra
+    and $1f ;mask away top parts
+    ;a now has exp
+    ld b,a ;save it in b
+    set 2,d
+    jr nz,_HPadd_hl_de_hlNorm
+     res 2,d
+     sla l
+     rl d
+_HPadd_hl_de_hlNorm:
+	;now we check for inf/nan
+    cp $1f
+    jr nz,_HPadd_hl_de_hlOk
+     ;hl is nonfinite
+     ;check nan
+     ld a,h
+     and 3
+     or l
+     pop de
+     pop de
+     ret nz ;return hl if it's nan
+     ;hl is ±inf
+     ;check de is not other inf
+     ld a,h
+     xor $80 ;invert sign
+     xor d ;ret nan if a is 0
+	 or e     ;e better be 0 for this
+     ret nz ;de wasn't other inf, so we return hl
+infminusinfnanminus1:
+     ld l,1
+     ret
+_HPadd_hl_de_hlOk:    
+	bit 7,h ;sign
+    ld h,d ;set hl to mantissa
+    jr z,_HPadd_hl_de_hlPos
+     ;negate hl
+     ex de,hl
+     ld hl,0
+     or a ;zcf
+     sbc hl,de ;negative hl
+_HPadd_hl_de_hlPos:
+    ;now we convert de
+    ex (sp),hl    
+    
+    ld a,h
+    and $3
+    ld d,a  ;save exp
+    ld a,h
+    rra
+    rra
+    and $1f ;mask away top parts
+    ;a now has exp
+    set 2,d
+    jr nz,_HPadd_hl_de_deNorm
+     res 2,d
+     sla l
+     rl d
+_HPadd_hl_de_deNorm:
+	;now we check for inf/nan
+    cp $1f
+    jr nz,_HPadd_hl_de_deOk
+     ;hl is known finite
+     ;so we always ret de
+	 pop de
+     pop de
+     ld l,e
+     ld h,d
+     ret
+_HPadd_hl_de_deOk:    
+	bit 7,h ;sign
+    ld h,d ;set hl to mantissa
+    jr z,_HPadd_hl_de_dePos
+     ;negate hl
+     ex de,hl
+     ld hl,0
+     or a ;zcf
+     sbc hl,de ;negative hl
+_HPadd_hl_de_dePos:
+    ;ok hl is de converted now
+    ;now we do the relative shifts
+	;a still has exp
+
+    ld c,a ;c is max exp
+    
+    sub b ;a-b, if a<b, carry is set, if a<b (sp)'s (aka hl) exp is larger
+    jr nc,_HPadd_hl_de_deBiggerEx
+     ld c,b ;keep c max exp
+     neg ;negate a
+     ex (sp),hl ;swap 'em
+     push hl
+_HPadd_hl_de_saveHL:
+     ld hl,0
+     ld (_HPadd_hl_de_saveDE+1),hl
+     pop hl
+     
+_HPadd_hl_de_deBiggerEx: ;by now hl (maybe de's value) has the largest exp
+    ;check the difference
+    ;if the exps are more than 11 appart, they can't even affect eachother through rounding
+    cp 12
+    jr c,_HPadd_hl_de_inRange
+     ;return hl; it is the max
+_HPadd_hl_de_saveDE:
+     ld hl,0
+     pop de
+     pop de
+     ret
+
+_HPadd_hl_de_inRange:
+    ;ok, shift up a few for some guard bits
+    ;hl is ---- -1MM  MMMM MMMM
+    
+    add hl,hl
+    add hl,hl
+    add hl,hl ;max shift is 3 because we need 2 guard bits on top, one for carry and 1 for sign
+    
+    ;now we shift the other
+    pop de
+    ex de,hl
+	;a is rshift amount, it's already rshifted by 3
+    sub 3 ;a<3, lshift
+    jr z,_HPadd_hl_de_doneShifting
+    jr nc,_HPadd_hl_de_noLShift
+     neg
+_HPadd_hl_de_LShiftLoop: ;shift right 3-a
+     add hl,hl
+     dec a
+     jr nz,_HPadd_hl_de_LShiftLoop
+    jr _HPadd_hl_de_doneShifting
+_HPadd_hl_de_noLShift:
+    ;a is now a-3 is now how many rshifts to do
+    ld b,a
+_HPadd_hl_de_rshiftLoop:
+    sra h
+    rr l
+    djnz _HPadd_hl_de_rshiftLoop
+_HPadd_hl_de_doneShifting:
+    add hl,de
+    ;check sign
+    bit 7,h
+    ld d,0
+    jr z,_HPadd_hl_de_ansPos
+     set 7,d
+     ;negate hl
+     push de
+     ex de,hl
+	 ld hl,0
+     or a
+     sbc hl,de
+     pop de
+_HPadd_hl_de_ansPos:    
+    ;normalize
+    add hl,hl ;get rid of the sign guard bit
+    ld b,c ;get exp in b
+    inc b ;for carry
+_HPadd_hl_de_NormLoop:
+	add hl,hl
+    jr c,_HPadd_hl_de_NormLoopEnd
+    djnz _HPadd_hl_de_NormLoop
+    ;subnormal
+    
+_HPadd_hl_de_NormLoopEnd:    
+    
+    ;check exp
+    ld a,b
+    cp $1f
+    jr c,_HPadd_hl_de_ansExpOK
+     ;return inf, we had an overflow
+     ld a,%01111100
+     or d
+     ld h,a
+     ld l,0
+     pop de
+     ret
+_HPadd_hl_de_ansExpOK:    
+    ;hl looks like this: MMMM MMMM  MM-- ----
+    
+    ;round ties to even
+    
+    ld a,l
+    ld e,$10 ;construct test here, it will be shifted up
+    rla
+    rla ;put last m in carry
+    ccf ;invert
+    rl e
+    ld a,l
+    and $3f
+    
+    ;shift hl here
+    add hl,hl
+    adc hl,hl
+    rl l
+    ;hl looks like : MMMM MMMM  ---- --MM
+    ;c is free
+    ld c,h
+    ld h,l
+    ld l,c; hl is now justified
+    ;now we load in the exp, b is the new exp
+    ld c,a ;save a
+	ld a,b
+    rla
+    rla
+    or d
+    ld d,a
+    ld a,h
+    and 3
+    or d
+    ld h,a
+    ld a,c
+    
+    cp e
+    jr c,_HPadd_hl_de_roundDown
+     inc hl
+_HPadd_hl_de_roundDown:    
+    pop de
+    ret
+    
+    
+    
+    
+    
+    
+    
+;time
+;1*1		~1248
+;n*n		~   
+    
+HPmul_hl_de:
+	;do signs first
+    push de
+    push de
+    ld a,d
+    xor h
+    and $80
+    ld (HPmul_hl_de_sign+2),a ;sign stored
+    ld a,h
+    and 3;make mantissa in dl
+    ld d,a
+    ld a,h
+    rra
+    rra
+    and $1f
+    set 2,d
+    jr nz,HPmul_hl_de_hlNorm
+     res 2,d
+     sla l
+     rl d
+HPmul_hl_de_hlNorm:
+	cp $1f
+    jr nz,HPmul_hl_de_hlOK
+	     ;ok, is hl nan?, at this point, hl is still intact
+	     pop de
+	     pop de
+	     ld a,(HPmul_hl_de_sign+2) ;do sign on hl
+	     xor h
+	     ld h,a
+	     and 3 ;check for nan
+	     or l
+	     ret nz
+	     ;hl is inf, check that de isn't 0
+	     ld a,d
+	     and $7f
+	     or e
+	     jr nz,HPmul_hl_de_HLINFDENON0
+	      ;de is 0,ret nan
+HPmul_hl_de_RetNAN:    
+
+INFTIMESZERONANMINUSONE:
+	      ld l,2
+	      ret
+HPmul_hl_de_HLINFDENON0:
+	     ;is de nan?
+	     ld a,d
+	     and $7c
+	     cp $7c
+	     ret nz ;de finite, ret hl
+	     ;de inf/nan
+	     ld a,d
+	     and 3
+	     or e
+	     ret z ;de inf, ret hl
+	     ;de nan, ret de
+	     ld h,d
+	     ld l,e
+	     ret
+HPmul_hl_de_hlOK:
+    ld e,a ;save exp
+    ld h,d ;make hl mant
+    ex (sp),hl ;exchange for the other
+    
+    ld a,h
+    and 3;make mantissa in dl
+    ld d,a
+    ld a,h
+    rra
+    rra
+    and $1f
+    set 2,d
+    jr nz,HPmul_hl_de_deNorm
+     res 2,d
+     sla l
+     rl d
+HPmul_hl_de_deNorm:
+	cp $1f
+    jr nz,HPmul_hl_de_deOK
+	     ;hl is finite from prev check
+         ;is de nan?
+         ;at this point, hl is still intact as de
+         pop bc ;old hl's mant
+         pop de
+         ld a,(HPmul_hl_de_sign+2) ;do sign on hl
+	     xor h
+	     ld h,a
+         and 3
+         or e
+         ret nz ;hl as de was nan, ret it
+     	 ;de is inf, check bc
+     	 ld a,b
+         or c
+         ret nz ;old hl was non0
+         jr HPmul_hl_de_RetNAN
+HPmul_hl_de_deOK:
+	;calculate result exp = e1+e2-0x0f, I have way enough room for all of the sign and carry stuff
+    add a,e
+    sub $05 ;5 so -10 is 0
+    ;bounds:
+    ;	seee eeMM  MMMM MMMM
+    ;   0000 01 = 2 ^ - 14, e(1)
+    ;   0000 0000  0000 0001 = e(-9)
+    ;	ex < -10 round to 0
+    jr c,HPmul_hl_de_ret0
+    	;ret ±0
+HPmul_hl_de_noUnderflow:  
+	;max is now $1f + 10 = $29
+    cp $29
+    jr c,HPmul_hl_de_noOverflow
+	 	;return ±inf
+        pop de
+        jp HPmul_hl_de_retInf
+HPmul_hl_de_noOverflow:
+	sub $0a ;finish the conversion
+    jr nc,HPmul_hl_de_AnsNotSubnormalEx
+    	;stack is [m2][de]..
+    	;here we will trick the rest of the routine into being a subroutine
+        
+        ld (HPmul_hl_de_AnsSubnormalExSaveA+1),a
+        
+        ;
+        ;state: dl is m1, (sp) m2, c is free, b is free, e is free
+        
+
+        
+        
+        ld h,d ;save d to free up de
+        
+        ;make a sane
+        ld a,$0f ;value of 2^0
+        
+        pop bc
+        pop de
+        call HPmul_hl_de_AnsNotSubnormalExTrick
+        ;ok now de is op2 and hl is ans with exp centered on $0f
+        ;get sign and save it
+        ld a,h
+        and $80
+        ld (HPmul_hl_de_AnsSubnormalExSaveSign+1),a
+        
+HPmul_hl_de_AnsSubnormalExSaveA:
+		ld b,0
+        ;a is restored,
+        ;now we shift properly
+        ld a,h
+        rra
+        rra
+        and $1f ;get exp, exp can never be below 5ish unless ans is 0
+        ret z ;if ans was 0, we ret it 
+        ;ans was't 0
+        ;save off ex
+        ld c,a
+        
+        ;we write 0 to hl's exp and shift the mant down the proper amount, then we round
+        ;mant will be in hlc
+		;we can restore sign later so we overwrite it now
+        ld a,h
+		and 3
+        or 4 ;implicit bit restore
+        ld h,a
+        
+        ;b is exp offset, c is exp result when exp was $0f, so true exp is c-$0f+b
+        ld a,c		;c domain: $05 to $10
+        sub $0f		
+        add a,b		;b domain: -$01 to -$0a
+        ;result range: $00 to -something
+        ;b is negative $0a at worst, negative 1 at best, which means num of shifts = -b+1
+        ;the plus 1 is for the implicit bit
+        neg
+        inc a
+        
+        ld b,a
+        ld c,0
+HPmul_hl_de_AnsSubnormalEx_shiftLoop:
+        ;shift hlc right 1
+        srl h
+        rr l
+        rr c
+        djnz HPmul_hl_de_AnsSubnormalEx_shiftLoop
+        ;restore sign
+        
+        ld a,h
+HPmul_hl_de_AnsSubnormalExSaveSign:
+        or 0
+        ld h,a
+        
+        ;now we round with c
+        ld b,$40
+        ld a,l
+        rra
+        ccf
+        rl b
+        ld a,c
+        cp b ;c if a < b
+		ret c 	;hl is ans
+        inc hl
+        ret
+
+HPmul_hl_de_AnsNotSubnormalExTrick:
+		push de
+        push bc
+        ld d,h
+        
+        
+HPmul_hl_de_AnsNotSubnormalEx:
+    ld c,a ;store result exp
+    ;ok now we can do the multiply
+    ;but first we check if any mantissas are 0
+    
+    ld a,d
+    or l
+    jr z,HPmul_hl_de_ret0
+    ex (sp),hl
+    ld a,h
+    or l
+    ex (sp),hl
+    jr nz,HPmul_hl_de_non0ans
+HPmul_hl_de_ret0:
+	    pop de
+	    pop de
+HPmul_hl_de_sign:;little endian, so +1 is l, +2 is h
+	    ld hl,0
+	    ret
+HPmul_hl_de_non0ans:
+    ;ahl - result
+    ;de ;adding one
+    ;ah ;bit one
+    ;there will be enough space
+    
+    
+    ld a,l
+	
+    ld h,d ;move mantissa to ahl, up against top
+    	    ; MMMM MMMM 0000 0MMM l:0
+    srl h   ; MMMM MMMM 0000 00MM   c:Mh
+    rra		; MMMM MMMM 0000 00MM   c:Ma
+    rr h	; MMMM MMMM M000 000M   c:Mh
+    rra		; MMMM MMMM M000 000M   c:Ma
+    rr h	; MMMM MMMM MM00 0000   c:Mh
+    rra		; MMMM MMMM MM00 0000   c:Ma
+    rr h 	; MMMM MMMM MMM0 0000   c:0
+    
+    ld l,0
+    
+    pop de ;get other mantissa in de
+    ld b,11 ;11 bits
+HPmul_hl_de_mulLoop:
+	add hl,hl
+    rla
+    jr nc,HPmul_hl_de_mulLoop_noAdd
+     add hl,de
+     adc a,0 ;add carry
+HPmul_hl_de_mulLoop_noAdd:
+	djnz HPmul_hl_de_mulLoop
+    
+    ;multiply is done
+    ;ans in ahl on bottom
+    
+    ;a			h			l
+    ;max res:
+    ;0011 1111  1111 0000  0000 0001
+    add hl,hl
+    rla
+    add hl,hl
+    rla
+    ld b,c
+    inc b
+    ;now we normalize
+HPmul_hl_de_NormLoop:
+    add hl,hl
+    rla
+    jr c,HPmul_hl_de_NormLoop_end
+    djnz HPmul_hl_de_NormLoop
+    ;subnormal
+HPmul_hl_de_NormLoop_end:    
+    ;now we round
+    ld e,l ;save into hle
+    ld l,h
+    ld h,a
+    ;cut off lsb
+    ld a,e
+    or a
+    jr z,HPmul_hl_de_NoLsbCont
+     set 0,l
+HPmul_hl_de_NoLsbCont:    
+    
+    ;now we round hl while simultaneously storing it
+    ;check for b at inf
+    ld a,b
+    cp $1f
+    jr c,HPmul_hl_de_inRange
+HPmul_hl_de_retInf:
+	    ;return ± inf 
+	    ld a,(HPmul_hl_de_sign+2)
+	    or $7c
+	    ld h,a
+	    ld l,0
+	    pop de
+    	ret
+HPmul_hl_de_inRange: 
+    
+    ld d,l ;save lsb
+    ld a,l
+    and $c0
+    ld l,a
+    add hl,hl
+    adc hl,hl
+    rl l
+    ;do swapsies of hl
+    ld a,h
+    ld h,l
+    ld l,a
+    rra ;put bottom bit in carry
+    ccf ;inverty
+    ;d = MMgg gggg
+    ld e,$10
+    rl e ;test is constructed
+    ;now we make the float
+    ld a,(HPmul_hl_de_sign+2)
+    sla b ;shift b up into place
+    sla b
+    or b
+    or h
+    ld h,a
+    ;hl is ans now
+    ld a,d
+    and $3f
+    cp e
+    jr c, HPmul_hl_de_RoundDown
+     inc hl
+HPmul_hl_de_RoundDown:
+    pop de
+    ret
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

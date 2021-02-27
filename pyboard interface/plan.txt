@@ -1,0 +1,20 @@
+make a pyboard program that sends a small, safe assembly program to the calculator it's connected to to use it as a keyboard and screen (and power suppily)
+
+using serial port and parasitic power
+
+pyboard becomes spi-slave after sending program and verifying it is running
+
+then the ti-84 can do stuff like this to get bits from pyboard:
+  ld a,2
+  out (0),a ;reset clock
+  xor a
+  out (0),a ;trigger clock
+  in a,(0)  ;read data in bit 0
+  ;total time: 44 t-states/bit = 352 per byte = 17 to 42.6 kB/sec = 22 to 55 fps
+
+;theoretical inir rate: 35-89 kB/sec burst
+
+;experimental fast graphics byte get:
+  in a,(0)
+  rra
+  rr d ;23/bit = 184/byte = 32.6 to 81.5 kB/sec = 42 to 106 fps

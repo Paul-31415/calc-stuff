@@ -1,0 +1,2051 @@
+
+
+myTextShadow	equ	appBackUpScreen	;432
+textSavePtr	equ	myTextShadow+432	;2
+textStart	equ	textSavePtr+2	;2
+textPage	equ	textStart+2	;1
+curY		equ	textPage+1	;1
+curX		equ	curY+1		;1
+appFlagsSave	equ	curX+1		;1
+penColz		equ	appFlagsSave+1	;1
+penRowz		equ	penColz+1	;1
+tokPage		equ	penRowz+1	;1
+cursorHookData	equ	tokPage+1	;5
+
+;###################################
+openEditor:
+	call	findSmallFont
+	bcall(_monReset)
+	bcall(_cursorOff)
+	res	curAble, (iy + curFlags)
+	set	3, (iy + $14)
+	ld	a, kPrgmEd
+	ld	(cxCurApp), a
+	ld	hl, cxMainVectors
+	bcall(_appInit)
+	xor	a
+	ld	(progToEdit+8), a
+	set	appTextSave, (iy + appFlags)
+	call	clearScreen
+	call	dispTitle
+	
+	ld	hl, progToEdit-1
+	rst	20h
+	bcall(_chkFindSym)
+	jr	nc, progIsFound
+	bcall(_errUndefined)
+progIsFound:
+	bcall(_canAlphIns)
+	ld	(editSym), hl
+	call	openAnEdit
+	ld	de, 1
+	ld	(curY), de
+	call	setupThisPos
+	ld	a, ':'
+	call	myyvPutC
+	inc	d
+	ld	(curY), de
+	call	dispEOW
+	call	fstCopy
+	set	0, (iy + 9)		;this enables the editor menus
+	set	appAllowContext, (iy + APIFlg)
+
+
+	ld	de, cursorHookData
+	ld	a, $69
+	ld	(de), a
+	inc	de
+	ld	hl, cursorHookPtr
+	ld	bc, 3
+	ldir
+	ld	a, (iy + $34)
+	ld	(de), a
+
+	in	a, (06)
+	ld	hl, cursorHook
+	bcall(_enableCursorHook)
+	bcall(_mon)
+
+
+
+
+
+
+
+
+;################################
+cursorHook:
+	add	a, e
+	push	af
+	ld	a, (cxCurApp)
+	cp	kPrgmEd
+	jr	z, okApp
+	cp	kTblSet
+	jr	z, okApp
+	cp	kFormat
+	jr	z, okApp
+
+	call	restoreCursorHook
+
+	pop	af
+	or	1
+	ret
+
+okApp:
+	pop	af
+	di
+
+
+	ld	hl, (penColz)
+	push	hl
+
+	ld	de, (curY)
+	call	getPos
+	ld	(penColz), hl
+
+	ld	b, (iy + textFlags)
+	ld	c, (iy + appFlags)
+	res	appTextSave, (iy + appFlags)
+
+	cp	$23
+	jr	z, _23Counts
+	cp	$22
+	jr	nz, cursorTurningOff
+
+_23Counts:
+	push	hl
+	call	getBufPos
+	ld	a, (hl)
+	ld	(curUnder), a
+	set	textInverse, (iy + textFlags)
+	ld	c, 0
+	call	myyVPutCur
+	pop	hl
+	ld	(penColz), hl
+	res	textInverse, (iy + textFlags)
+	ld	c, 1
+	call	myyVPutCur
+
+	ld	hl, 93*256
+	ld	(penColz), hl
+	set	textInverse, (iy + textFlags)
+	ld	a, 't'
+	ld	c, 0
+	call	myyVPutCur
+	ld	(penColz), hl
+	ld	a, (iy + shiftFlags)
+	and	%00011000
+	ld	d, a
+	add	a, a
+	or	d
+	or	(iy + textFlags)
+	and	%00010000
+	ld	c, 1
+	res	textInverse, (iy + textFlags)
+	ld	a, 't'
+	call	nz, myyvPutCur
+	jr	quitCursorHook
+
+cursorTurningOff:
+
+	ld	a, (curUnder)
+	set	textInverse, (iy + textFlags)
+	ld	c, 0
+	call	myyVPutCur
+	ld	(penColz), hl
+	res	textInverse, (iy + textFlags)
+	call	myyVPutC
+	
+quitCursorHook:
+	ld	(iy + textFlags), b
+	ld	(iy + appFlags), c
+
+	pop	hl
+	ld	(penColz), hl
+	call	fstCopy
+	xor	a
+	ret
+
+
+
+	
+
+
+;################################
+myCxPutAway:
+	call	restoreCursorHook
+	res	grfSplitOverride, (iy + sGrFlags)
+	res	0, (iy + 9)
+	bcall(_canAlphIns)
+	bit	editOpen, (iy + editFlags)
+	ret	z
+	ld	hl, (editSym)
+	ld	(hl), 5
+	bcall(_closeEditEqu)
+	ret
+	
+
+;#################################
+myCxPPutAway:
+	ld	a, (iy + appFlags)
+	ld	(appFlagsSave), a
+	ret
+
+;################################
+myCxRedispPtr:
+	ld	a, (appFlagsSave)
+	ld	(iy + appFlags), a
+	call	displayTextShadow
+	jp	fstCopy
+
+;################################
+myCxErrorEp:
+	ret		;umm...
+
+;################################
+myCxSizeWind:
+	ret		;deal with later
+
+;################################
+myCxMain:
+	di
+	set	appAutoScroll, (iy + appFlags)
+	ld	hl, fstCopy
+	push	hl
+	or	a
+	ret	z
+	cp	kLeft
+	jp	z, cursorLeft
+	cp	kRight
+	jp	z, cursorRight
+	cp	kDown
+	jp	z, cursorDown
+	cp	kUp
+	jp	z, cursorUp
+
+	cp	5
+	jr	nz, tNotEnter
+
+	res	shiftAlpha, (iy + shiftFlags)
+	bit	textInsMode, (iy + textFlags)
+	jr	nz, tDoEnter
+	
+	call	getTokAtEditTail
+	jr	z, tDoEnter
+simpleEnterLoop:
+	call	cursorRight
+	ld	hl, (editCursor)
+	bcall(_getPrevTok)
+	call	isTokReturn
+	ret	z
+	call	getTokAtEditTail
+	jr	nz, simpleEnterLoop
+
+tDoEnter:
+	ld	a, 5
+	jp	insDisp
+
+tNotEnter:
+	cp	kIns
+	jr	nz, tNotKIns
+
+	ld	a, (iy + textFlags)
+	xor	1 << textInsMode
+	ld	(iy + textFlags), a
+	ret
+
+tNotKIns:
+
+	cp	kAlphaUp
+	jr	nz, tNotPageUp
+
+	ld	b, 7
+pageUpLoop:
+	call	cursorUp
+	push	bc
+	call	fstCopy
+	pop	bc
+	djnz	pageUpLoop
+	ret
+
+tNotPageUp:
+	cp	kAlphaDown
+	jr	nz, tNotPageDown
+
+	ld	b, 7
+pageDownLoop:
+	call	cursorDown
+	push	bc
+	call	fstCopy
+	pop	bc
+	djnz	pageDownLoop
+	ret
+
+tNotPageDown:
+
+	cp	kBOL
+	jr	nz, tNotBOL
+
+	res	textScrolled, (iy + textFlags)
+bolLoop:
+	call	cursorLeft
+	ld	hl, (editTop)
+	ld	de, (editCursor)
+	or	a
+	sbc	hl, de
+	ret	z
+
+	ex	de, hl
+	bcall(_getPrevTok)
+	call	isTokReturn
+	ret	z
+
+	bit	textScrolled, (iy + textFlags)
+	call	nz, fstCopy
+	res	textScrolled, (iy + textFlags)
+	
+	jr	bolLoop
+
+tNotBOL:
+	cp	kEOL
+	jr	nz, tNotEOL
+
+	res	textScrolled, (iy + textFlags)
+eolLoop:
+	call	cursorRight
+	call	getTokAtEditTail
+	ret	z
+
+	call	isTokReturn
+	ret	z
+
+	bit	textScrolled, (iy + textFlags)
+	call	nz, fstCopy
+	res	textScrolled, (iy + textFlags)
+
+	jr	eolLoop
+
+tNotEOl:
+
+	cp	$21
+	jr	nz, tNotBackspace
+	call	cursorLeft
+	ret	z
+	jr	tDoDelete
+	
+tNotBackspace:
+	cp	kDel
+	jr	nz, tNotDel
+	
+tDoDelete:
+	res	textInsMode, (iy + textFlags)
+	call	delTokEditTail
+delCleanup:
+	ld	de, (curY)
+	call	setupThisPos
+	call	clearText
+	call	dispEOW
+	ret
+
+
+tNotDel:
+	
+	cp	kClear
+	jr	nz, tNotClear
+
+tDoClear:
+
+preClearLoop:
+	call	isEditAtTop
+	jr	z, preClearDone
+
+	bcall(_getPrevTok)
+	call	isTokReturn
+	jr	z, preClearDone
+
+	res	textScrolled, (iy + textFlags)
+	call	cursorLeft
+	bit	textScrolled, (iy + textFlags)
+	call	nz, fstCopy
+
+	call	delTokEditTail
+
+	jr	preClearLoop
+
+preClearDone:
+
+postClearLoop:
+	call	getTokAtEditTail
+	jr	z, delCleanup
+
+	call	isTokReturn
+	jr	z, delCleanup
+
+	call	delTokEditTail
+	jr	postClearLoop
+	
+
+
+tNotClear:
+
+	cp	kLastEnt
+	jr	nz, tNotKLastEnd
+
+	call	tDoClear
+	res	shiftAlpha, (iy + shiftFlags)
+	set	textInsMode, (iy + textFlags)
+	bcall(_getLastEntry)
+	ld	a, 5
+	bcall(_rclToQueue)
+	set	7, (iy + $0E)		;recall flag
+	ret
+	
+
+tNotKLastEnd:
+
+	cp	kRecall
+	jr	nz, tNotKRecall
+
+	ld	hl, (editSym)
+	ld	a, (hl)
+	and	$E0
+	or	9
+	ld	(hl), a
+	pop	bc
+	bjump(_RclRegEq_Call)
+
+tNotKRecall:
+
+
+	cp	$5A
+	ret	c
+
+	jp	insDisp
+	
+
+
+
+
+;#################################
+cxMainVectors:
+	.dw	myCxMain
+	.dw	myCxPPutAway
+	.dw	myCxPutAway
+	.dw	myCxRedispPtr
+	.dw	myCxErrorEp
+	.dw	myCxSizeWind
+	.db	$0E
+
+
+;#################################
+openAnEdit:
+	bcall(_editProg)
+	set	editOpen, (iy + editFlags)
+	ld	hl, (iMathPtr1)
+	inc	hl
+	inc	hl
+	ld	(editTop), hl
+	push	hl
+	ld	hl, (iMathPtr2)
+	ld	(editCursor), hl
+	push	hl
+	ex	de, hl
+	ld	hl, (iMathPtr3)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nc, setupEditProgSwapSkip
+	ex	de, hl
+setupEditProgSwapSkip:
+	ld	(editBtm), hl
+	ld	(editTail), hl
+	pop	hl
+	pop	de
+	or	a
+	sbc	hl, de
+	ret	z
+	ld	c, l
+	ld	b, h
+	ld	hl, (editCursor)
+	dec	hl
+	ld	de, (editTail)
+	dec	de
+	lddr
+	inc	hl
+	ld	(editCursor), hl
+	inc	de
+	ld	(editTail), de
+	ret
+
+
+;################################
+restoreCursorHook:
+	ld	hl, cursorHookData
+	ld	a, (hl)
+	cp	$69
+	ret	nz
+	inc	hl
+	ld	de, cursorHookPtr
+	ld	bc, 3
+	ldir
+	ld	a, (hl)
+	and	$80
+	or	(iy + $34)
+	ld	(iy + $34), a
+	ret
+
+
+;################################
+isEditAtTop:
+	ld	hl, (editCursor)
+	ld	de, (editTop)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	ret
+
+;#################################
+delTokEditTail:
+	call	getTokAtEditTail
+	
+	push	af
+	call	incEditTail
+	pop	af
+	ret	nc
+
+incEditTail:
+	ld	hl, (editTail)
+	ld	de, (editBtm)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	ret	z
+	inc	hl
+	ld	(editTail), hl
+	ret
+
+
+;################################
+myEditorToOffset:
+	push	hl
+	ld	hl, (editCursor)
+	ld	de, (editTop)
+	or	a
+	sbc	hl, de
+	pop	de
+	sbc	hl, de
+	
+	ld	de, (editBtm)
+	ld	b, h
+	ld	c, l
+	ld	hl, (editCursor)
+	dec	de
+	dec	hl
+	jr	z, dontLddr
+	lddr
+dontLddr:
+	inc	hl
+	ld	(editCursor), hl
+	inc	de
+	ld	(editTail), de
+
+	ld	de, 1
+	ld	(curY), de
+	call	clearText
+	call	displayTextShadow
+	call	displayBOL
+	call	dispEOW
+	ret
+	
+
+;#################################
+insDisp:
+	set	appTextSave, (iy + appFlags)
+	bcall(_convKeyToTok)
+	push	de
+	bit	textInsMode, (iy + textFlags)
+	jr	nz, isInserting
+
+	call	getTokAtEditTail	;z = at end, nc = 1 byte, c = 2 byte
+	
+	jr	c, notInserting
+	jr	z, notInserting
+	cp	$3F
+	jr	z, isInserting
+notInserting:
+	
+	pop	de
+	push	de
+	bcall(_bufReplace)
+	jr	z, insDispDone
+
+
+displayItttt:
+
+	ld	a, (curX)
+	or	a
+	jr	z, weirdWrapCase
+
+okDisplayIt:
+	ld	de, (curY)
+	call	setupThisPos
+	call	clearText
+	pop	de
+	call	putTokString
+	call	dispEOW
+	call	getTokAtEditTail
+	ret	z
+	call	getTokLength
+	ld	de, (curY)
+	call	getPos
+	add	a, h
+	cp	96
+	jr	nc, isNewLiningz
+	ld	a, b
+	add	a, d
+	cp	49
+isNewLiningz:
+	res	textScrolled, (iy + textFlags)
+	call	nc, newLine
+	bit	textScrolled, (iy + textFlags)
+	call	nz, dispEOW
+	ret
+
+isInserting:
+	pop	de
+	push	de
+	bcall(_bufInsert)
+	jr	nz, displayitttt
+insDispDone:
+	pop	de
+	ret
+
+
+weirdWrapCase:
+	bcall(_bufLeft)
+	call	getEditCursorPos
+	inc	b
+	dec	b
+	push	af
+	bcall(_bufRight)
+	pop	af
+	jr	z, okDisplayIt
+
+	call	cursorLeft
+	pop	de
+	ld	de, (curY)
+	call	clearText
+	call	dispEow
+	call	cursorRight
+	
+	ret
+
+
+;#################################
+isTokReturn:
+	ld	a, d
+	or	a
+	ret	nz
+	ld	a, e
+	cp	$3F
+	ret
+
+;#################################
+setupThisPos:
+	push	hl
+	call	getBufPos
+	ld	(textSavePtr), hl
+	call	getPos
+	ld	(penColz), hl
+	pop	hl
+	ret
+
+;#################################
+displayTextShadow:
+	push	af
+	push	bc
+	push	de
+	push	hl
+	
+	ld	a, (iy + appFlags)
+	push	af
+	res	appTextSave, (iy + appFlags)
+	res	textInverse, (iy + textFlags)
+	bcall(_grBufClr)
+	ld	hl, myTextShadow
+	ld	de, 0
+	ld	bc, 48*256+9
+displayTextShadowLoop:
+	push	bc
+	push	hl
+	call	getPos
+	ld	(penColz), hl
+	pop	hl
+displayTextShadowLoopInner:
+	ld	a, (hl)
+	inc	hl
+	call	myyvPutC
+	djnz	displayTextShadowLoopInner
+	inc	e
+	pop	bc
+	dec	c
+	jr	nz, displayTextShadowLoop
+
+	pop	af
+	ld	(iy + appFlags), a
+	pop	hl
+	pop	de
+	pop	bc
+	pop	af
+	ret
+
+;#################################
+cursorUp:
+	res	textInsMode, (iy + textFlags)
+	push	af
+	push	bc
+	push	de
+	push	hl
+	ld	de, (curY)
+	call	getPos
+	ld	b, h
+	ld	c, l
+cursorUpLoop:
+	res	textScrolled, (iy + textFlags)
+	call	cursorLeft
+
+	call	isEditAtTop
+	jr	z, cursorUpDone
+
+	bit	textScrolled, (iy + textFlags)
+	jr	z, didntScrollUpYo
+	inc	c
+didntScrollUpYo:
+
+	ld	de, (curY)
+	call	getPos
+	ld	a, l
+	cp	c
+	jr	z, cursorUpLoop
+
+	ld	a, b
+	cp	h
+	jr	nc, cursorUpDone
+
+	bcall(_bufLeft)
+	jr	z, cursorUpDone
+	bcall(_bufRight)
+	call	isTokReturn
+	jr	nz, cursorUpLoop
+
+cursorUpDone:
+	pop	hl
+	pop	de
+	pop	bc
+	pop	af
+	ret
+
+	
+
+;#################################
+cursorDown:
+	res	textInsMode, (iy + textFlags)
+	push	af
+	push	bc
+	push	de
+	push	hl
+	ld	de, (curY)
+	call	getPos
+	ld	b, h
+	ld	c, l
+cursorDownLoop:
+	call	cursorRight
+
+	ld	hl, (editTail)
+	ld	de, (editBtm)
+	or	a
+	sbc	hl, de
+	jr	z, cursorDownDone
+	
+
+	bit	textScrolled, (iy + textFlags)
+	jr	z, didntScrollYo
+	dec	c
+didntScrollYo:
+
+	ld	de, (curY)
+	call	getPos
+	ld	a, l
+	cp	c
+	jr	z, cursorDownLoop
+
+	ld	a, h
+	cp	b
+	jr	nc, cursorDownDone
+
+	call	getTokAtEditTail
+	jr	z, cursorDownDone
+
+	call	isTokReturn
+	jr	z, cursorDownDone
+
+	push	bc
+	call	getTokLength
+	ld	de, (curY)
+	call	getPos
+	add	a, h
+	ld	h, a
+	ld	a, b
+	add	a, d
+	ld	l, a
+	push	hl
+	call	getTokAtEditTail
+	inc	hl
+	call	isAtEndGetNextTok
+	jr	nz, notAtEnddd
+	pop	hl
+	pop	bc
+	jr	cursorDownLoop
+notAtEnddd:
+	call	getTokLength
+	pop	hl
+
+	add	a, h
+	cp	96
+	ld	a, b
+	pop	bc
+	jr	nc, cursorDownDone
+	add	a, l
+	cp	49
+	jr	c, cursorDownLoop
+	
+
+
+cursorDownDone:
+
+
+	pop	hl
+	pop	de
+	pop	bc
+	pop	af
+	ret
+	
+
+;#################################
+cursorRight:
+	res	textInsMode, (iy + textFlags)
+	push	af
+	push	bc
+	push	de
+	push	hl
+	bcall(_bufRight)
+	res	textScrolled, (iy + textFlags)
+	set	appTextSave, (iy + appFlags)
+	jr	z, cantCursorRight
+	
+	call	putTokString
+	call	getTokAtEditTail
+	jr	z, endOfProgramzz
+	call	getTokLength
+	ld	de, (curY)
+	call	getPos
+	add	a, h
+	cp	96
+	jr	nc, isNewLining
+	ld	a, b
+	add	a, d
+	cp	49
+isNewLining:
+	call	nc, newLine
+endOfProgramzz:
+	bit	textScrolled, (iy + textFlags)
+	call	nz, dispEOW
+cantCursorRight:
+	pop	hl
+	pop	de
+	pop	bc
+	pop	af
+	ret
+
+
+
+
+;##################################		;41e3 3c f
+cursorLeft:
+	res	textInsMode, (iy + textFlags)
+	push	bc
+	push	de
+	push	hl
+	bcall(_bufLeft)
+	jp	z, cantCursorLeft	
+
+
+	ld	a, (curX)
+	or	a
+	jr	z, newLineBackwardz
+	call	isTokReturn
+	jp	z, newLineBackwardz
+	call	getTokLength
+	ld	a, (curX)
+	sub	b
+	ld	(curX), a
+	call	setupThisPos
+	jp	cantCursorLeft
+newLineBackwardz:
+	call	newLineBackwards
+
+	call	displayBOL
+
+cantCursorLeft:
+	pop	hl
+	pop	de
+	pop	bc
+	ret
+
+
+;####################################
+displayBOL:
+	call	getEditCursorPos
+	
+	inc	b
+	dec	b
+	jr	nz, notOnItsOwnLinez	
+	ld	de, (curY)
+	ld	d, 0
+	ld	(curY), de
+	call	setupThisPos
+	jr	displayedThatLine
+
+
+notOnItsOwnLinez:
+	ld	hl, (editCursor)
+workBackLoop:
+	ld	de, (editTop)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nz, notAtStartOfProg
+colonStartALine:
+	ld	de, (curY)
+	ld	d, 0
+	call	setupThisPos
+	ld	a, ':'
+	call	myyVPutC
+	inc	d
+	jr	readyToDisplay
+
+notAtStartOfProg:
+	bcall(_getPrevTok)
+	call	isTokReturn
+	jr	nz, notReturnnn
+	inc	hl
+	ld	d, 0
+	jr	colonStartALine
+
+notReturnnn:
+	push	hl
+	push	de
+	push	bc
+	call	getTokLength
+	pop	de
+
+	ld	a, d
+	sub	c
+	ld	b, a
+
+	pop	de
+	pop	hl
+	jr	nz, workBackLoop
+
+	ld	de, (curY)
+	ld	d, 0
+readyToDisplay:
+	call	setupThisPos
+	ld	(curY), de
+	ld	c, e
+displayTopLineLoop:
+	ld	de, (editCursor)
+	call	isAtDEGetNextTok	
+	jr	z, displayedThatLine
+	
+	inc	hl
+	push	hl
+	call	putTokString
+	pop	hl
+	jr	displayTopLineLoop
+
+displayedThatLine:
+	ld	de, (curY)
+	push	de
+	call	getTokAtEditTail
+	call	putTokString
+	pop	de
+	ld	(curY), de
+
+
+cursorLeftDone:
+
+	call	setupThisPos
+
+	ret
+
+
+
+;##################################
+newLineBackwards:
+	ld	a, (curY)
+	cp	2
+	jr	nc, noShiftNeeded
+
+
+	
+	ld	hl, 48*7+47+myTextShadow
+	ld	de, 48*8+47+myTextShadow
+	ld	bc, 48*7
+	lddr
+
+	ld	h, d
+	ld	l, e
+	ld	(hl), $20
+	dec	de
+	ld	bc, 47
+	lddr
+
+	call	displayTextShadow
+	
+	ld	a, 2
+	set	textScrolled, (iy + textFlags)
+noShiftNeeded:
+	dec	a
+	ld	e, a
+	ld	d, 0
+	ld	(curY), de
+	ret
+
+;##############################################
+getEditCursorPos:
+	ld	de, (editTop)
+	ld	hl, (editCursor)
+	or	a
+	push	hl
+	sbc	hl, de
+	ld	b, h
+	ld	c, l
+	pop	hl
+	jr	z, isAtBeginning
+	dec	hl
+searchForNewlineLoop:
+	ld	a, $3F
+	cpdr
+	jr	nz, firstLineIGuesss
+	jp	po, firstLineReturnn
+	call	isvHL2ByteTok
+	jr	z, searchForNewlineLoop
+firstLineReturnn:
+	inc	hl
+firstLineIGuesss:
+	inc	hl
+isAtBeginning:
+	
+	ld	bc, 2*256+1		;b is screen, c is buffer
+getTheOffsetLoop:
+	ld	de, (editCursor)
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	z, weHaveThePosition
+	
+	push	bc
+	call	getNextTok
+	inc	hl
+	push	hl
+	call	getTokLength
+	pop	hl
+	pop	de
+	add	a, d
+	ld	d, a
+	cp	96
+	jr	nc, offsetNewLine
+	ld	a, b
+	ld	b, d
+	add	a, e
+	cp	49
+	ld	e, c
+	ld	c, a
+	jr	c, getTheOffsetLoop
+offsetNewLine:
+	ld	b, c
+	ld	c, 1
+	jr	getTheOffsetLoop
+
+weHaveThePosition:
+
+	set	appTextSave, (iy + appFlags)
+
+	push	bc
+	call	getTokAtEditTail
+	call	isTokReturn
+	jr	z, itsAReturnNoBig
+
+	call	getTokLength
+	pop	de
+	add	a, d
+	cp	96
+	jr	nc, onItsOwnLine
+	ld	a, b
+	add	a, e
+	cp	49
+	jr	c, notOnItsOwnLine
+	
+onItsOwnLine:
+	
+	ld	de, 0
+	
+notOnItsOwnLine
+	push	de
+itsAReturnNoBig:
+	pop	bc
+	ret
+
+
+;##################################
+isvHL2ByteTok:
+	ld	a, (hl)
+;##################################
+isA2ByteTok:
+	push	bc
+	push	hl
+	ld	hl, _2ByteTable
+	ld	bc, 11
+	or	a
+	cpir
+	pop	hl
+	pop	bc
+	ret
+
+_2ByteTable:
+	.db	$5C, $5D, $5E, $60, $61, $62
+	.db	$63, $7E, $BB, $AA, $EF
+
+
+
+;##################################
+getTokAtEditTail:
+	ld	hl, (editTail)
+;##################################
+isAtEndGetNextTok:
+	ld	de, (editBtm)
+;##################################
+isAtDeGetNextTok:
+	or	a
+	sbc	hl, de
+	add	hl, de
+	ret	z
+getNextTok:
+	ld	d, 0
+	ld	e, (hl)
+	call	isvHl2ByteTok
+	ld	a, e
+	ret	nz
+	or	a
+	ld	d, a
+	inc	hl
+	ld	e, (hl)
+	scf
+	ret
+
+
+
+;#################################
+dispEOW:
+	ld	de, (curY)
+	push	de
+	set	appTextSave, (iy + appFlags)
+	res	appAutoScroll, (iy + appFlags)
+	call	clearText
+	call	getBufPos
+	ld	(textSavePtr), hl
+
+	ld	hl, (editTail)
+dispEOWLoop:
+	call	isAtEndGetNextTok
+	jr	z, doneEOWing
+
+	inc	hl
+	push	hl
+	call	putTokString
+	pop	hl
+	jr	nc, dispEOWLoop
+doneEOWing:
+	set	appAutoScroll, (iy + appFlags)
+	pop	de
+	ld	(curY), de
+	call	setupThisPos
+	ret	
+
+
+;#################################
+clearTextNo:
+	push	af
+	push	bc
+	push	hl
+	push	de
+	jr	clearTextNoEntry
+
+;##################################
+clearText:
+	push	af
+	push	bc
+	push	hl
+	push	de
+	call	getBufPos
+	ex	de, hl
+	ld	hl, myTextShadow+431
+	or	a
+	sbc	hl, de
+	ld	c, l
+	ld	b, h
+	ld	l, e
+	ld	h, d
+	inc	de
+	ld	(hl), $20
+	jr	z, clearTextNoEntry
+	ldir
+clearTextNoEntry:
+	pop	de
+	push	de
+	call	getPos
+	ex	de, hl
+	call	getPixel2
+	ld	a, d
+	and	7
+	ld	b, a
+	ld	a, $FF
+	jr	z, haveTheMask
+makeMaskLoop:
+	srl	a
+	djnz	makeMaskLoop
+haveTheMask:
+	cpl
+	ld	c, a
+	ld	a, 95
+	sub	d
+	and	%11111000
+	rrca
+	rrca
+	rrca
+	ld	e, a
+	ld	a, 11
+	sub	e
+	ld	d, a
+
+	ld	b, 7
+clearTextLoop:
+	push	bc
+	ld	a, (hl)
+	and	c
+	ld	(hl), a
+	inc	hl
+	ld	b, e
+	ld	a, b
+	or	a
+	jr	z, noEndZero
+endZeroLoop:
+	ld	(hl), 0
+	inc	hl
+	djnz	endZeroLoop
+noEndZero:
+	ld	a, d
+	add	a, l
+	ld	l, a
+	jr	nc, $+3
+	inc	h
+;$$
+	pop	bc
+	djnz	clearTextLoop
+	ex	de, hl
+	ld	hl, 767+plotSScreen
+	or	a
+	sbc	hl, de
+	ld	b, h
+	ld	c, l
+	ld	h, d
+	ld	l, e
+	inc	de
+	jr	c, quitClearing
+	ld	(hl), 0
+	jr	z, quitClearing
+	ldir
+quitClearing:
+	pop	de
+	pop	hl
+	pop	bc
+	pop	af
+	ret
+	
+
+
+;##################################
+newLine:
+	push	bc
+	push	af
+	push	de
+	push	hl
+
+	ld	a, (curY)
+	cp	8
+	jr	c, simpleNewLine
+
+	bit	appAutoScroll, (iy + appFlags)
+	scf
+	jr	z, quitCusCantScroll
+
+	ld	de, 48+myTextShadow
+	ld	hl, 48*2+myTextShadow
+	ld	bc, 48*7
+	ldir
+
+	ld	hl, 48*8+myTextShadow
+	ld	de, 48*8+myTextShadow+1
+	ld	bc, 47
+	ld	(hl), $20
+	ldir
+
+	call	displayTextShadow
+
+	set	textScrolled, (iy + textFlags)
+
+	ld	e, 7
+simpleNewLine:
+	inc	e
+	ld	d, 0
+	ld	(curY), de
+	bit	appTextSave, (iy + appFlags)
+	jr	z, dontChangeTextSave
+	call	getBufPos
+	ld	(textSavePtr), hl
+dontChangeTextSave:
+	or	a
+quitCusCantScroll:
+	pop	hl
+	pop	de
+	pop	bc
+	ld	a, b
+	pop	bc
+	ret
+
+
+;##################################
+;input:	de = token
+;output: a = pixel length
+;	 c = pixel length
+;	 b = char count
+;	de = first char of string
+;	hl = last char of string
+
+getTokLength:
+	bcall(_getTokString)
+	bit	7, h
+	jr	nz, tokenHooked
+
+	di
+	ld	de, $4000
+	add	hl, de
+	ex	de, hl
+	ld	hl, -16
+	add	hl, sp
+	ex	de, hl
+	ld	bc, 16
+	ld	a, (tokPage)
+	out	(07), a
+	ldir
+
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+	out	(07), a
+
+	ex	de, hl
+	ld	de, op3+15
+	dec	hl
+	ld	bc, 16
+	lddr
+	ex	de, hl
+	inc	hl
+;	ei
+
+tokenHooked:
+	push	hl
+	ld	a, (hl)
+	ld	b, a
+	ld	d, b
+	or	a
+	ld	c, 0
+	jr	z, stupidZeroToken
+sumCharLengths:
+	inc	hl
+	ld	a, (hl)
+	push	hl
+	cp	$D6
+	jr	nz, notdreadedD6
+	xor	a
+notDreadedD6:
+	call	nz, getLetterLength
+	pop	hl
+	add	a, c
+	ld	c, a
+	djnz	sumCharLengths
+stupidZeroToken:
+	ld	b, d
+	pop	de
+	ret
+
+;##################################
+putTokString:
+	call	getTokLength
+	dec	b
+	inc	b
+	ret	z
+	push	de
+	ld	de, (curY)
+	call	getPos
+	add	a, h
+	cp	96
+	jr	nc, fillWithZeros
+	ld	a, d
+	add	a, b
+	cp	49
+	jr	nc, nextline
+	jr	thisLine
+
+fillWithZeros:
+	call	getBufPos
+	ld	a, 48
+	jr	fillWithZerosEntry
+fillWithZerosLoop:
+	ld	(hl), 0
+	inc	hl
+	inc	d
+fillWithZerosEntry
+	cp	d
+	jr	nz, fillWithZerosLoop
+
+nextLine:
+	call	newLine
+	pop	de
+	ret	c
+	push	de
+	ld	de, (curY)
+thisLine:
+	call	getPos
+	ld	(penColz), hl
+	pop	hl
+	ld	c, b
+dispThisTokenLoop:
+	inc	hl
+	ld	a, (hl)
+	cp	$D6
+	jr	z, dreadedD6
+	call	myyVPutC
+	djnz	dispThisTokenLoop
+
+	ld	a, d
+	add	a, c
+	ld	(curX), a
+	cp	49
+	ccf
+	ret	nc
+	jp	newLine
+
+dreadedD6:
+	call	newLine
+	ret	c
+	ld	de, (curY)
+	call	getPos
+	ld	(penColz), hl
+	ld	a, ':'
+	call	myyvPutC
+	inc	d
+	ld	(curY), de
+	ret
+
+
+;##################################
+clearScreen:
+	ld	hl, myTextShadow
+	ld	de, myTextShadow+1
+	ld	bc, 432
+	ld	(hl), $20
+	ldir
+	bcall(_grBufClr)
+	ret
+
+
+;##################################
+dispTitle:
+	ld	de, 0
+	call	getPos
+	ld	(penColz), hl
+	call	getBufPos
+	ld	(textSaveptr), hl
+	ld	hl, progText
+	call	myyvPutS
+	ld	hl, progToEdit
+	call	myyvPutS
+	ret
+
+progText:
+	.db	"PROGRAM:  ", 0
+
+;##################################
+dispLine:
+	ld	b, 48
+	ld	d, 0
+dispPartOfLine:
+	res	appTextSave, (iy + appFlags)
+	call	getPos
+	ld	(penColz), hl
+	call	getBufPos
+	ld	a, b
+	or	a
+	ret	z
+dispLineLoop:
+	ld	a, (hl)
+	call	myyvPutC
+	inc	hl
+	djnz	dispLineLoop
+	ret
+
+
+;##################################
+getBufPos:
+	push	af
+	push	de
+	ld	a, d
+	ld	l, e
+	ld	h, 0
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	ld	e, l
+	ld	d, h
+	add	hl, hl
+	add	hl, de
+	ld	e, a
+	ld	d, 0
+	add	hl, de
+	ld	de, myTextShadow
+	add	hl, de
+	pop	de
+	pop	af
+	ret
+
+
+
+;##################################
+getPos:
+	push	af
+	push	bc
+	push	de
+	push	de
+	ld	d, 0
+	call	getBufPos
+	pop	de
+	ld	a, e
+	add	a, a
+	add	a, a
+	add	a, a
+	sub	e
+	ld	e, a
+	ld	a, d
+	or	a
+	jr	z, leftAlignedAlready
+	ld	b, a
+	ld	d, 0
+getPosLoop:
+	ld	a, (hl)
+	inc	hl
+	push	hl
+	call	getLetterLength
+	pop	hl
+	add	a, d
+	ld	d, a
+	djnz	getPosLoop
+leftAlignedAlready:
+	ex	de, hl
+	pop	de
+	pop	bc
+	pop	af
+	ret
+
+;#################################
+findSmallFont:
+	di
+	ld	a, $7B
+	out	(07), a
+
+	ld	a, (_getTokString + 2 + $4000)
+	push	af
+	
+	ld	a, (_Load_SFont + 2 + $4000)
+	push	af
+	out	(07), a
+
+	ld	hl, $8000
+	ld	bc, $FFFF
+	ld	a, $2C
+searchLoop:
+	cpir
+	ld	a, (hl)
+	cp	$12
+	jr	nz, searchLoop
+	inc	hl
+	ld	a, (hl)
+	cp	$12
+	jr	nz, searchLoop
+
+	ld	de, -13
+	add	hl, de
+
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+	out	(07), a	
+
+	pop	af
+	ld	(textPage), a
+	ld	(textStart), hl
+	pop	af
+	ld	(tokPage), a
+	ei
+	ret
+
+
+;#################################
+;my v put s give DE
+
+myyVPutSDE:
+	ld	(penColz), de
+;################################
+;my v put s
+;input: hl = string
+;	(penColz)
+;output: hl = after string
+;	(penColz) updated
+;destroys: none
+
+myyVPutS:
+	push	af
+myyVPutSLp:
+	ld	a, (hl)
+	inc	hl
+	or	a
+	jr	nz, notQuitVPutS
+	pop	af
+	ret
+notQuitVPutS:
+	call	myyVPutC
+	jr	myyVPutSLp
+
+
+
+
+
+;#################################
+myyVPutCur:
+	di
+	push	af
+	push	bc
+	push	de
+	push	hl
+	push	ix
+	or	a
+	jp	z, myyVPutMapDone
+
+	call	getLetterLength
+
+	push	af
+	sub	9
+	cpl
+	ld	d, a
+
+jkUseRegular:
+	dec	c
+	inc	c
+
+	jr	z, haveCursor
+	
+	ld	c, 1
+	bit	textInsMode, (iy + textFlags)
+	jr	z, notInsertCursor
+	ld	c, 5
+notInsertCursor:
+	bit	shift2nd, (iy + shiftFlags)
+	jr	nz, haveCursor
+
+	dec	c
+	bit	shiftAlpha, (iy + shiftFlags)
+	jr	z, haveCursor
+
+	inc	c
+	inc	c
+	
+	bit	shiftLwrAlph, (iy + shiftFlags)
+	jr	z, haveCursor
+
+	inc	c
+haveCursor:
+	
+	ld	a, c
+	add	a, a
+	add	a, c
+	add	a, a
+	ld	hl, cursorData
+	add	a, l
+	ld	l, a
+	jr	nc, $+3
+	inc	h
+;$$
+
+	ld	c, d
+	ld	b, 7
+	ld	de, sFont_record+1
+makeCursorLoop:
+	push	bc
+	ld	b, c
+	ld	a, (hl)
+shiftCursorLoop:
+	srl	a
+	djnz	shiftCursorLoop
+	ld	(de), a
+	inc	hl
+	inc	de
+	pop	bc
+	djnz	makeCursorLoop
+
+
+	pop	bc
+	ld	a, (textPage)
+	ld	d, a
+
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+	ld	(textPage), a
+
+	ld	a, b
+	ld	hl, returnPointForCur
+	push	hl
+	push	de
+	push	hl
+	push	hl
+	push	hl
+	push	hl
+	ld	hl, sFont_record
+	jr	drawCursorEntry
+returnPointForCur:
+
+	ld	(textPage), a
+	jp	myyVPutMapDone
+
+
+
+;#################################
+;my v put map
+;input: a = characeter
+;	(textStart) = os small font buf
+;	(textPage) = os small font page
+;	textInverse, (iy + textFlags)
+;	(penColz)
+;output: (penColz) increased, so it can be a subroutine
+;destroys: none
+
+myyVPutC:
+	di
+	push	af
+	push	bc
+	push	de
+	push	hl
+	push	ix
+	
+	or	a
+	jp	z, myyVPutMapDone
+
+	bit	appTextSave, (iy + appFlags)
+	jr	z, dontSaveText
+
+	ld	hl, (textSavePtr)
+	ld	(hl), a
+	inc	hl
+	ld	(textSavePtr), hl
+dontSaveText:
+
+	call	getLetterLength
+
+	inc	hl
+drawCursorEntry:
+	inc	hl
+	push	hl
+	ld	h, a
+	ld	de, (penColz)
+	ld	a, d
+	and	7
+	add	a, h
+	sub	8
+	ld	c, a
+	push	de
+	ld	l, 0
+	add	hl, de
+	ld	(penColz), hl
+
+	pop	de
+
+	inc	e
+	call	getPixel2
+	pop	ix
+
+
+
+	ld	b, 6
+	ld	de, 11
+putMapLoop:
+	push	bc
+	ld	a, (textPage)
+	out	(07), a
+	ld	a, c
+	ld	c, 0
+	or	a
+	jr	z, charAligned
+	jp	m, negAligned
+posAligned:
+	ld	b, a
+	ld	a, (ix)
+posAlignedLp:
+	rra
+	rr	c
+	djnz	posAlignedLp
+	jr	alignDone
+negAligned:
+	neg
+	ld	b, a
+	ld	a, (ix)
+negAlignedLp:
+	rlca
+	djnz	negAlignedLp
+	jr	alignDone
+charAligned:
+	ld	a, (ix)
+alignDone:
+	push	af
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+	out	(07), a
+	pop	af
+
+	bit	textInverse, (iy + textFlags)
+	jr	nz, inverseText
+
+	or	(hl)
+	ld	(hl), a
+	inc	hl
+	ld	a, c
+	or	(hl)
+	ld	(hl), a
+	jr	putDone
+inverseText:
+	cpl
+	and	(hl)
+	ld	(hl), a
+	inc	hl
+	ld	a, c
+	cpl
+	and	(hl)
+	ld	(hl), a
+putDone:
+	
+	add	hl, de
+	inc	ix
+	pop	bc
+	djnz	putMapLoop
+
+
+myyVPutMapDone:
+	pop	ix
+	pop	hl
+	pop	de
+	pop	bc
+	pop	af
+;	ei
+	ret
+
+;#################################
+cursorData:			
+	.db	%11111111
+	.db	%11111111
+	.db	%11111111
+	.db	%11111111
+	.db	%11111111
+	.db	%11111111
+
+	.db	%11111111
+	.db	%10111111
+	.db	%00011111
+	.db	%10111111
+	.db	%10111111
+	.db	%10111111
+
+	.db	%11111111
+	.db	%10111111
+	.db	%01011111
+	.db	%00011111
+	.db	%01011111
+	.db	%11111111
+
+	.db	%11111111
+	.db	%11111111
+	.db	%10011111
+	.db	%01011111
+	.db	%10011111
+	.db	%11111111
+
+	.db	%00000000
+	.db	%00000000
+	.db	%00000000
+	.db	%00000000
+	.db	%00000000
+	.db	%11111111
+
+	.db	%01000000
+	.db	%11100000
+	.db	%01000000
+	.db	%01000000
+	.db	%00000000
+	.db	%11111111
+
+	.db	%01000000
+	.db	%10100000
+	.db	%11100000
+	.db	%10100000
+	.db	%00000000
+	.db	%11111111
+
+	.db	%00000000
+	.db	%01100000
+	.db	%10100000
+	.db	%01100000
+	.db	%00000000
+	.db	%11111111
+	
+
+
+;########################################
+;get pixel
+;input: de = xy
+;output: hl = plotSScreen loc
+;destroys: none
+
+getPixel2:
+	push	de
+	push	af
+	ld	a, d
+	ld	d, 0
+	ld	h, d
+	ld	l, e
+	add	hl, de
+	add	hl, de
+	add	hl, hl
+	add	hl, hl
+
+	and	%11111000
+	rrca
+	rrca
+	rrca
+	ld	e, a
+	add	hl, de
+	ld	de, plotSScreen
+	add	hl, de
+	pop	af
+	pop	de
+	ret
+
+
+
+;########################################
+getLetterLength:
+	ld	l, a
+	ld	h, 0
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	push	de
+	push	af
+	ld	de, (textStart)
+	add	hl, de
+
+
+	ld	a, (textPage)
+	out	(07), a
+
+	ld	d, (hl)
+
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+	out	(07), a
+
+	pop	af
+	cp	' '
+	jr	nz, notSpacedd
+	inc	d
+notSpacedd:
+	ld	a, d
+	pop	de
+	ret
+
+
+
+
+
+;########################################
+;graph buffer copy
+;input: none
+;output: none
+
+fstCopy:
+	ld	a, $80
+	out	($10), a
+	ld	hl, plotSScreen
+	ld	c, $20
+dispColumnzz:
+	DWAIT
+	ld	a, c
+	out	($10), a
+	cp	$2C
+	ret	z
+	ld	b, 64
+	ld	de, 12
+dispBytezz:
+	DWAIT
+	ld	a, (hl)
+	out	($11), a
+	add	hl, de
+	djnz	dispBytezz
+	ld	de, -767
+	add	hl, de
+	inc	c
+	jr	dispColumnzz
+
+
+

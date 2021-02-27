@@ -1,0 +1,1155 @@
+
+
+;3ec7
+;43e7
+
+;#######################################
+;input: (erase) = 1 erase 0 enable
+;output: os patch
+
+doFlashStuff:
+	bcall(_chk_batt_low)
+	ret	z
+
+	bcall(_getBaseVer)
+	ld	a, b
+
+	ld	de, $3EC7
+	ld	hl, _119RealCall
+	cp	19
+	jr	z, foundTheRightCall
+
+	ld	de, $3D1E+$4000
+	ld	hl, _243RealCall
+	cp	43
+	jr	z, foundTheRightCall
+	
+	ld	de, $3ECE+$4000
+	ld	hl, _253RealCall
+	cp	53
+	jr	z, foundTheRightCall
+
+	ld	de, $3ED3+$4000
+	ld	hl, _255RealCall
+	cp	55
+	jr	z, foundTheRightCall
+
+	ret
+foundTheRightCall:
+	push	hl
+	push	de
+
+	call	beginFlash
+
+	call	isOldRomInstalled
+	call	z, uninstallOldStuff
+
+	pop	de
+	pop	hl
+	push	hl
+	push	de
+
+	ld	de, $80B0
+	ld	bc, 6
+	ldir
+
+	ld	hl, uninstallingPage0
+	ld	e, 13
+
+	ld	a, (erase)
+	or	a
+	jr	nz, wereNotWriting
+#if	_84
+	ld	hl, $7FD5
+#else
+	ld	hl, $7FE8
+#endif
+	ld	($80B0+3), hl
+	bcall(_getBaseVer)
+	dec	a
+	ld	a, $75
+	jr	nz, was843
+
+#if	_84
+	ld	a, $79
+#else
+	ld	a, $19
+#endif
+
+was843:
+	ld	($80B0+5), a
+	ld	hl, installingPage0
+	ld	e, 17
+wereNotWriting:
+
+
+	call	startNewFlashPhase
+
+
+	ld	hl, $80B0
+	pop	de
+	ld	bc, 6
+	xor	a
+	call	modAPage
+
+	ld	hl, $80B0
+	ld	de, $80B1
+	ld	bc, 43-1
+	ld	(hl), $FF
+	ldir
+
+
+
+	ld	hl, uninstallingPage75
+	ld	e, 13
+
+	ld	a, (erase)
+	or	a
+	jr	nz, isErasing
+	ld	hl, entryPoint2Code
+	ld	de, $80B0
+#if	_84
+	ld	bc, 29
+#else
+	ld	bc, 39
+#endif
+	ldir
+
+#if	_84
+	bcall(_getBaseVer)
+	ld	a, b
+	ld	hl, $0305
+	cp	19
+	jr	z, foundGetCSC
+	ld	hl, $0403
+	cp	43
+	jr	z, foundGetCSC
+	ld	hl, $0406	;it's the same in both MP's
+foundGetCSC:
+	ld	($80B1), hl
+
+	ex	(sp), hl	;don't care what gets pushed
+	ld	bc, 6
+	ldir
+
+	ld	hl, appName
+	ld	bc, 8
+	ldir
+#endif
+
+	ld	hl, installingPage75
+	ld	e, 17
+isErasing:
+	
+	call	startNewFlashPhase
+
+	pop	hl
+	bcall(_getBaseVer)
+	dec	a
+	ld	a, $75
+	jr	nz, was84
+
+#if	_84
+	ld	a, $79
+#else
+	ld	a, $19
+#endif
+
+was84:
+	ld	hl, $80B0
+#if	_84
+	ld	de, $7FD5
+	ld	bc, 43
+#else
+	ld	de, $7FD9
+	ld	bc, 39
+#endif
+	call	modAPage
+
+	call	wrapUpFlash
+	ld	a, 1
+	ld	(flashSuccess), a
+	ret	
+
+
+
+
+
+;#######################################
+uninstallOldStuff:
+	bcall(_GetBaseVer)
+	cp	2
+	ret	nz
+	ld	a, b
+	cp	43
+	jp	nz, not243
+	
+	call	flash1
+
+
+	ld	a, $78
+
+	call	flash2
+
+	ld	a, $78
+	bcall(_EraseFlashPage)
+
+	call	incIndic
+	
+	ld	b, $78
+	ld	a, (swapSectorPage)
+	call	myCopyFlashPage
+	
+	call	incIndic
+
+	inc	a
+	ld	(pageA), a
+	ld	a, b
+	inc	a
+	ld	(pageB), a
+	ld	hl, $4000
+	ld	de, $4000
+	ld	bc, $4438-$4000
+	call	copyFlash
+	call	incIndic
+	ld	hl, oldData1
+	ld	a, (pageA)
+	push	af
+	in	a, (06)
+	ld	(pageA), a
+	ld	bc, 3
+	call	copyFlash
+
+	pop	af
+	ld	(pageA), a
+	
+	call	incIndic
+
+	ld	h, d
+	ld	l, e
+	ld	bc, $7F0C-$4438-3
+	call	copyFlash
+
+	call	incIndic
+
+	ld	b, $7a
+	ld	a, (swapSectorPage)
+	add	a, 2
+	call	myCopyFlashPage
+	call	incIndic
+	inc	a
+	inc	b
+	call	myCopyFlashPage
+;$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+;	fall through
+;###############################
+incIndic:
+	push	af
+	DWAIT
+	ld	a, $FF
+	out	($11), a
+	pop	af
+	ret
+
+;############
+;	2.53 ram clear
+
+
+
+
+not243:
+	cp	53
+	jp	nz, not253
+
+	call	flash1
+
+	ld	a, $74
+
+	call	flash2
+
+	ld	a, $74
+	bcall(_EraseFlashPage)
+
+	call	incIndic
+	
+	ld	b, $74
+	ld	a, (swapSectorPage)
+	call	myCopyFlashPage
+	
+	call	incIndic
+	inc	a
+	inc	b
+	call	myCopyFlashPage
+
+	call	incIndic
+
+	inc	a
+	ld	(pageA), a
+	ld	a, b
+	inc	a
+	ld	(pageB), a
+	ld	hl, $4000
+	ld	de, $4000
+	ld	bc, $7FDD-$4000
+	call	copyFlash
+
+	call	incIndic
+
+	ld	a, (pageA)
+	inc	a
+	ld	(pageA), a
+	ld	a, $77
+	ld	(pageB), a
+	ld	hl, $4000
+	ld	de, $4000
+	ld	bc, $6D61-$4000
+	call	copyFlash
+
+	call	incIndic
+
+	ld	a, (pageA)
+	push	af
+	ld	hl, oldData4
+	ld	bc, 3
+	in	a, (06)
+	ld	(pageA), a
+	call	copyFlash
+
+	call	incIndic
+
+	pop	af
+	ld	(pageA), a
+	ld	h, d
+	ld	l, e
+	ld	bc, $7FF2-$6D64
+	call	copyFlash
+
+	jp	incIndic
+
+
+
+
+
+;###############
+not253:
+	cp	55
+	ret	nz
+
+	call	flash1
+
+	ld	a, $74
+
+	call	flash2
+
+	ld	a, $74
+	bcall(_EraseFlashPage)
+
+	call	incIndic
+	
+	ld	b, $74
+	ld	a, (swapSectorPage)
+	ld	l, 3
+recopy:
+	call	myCopyFlashPage	
+	call	incIndic
+	inc	a
+	inc	b
+	dec	l
+	jr	nz, recopy
+
+
+	ld	(pageA), a
+	ld	a, b
+	ld	(pageB), a
+
+	ld	hl, $4000
+	ld	de, $4000
+	ld	bc, $2FA6
+	call	copyFlash
+
+	ld	a, (pageA)
+	push	af
+	in	a, (06)
+	ld	(pageA), a
+	ld	hl, oldData6
+	ld	bc, 3
+	call	copyFlash
+
+	pop	af
+	ld	(pageA), a
+
+	ld	h, d
+	ld	l, e
+	ld	bc, $350F-3-$2FA6
+	call	copyFlash
+
+	jp	incIndic
+
+
+
+
+
+flash1:
+	ld	hl, uninstallOldText
+	ld	e, 20
+	call	startNewFlashPhase
+
+	ld	a, (swapSectorPage)
+	ld	b, a
+
+	jp	incIndic
+	
+
+
+
+
+
+
+
+flash2:
+	ld	l, 4
+copyLoop:
+	call	myCopyFlashPage
+	call	incIndic
+	inc	a
+	inc	b
+	dec	l
+	jr	nz, copyLoop
+
+	ret
+
+;####################################
+startNewFlashPhase:
+	push	hl
+	ld	d, 50
+	ld	(penCol), de
+	call	clearScreenForFlash
+	pop	hl
+	call	myVPutS
+	bcall(_grBufCpy)
+	di
+	
+	ld	a, 7
+	out	($10), a
+	DWAIT
+	ld	a, $20
+	out	($10), a
+	ld	a, $BF
+	out	($10), a
+	ret
+
+
+;####################################
+clearScreenForFlash:
+	ld	hl, 12*50+plotSScreen
+	ld	c, 14*12-1
+	jp	clearMemSmall
+	ret
+
+
+;####################################
+beginFlash:
+	call	clearScreenForFlash
+
+	call	unlockFlashApp
+	bcall(_findSwapSector)
+	ld	(swapSectorPage), a
+	bcall(_EraseFlashPage)
+	ret
+
+
+;####################################
+wrapUpFlash:
+	ld	hl, fixingChecksumText
+	ld	e, 15
+	call	startNewFlashPhase
+
+	call	fixCheckSum
+
+	call	incIndic
+	
+	ld	a, (swapSectorPage)
+	bcall(_EraseFlashPage)
+	call	incIndic
+	ld	b, $FE
+	ld	a, (swapSectorPage)
+	ld	de, $4000
+	bcall(_WriteAByte)
+
+	ld	a, $05
+	out	($10), a
+
+	ret
+
+
+;########################################
+;fix the os checksum
+;input: (swapSector) is set
+
+fixCheckSum:
+	call	incIndic
+	ld	a, (swapSectorPage)
+	mcall(_eraseFlashPage)
+	
+	call	incIndic
+
+	ld	a, (swapSectorPage)
+	ld	b, a
+
+#if	_84
+	ld	a, $7C	
+#else
+	ld	a, $1C
+#endif
+	
+	ld	l, 2
+coyLoop:
+	call	myCopyFlashPage
+	call	incIndic
+	inc	a
+	inc	b
+	dec	l
+	jr	nz, coyLoop
+
+#if	_84
+	ld	a, $7C
+#else
+	ld	a, $1C
+#endif
+	
+	mcall(_eraseFlashPage)
+
+	call	incIndic
+
+	ld	a, (swapSectorPage)
+
+#if	_84
+	ld	b, $7C
+#else
+	ld	b, $1C
+#endif
+
+	call	myCopyFlashPage
+
+	call	incIndic
+	call	incIndic
+
+	inc	a
+	inc	b
+	ld	(pageA), a
+	ld	a, b
+	ld	(pageB), a
+
+	ld	hl, $4000
+	ld	de, $4000
+	ld	bc, $3FFF
+	call	copyFlash
+
+	call	incIndic
+	call	incIndic
+
+	call	osChecksum
+
+	call	incIndic
+	call	incIndic
+
+	cpl
+	ld	b, a
+
+#if	_84
+	ld	a, $7D
+#else
+	ld	a, $1D
+#endif
+
+	ld	de, $7FFF
+	bcall(_writeAByte)
+	ret
+
+;#########################
+;calculate os checksum 
+;input: none
+;output: checksum of current OS, cpl to use yourself
+
+osChecksum:
+	bcall(_getBaseVer)
+
+#if	_84
+	ld	d, $78
+#else
+	ld	d, $18
+#endif
+
+	dec	a
+	jr	z, not55
+	ld	d, $74
+	ld	a, b
+	cp	55
+	jr	nz, not55
+	ld	d, $70
+not55:
+	ld	bc, 0
+checkSumLoop:
+	ld	hl, $8000
+loopFor7A:
+	ld	a, b
+	out	(07), a
+	ld	a, c
+realLoopz:
+	add	a, (hl)
+	inc	hl
+	bit	6, h
+	jp	z, realLoopz
+
+	inc	b
+	ld	c, a
+	ld	a, b
+	cp	8
+	jr	nz, not8
+	
+	call	incIndic
+	call	incIndic
+
+	ld	b, d
+	jr	checksumLoop
+not8:
+
+#if	_84
+	cp	$7A
+#else
+	cp	$1A
+#endif
+
+	jr	nz, not7A
+	ld	hl, $8200
+	jr	loopFor7A
+not7A:
+	cp	$73
+	jr	nz, not73
+	ld	hl, $8300
+	jr	loopFor7A
+not73:
+	
+#if	_84
+	cp	$7E
+#else
+	cp	$1E
+#endif
+
+	jr	nz, checkSumLoop
+
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+
+	out	(07), a
+	ld	a, c
+	ret
+
+;#########################################
+;write modded info to a page
+;inputs: a = page
+;	bc = length
+;	de = starting position
+;	hl = data to put
+
+modAPage:
+	push	bc
+	push	hl
+	push	de
+	push	af
+	ld	a, (swapSectorPage)
+	mcall(_eraseFlashPage)
+	call	incIndic
+	ld	a, (swapSectorPage)
+	ld	b, a
+	pop	af
+	push	af
+	and	%11111100
+	ld	l, 4
+cleanOrigPageLp:
+	call	myCopyFlashPage
+	call	incIndic
+	inc	a
+	inc	b
+	dec	l
+	jr	nz, cleanOrigPageLp
+
+	pop	af
+	push	af
+	mcall(_eraseFlashPage)
+
+	call	incIndic
+	pop	af
+	push	af
+	ld	h, a
+	and	%11111100
+	ld	b, a
+	ld	a, (swapSectorPage)
+	ld	l, 4
+copyBackAllButOneLp:
+	ld	c, a
+	ld	a, b
+	cp	h
+	ld	a, c
+	call	nz, myCopyFlashPage
+	inc	a
+	inc	b
+	dec	l
+	call	incIndic
+	jr	nz, copyBackAllButOneLp
+
+	pop	af
+	ld	(pageB), a
+	and	%00000011
+	ld	b, a
+	ld	a, (swapSectorPage)
+	or	b
+	ld	(pageA), a
+
+	pop	bc
+	res	6, b
+	ld	hl, $4000
+	ld	de, $4000
+	call	copyFlash
+	call	incIndic
+	pop	hl
+	pop	bc
+	call	copyFlash
+	call	incIndic
+	ld	hl, $8000
+	or	a
+	sbc	hl, de
+	ld	c, l
+	ld	b, h
+	ld	l, e
+	ld	h, d
+	call	copyFlash
+	jp	incIndic
+	
+
+
+
+
+
+
+;#########################################
+;		flash stuff
+;#########################################
+
+
+;#########################################
+;2.43 data
+oldData1:
+	.db	$11, 05, 02	
+
+
+
+;2.53 data
+oldData4:
+	call	$6DD4
+
+;2.55 data
+oldData6:
+	ld	hl, $6FEA
+
+;6FA6
+
+
+
+entryPoint2Code:
+#if	_84
+
+;$7FD5
+	call	0000			;3
+	cp	$0F			;2
+	jr	z, $+24			;2
+;$7FDC
+	ld	hl, $7FF8		;3
+	rst	20h			;1
+	bcall(_findApp)			;3
+	out	($07), a		;2
+	ld	a, ($8086)		;3
+	rla				;1
+	cp	$69*2			;2
+	jp	z, $8087		;3
+
+#if	_84
+	ld	a, $81			;2
+#else
+	ld	a, $41
+#endif
+
+	out	($07), a		;2
+					   ;sum 29
+;$7FF2
+	;the call			;6
+;$7FF8					   ;sum 35
+	;the name			;8
+					   ;sum 43
+
+#else
+
+;$7FD9
+	.db	appObj, "zStart83"	;9
+;$7FE2
+	call	$2B3C			;3
+	.dw	$43E7			;2
+	.db	$79			;1
+;$7FE8
+	call	$0305			;3
+	cp	$0F			;2
+	jr	z, $-12			;2
+	ld	hl, $7FD9		;3
+	rst	20h			;1
+	bcall(_findApp)			;3
+	jr	c, $-21			;2
+	ld	($8000), a		;3
+	call	$2B3C			;3
+	.dw	$4087			;2
+;$8000					   ;sum 39
+	
+#endif
+
+_119RealCall:
+	call	$2B3C
+	.dw	$43E7
+	.db	$79
+
+_243RealCall:
+	call	$2B5E
+	.dw	$442A
+	.db	$79
+
+_253RealCall:
+	call	$2B62
+	.dw	$6DA7
+	.db	$77
+
+_255RealCall:
+	call	$2B49
+	.dw	$6F98
+	.db	$77
+
+
+_253OldCall:
+	call	$2B62
+	.dw	$6DBF
+	.db	$77
+
+_255OldCall:
+	call	$2B49
+	.dw	$6FB0
+	.db	$77
+
+	
+
+#if	_84
+;###################################
+;unlock flash on boot code 1.02 from app
+unlockFlashApp:
+	push	ix
+	ld	hl, $80C8
+	ld	c, $8100-$80C8
+	call	clearMemSmall
+	ld	hl, unlockData
+	ld	de, $80FE
+	ld	bc, unlockDataEnd-unlockData
+	ldir
+	jp	entryPoint-unlockData+$80FE
+
+
+unlockData:
+	ld	sp, (saveSP)
+	xor	a
+	out	(05), a
+	pop	af
+	out	(06), a
+	pop	ix
+	ret
+entryPoint:
+	in	a, (06)
+	push	af
+	ld	a, $80
+	ld	i, a
+	ld	(saveSP), sp
+	ld	sp, $82A9+$4000
+	ld	a, 1
+	out	(05), a
+	ld	a, $7F
+	out	(06), a
+	in	a, (02)
+	bit	5, a
+	jp	nz, $4529
+	push	af
+	jp	$4276
+
+unlockDataEnd:
+
+#else
+
+UnlockFlashApp:
+;Unlocks Flash protection.
+;Destroys: pagedCount                        
+;          pagedGetPtr
+;          arcInfo
+;          iMathPtr5
+;          pagedBuf
+;          ramCode
+
+        in      a, (06)
+        push    af
+	push	ix
+
+        ld      hl, returnPoint+$8214-$81E3
+        ld      de, $8214
+        ld      a, e
+        ld      (arcInfo), a            ;should be 08-15
+        ld      (pagedCount), a         ;just has to be over 2
+        ld      bc, $8214-$8167
+        lddr
+        ld      (iMathPtr5), de         ;must be 8167
+        ld      iy, 0056h-25h           ;permanent flags
+        
+        jp      $81E3+continuePoint-returnPoint
+
+continuePoint:
+        add     a, e
+        ld      (pagedBuf), a           ;needs to be large, but under 80
+        call    $81E3+translatePagez-returnPoint
+        ld      hl, ($5092)
+        ld      a, ($5094)
+        call    $81E3+translatePagez-returnPoint
+        ld      a, $CC
+        cpir
+        dec     hl
+        jp      (hl)
+
+returnPoint:
+        ld      hl, $0018
+        ld      (hl), $C3               ;dummy write
+flashWait:
+        ld      iy, flags
+        djnz    flashWait               ;wait for write to finish
+        add     hl, sp
+        ld      sp, hl
+	pop	ix
+        pop     af
+translatePagez:
+        bcall(_NZIf83Plus)
+        jr      z, not83
+        and     1Fh
+not83:
+        out     (06), a
+        ret
+
+#endif
+
+
+;######################################
+myCopyFlashPage:
+;because the real one is on $7D
+	push	bc
+	push	de
+	push	hl
+	push	af
+	ld	(pageA), a
+	ld	a, b
+	ld	(pageB), a
+	ld	bc, $4000
+	ld	de, $4000
+	ld	hl, $4000
+	call	copyFlash
+	jp	popAFHLDEBC
+
+
+;########################################
+;works just like ldir
+;page a = source
+;page b = dest
+
+copyFlash:
+	push	hl
+	push	de
+	ld	h, b
+	ld	l, c
+	ld	de, 768
+	mcall(_DivHLbyDE)
+	ld	(saveHL), hl
+	ld	(saveHL), hl
+	xor	a
+	ld	(saveA), a
+	ld	a, h
+	or	l
+	jr	nz, notZero
+	inc	a
+	ld	(saveA), a
+notZero:
+	ld	b, e
+	ld	a, b
+	or	a
+	pop	de
+	pop	hl
+	jr	z, checkRet
+	
+copyFlashLoop5:
+	push	bc
+	push	de
+	ld	a, (pageA)
+	ld	de, saveSScreen
+	ld	bc, 768
+	mcall(_FlashToRam2)
+	pop	de
+	ld	hl, saveSScreen
+	ld	a, (pageB)
+	ld	bc, 768
+	mcall(_WriteFlash)
+	ld	l, e
+	ld	h, d
+	pop	bc
+	djnz	copyFlashLoop5
+
+checkRET:
+	ld	a, (saveA)
+	or	a
+	ret	nz
+	
+		;catches remainder
+
+	push	de
+	ld	a, (pageA)
+	ld	de, saveSScreen
+	ld	bc, (saveHL)
+	mcall(_FlashToRam2)
+	pop	de
+	ld	hl, saveSScreen
+	ld	a, (pageB)
+	ld	bc, (saveHL)
+	mcall(_WriteFlash)
+
+	ret
+
+
+;########################################
+mCallApp:
+	push	hl
+	ld	hl, mCallRet-mCallRunner+textShadow
+	ex	(sp), hl
+	push	hl
+	push	af
+	push	bc
+	push	de
+	push	ix
+	
+	ld	hl, mCallRunner
+	ld	de, textShadow
+	ld	bc, mCallRunnerEnd-mCallRunner
+	ldir
+	in	a, (06)
+	ld	(mCallRet+1-mCallRunner+textShadow), a
+
+	pop	hl
+	
+	bit	7, h
+	set	7, h
+	res	6, h
+
+#if	_84
+	ld	a, $7B
+#else
+	ld	a, $1B
+#endif
+
+	jr	z, isOSBcall
+
+#if	_84
+	ld	a, $7F
+#else
+	ld	a, $1F
+#endif
+
+isOsBcall:
+	out	(07), a
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	inc	hl
+	ld	h, (hl)
+	
+	ex	de, hl
+
+#if	_84
+	ld	a, $81
+#else
+	ld	a, $41
+#endif
+
+	out	(07), a
+	ld	a, d
+	pop	de
+	pop	bc
+	jp	textShadow
+
+mCallRunner:
+	out	(06), a
+	pop	af
+	push	hl
+	pop	ix
+
+	push	af
+	push	bc
+	ld	hl, $4000
+	ld	bc, $FFFF
+	ld	a, $C9
+	cpir
+	dec	hl
+	pop	bc
+	pop	af
+
+	ex	(sp), hl
+	push	hl
+
+	push	ix
+	pop	hl
+
+	ex	(sp), hl
+	ret
+mCallRet:
+	ld	a, 0
+	out	(06), a
+	ret
+mCallRunnerEnd:
+	
+	
+
+
+
+uninstallOldText:
+	.db	"Uninstalling  old", 0
+installingPage0:
+	.db	"Modding  page  00h", 0
+installingPage75:
+	.db	"Modding  page  "
+#if	_84
+	.db	"75"
+#else	
+	.db	"19" 
+#endif
+	.db	"h", 0
+uninstallingPage0:
+	.db	"Restoring  page  00h", 0
+uninstallingPage75:
+	.db	"Restoring  page  "
+#if	_84
+	.db	"75"
+#else	
+	.db	"19" 
+#endif
+	.db	"h", 0
+fixingChecksumText:
+	.db	"Fixing  OS  checksum", 0
+
+
+

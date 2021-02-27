@@ -1,0 +1,265 @@
+Condition reference
+
+// INTRODUCTION
+
+This reference assumes that the reader is familiar with z80 assembly language.
+BASIC, C, Java, Japanese, or Swahili will not be sufficient.
+Basic knowledge of the English language is also assumed, but if you've made
+it this far, you probably have nothing to worry about on that account.
+
+Condition does fairly straightforward conversion of statements to assembly.
+It should be possible to look at a statement and perceive the assembly.
+When writing code to be processed with Condition, you must still think
+in assembly; Condition merely provides a shorthand notation for some logic.
+
+This reference does not describe the assembly output for every possible
+statement, but the reader should be able to infer what code is generated.
+The reader is also encouraged to look at the processed output from various
+input files in order to discover how Condition translates certain statements.
+I swear that this is not just because I'm too lazy to document all the
+possibilities.  Although if you were to directly ask me if I was too lazy,
+I'd probably plead the fifth.
+
+// GENERAL OPERATION
+
+Condition reads the input file one logical line at a time.
+A logical line is a string of characters terminated by a newline,
+a backslash, or the end of the file.
+Comments are removed from the line.
+Condition attempts to parse the line.
+If it fails, Condition includes the line verbatim in the output.
+This is how ordinary z80 assembly statements get processed.
+If Condition can parse the line, it will replace the line with z80 assembly.
+Condition ensures that line numbers are the same in input and output.
+This makes tracking errors easier.
+Bringing native guides who can identify the droppings of certain errors
+can also make the job easier.
+
+// REFERENCE
+
+I. Comments
+	;This section is irrelevant, since REAL men don't write comments.
+	Condition removes the following types of comments:
+	A. Assembly style
+		Everything from the first semicolon to the end of the line
+	B. C++ style
+		Everything from the first `//' to the end of the line
+	C. C style
+		Everything from a `/*' to the next `*/'
+
+II. Conditions
+	With the clouds clearing, conditions are good for a day outside.
+	Away from this document.
+	You know, the big room with the blue ceiling and poor climate control?
+	You've seen it before, right?  Or at least heard tales?
+	A. JR conditions
+		1. nz:	not zero
+			Aliases: `nz', `ne'
+		2. z:	zero
+			Aliases: `z', `eq'
+		3. nc:	no carry
+			Aliases: `nc', `a>=n', `n<=a'
+		4. c:	carry
+			Aliases: `c', `a<n', `n>a'
+	B. JP-only conditions
+		1. po:	parity odd
+			Aliases: `po', `nv'
+		2. pe:	parity even
+			Aliases: `pe', `v'
+		3. p:	plus
+			Aliases: `p'
+		4. m:	minus
+			Aliases: `m'
+	C. special conditions
+		1. ndjnz
+			A notional "not djnz", used for inverted conditionals
+			Example:
+				do
+				until ndjnz	;same as `while djnz'
+		2. djnz
+			Generates a DJNZ command instead of a normal jump
+			Example:
+				do		;C0001:
+				loop djnz	; djnz C0001
+		3. <no condition>
+			Omitting a condition causes an unconditional jump.
+			Example:
+				skip	; jp C0001
+				endskip	;C0001:
+		4. Invalid conditions, common typos
+			Aliases: `a>n', `n<a', `a<=n', `n>=a'
+III. Directives
+	"Thou shalt not djnz farther than 128 bytes"
+	A. Conditional statements
+		1. skip
+			conditionally skips a block of code
+			Example:
+				add	a,$20
+				skip	c
+					;skipped if the carry flag is set
+					ld	(hl),a
+				endskip
+
+		2. if
+			conditionally executes a block of code
+			Example:
+				add	a,$20
+				if	nc
+					;only executed if no carry
+					ld	(hl),a
+				endif
+
+		3. else
+			marks an alternative in an `if' or `skip' statement
+			Example:
+				add	a,$20
+				if	c
+					;only executed if carry
+					ld	(hl),a
+				else
+					;only executed if no carry
+					ld	(de),a
+				endif
+
+		4. endif/endskip
+			marks the end of an `if' or `skip' statement
+			Example:
+				See above
+			Notes: `endif' and `endskip' are synonyms.
+			For example, it is possible, though not recommended,
+			to close an `if' with an `endskip'.
+
+	B. Loop statements
+		1. do
+			opens a loop block
+			Example:
+				do
+					add	a,c
+				while nc
+
+		2. enddo
+			marks the end of a loop block, with no action.
+			Example:
+				do
+					inc	a
+					;this do/enddo block does not loop
+				enddo
+			Notes: `enddo' can be useful when used with
+			`again' and `break'
+
+		3. loop/while
+			marks end of loop, and conditionally jumps to the top
+			Examples:
+				;the following loops count down to zero:
+				do
+					dec	b
+				loop nz
+				do
+					dec	b
+				while nz
+				do
+					;FRUIT!
+					;This is the Fruit Loop that fell
+					;between the cusions six years ago.
+					;You always knew you'd find it again.
+				loop djnz
+
+		4. until
+			marks end of loop, & conditionally does not jump to top
+			Example:
+				do
+					dec	b
+				until z	;count down to zero
+
+		5. again
+			conditionally jumps to the top of the loop
+			Example:
+				do
+					dec	b
+					again	nz
+				enddo
+
+		5. break
+			conditionally jumps to the end of the loop
+			Example:
+				do
+					dec	b
+					break	z
+				loop	;unconditional jump to top
+				;Never issue the command
+				break my kneecaps
+				;I cannot be held responsible for
+				;Condition's interpretation of this command.
+
+	C. Raw statements
+		May require cooking before you can eat them safely.
+		1. jmp
+			conditionally jumps to a label
+			Example:
+				cp	42
+				jmp	a>=n,MyLabel
+			Notes: jmp has the advantage over jr and jp in that
+			aliases of conditions are valid (like `a>=n' for `nc'),
+			nonstandard conditions are valid (e.g. `jmp djnz,foo'),
+			and jump optimization policy is followed.
+
+		2. return
+			conditionally returns
+			Example:
+				cp	42
+				return	a<n
+			Notes: `return' is like `ret' except that aliases
+			of conditions are valid.
+
+	C. Option statements
+		1. option <prefixes>
+			sets the default prefix options
+			Example:
+				option size
+				jmp foo	;jr foo
+				option far
+				jmp foo	;jp foo
+
+		2. option "<option name>" "<option value>"
+			Sets the value of an option
+			Examples:
+				option "prefix" "_foo"
+				skip m	;jp m,_foo0001
+				endskip	;_foo0001:
+				option "anonprefix" "x"
+				@@:	;x0001:
+
+IV. Anonymous Labels
+	They might be government agents.
+	A. Declaring an anonymous label
+		Use `@@' to declare an anonymous label
+		Example:
+			@@:
+	B. Refering to anonymous labels
+		1. `@B'
+			Refer [B]ack to the last anonymous label
+			Example:
+				@@:
+					djnz @B
+		2. `@F'
+			Refer [F]orward to the next anonymous label
+			Example:
+					jp	 @F
+				@@:
+		3. `@<number>[BF]'
+			Refer to the Nth previous or next anon. label
+			Example:
+					jp	@3F	;refers to label C
+				@@:		;label A
+				@@:		;label B
+					jp	@2B	;refers to label A
+				@@:		;label C
+
+V. Known Bugs
+	Ants in your computer don't count.
+	Changing the anonymous label prefix can break anonymous labels:
+		option "anonprefix" "foo"
+		@@:			;foo0001:
+		option "anonprefix" "bar"
+			jp	@B	; jp bar0001
+	If you do have ants in your computer, clean up the spilled soda.

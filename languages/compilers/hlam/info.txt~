@@ -1,0 +1,8 @@
+
+allow for recursive definitions.
+eg: a<<b = [sla a] then a<<(b-1)
+    a<<0 = a
+      •for int or fix a
+
+    a<<b : float sign = a.sign, exp = a.exp + b, mant = a.mant
+      •for normal float a

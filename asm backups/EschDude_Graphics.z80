@@ -1,0 +1,350 @@
+#define 	lvl 86ECh ;saveSScreen
+
+
+screen:
+.dw 0
+
+
+putLCD:
+;puts screen (hl) with bit offset a to lcd 
+	di ;we gonna use sp
+    ld (_putLCDSaveSp+1),sp
+    and %111 ;idiot proofing
+    ld (_putLCD_shift+1),a
+    
+	ld a,5
+    out ($10),a
+
+    ld sp,hl
+    
+    ld a,$80
+    out ($10),a
+    
+    
+    
+	ld de,16
+    ld c,12
+_putLCD_colLoop:
+    ld a,$20+12
+    sub c
+    out ($10),a
+    
+    ld b,64
+_putLCD_rowLoop:
+	pop hl
+    ld a,h
+    ld h,l
+    ld l,a  ;hl
+    
+    
+_putLCD_shift:
+	jr $    
+	add hl,hl ;size:1
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    add hl,hl
+	
+    ld a,h
+    out ($11),a
+    
+    ld hl,14
+    add hl,sp
+    ld sp,hl
+    
+    
+	djnz _putLCD_rowLoop
+    
+    
+    ld hl,-1023
+    add hl,sp
+    ld sp,hl
+    
+    dec c
+    jr nz,_putLCD_colLoop
+    
+    
+
+_putLCDSaveSp:
+	ld sp,0
+    ret
+
+
+
+
+renderLayer:
+
+;level(x,y,z) = x+9y+81z
+
+;renders layer c to screen
+	;raster:
+    ;	  1			|
+    ;	 32			v : lvlPtr (z-=1)(either x += 1 or y += 1)
+    ;   456			
+    ;  A987			> or < : (x+1,y-1 = -8) or (x-1,y+1 = 8)
+    ;
+	
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+
+;screen buff is 128x109 pixels - enough to fit the whole map without clipping
+
+;places a block image (hl) on buff (de) at pos x=b,y=c
+putB:
+
+	;adj buff to row = de+16*a
+    ld a,b
+    
+    ld b,0
+    
+    sla c
+    rl b
+    sla c
+    rl b
+    sla c
+    rl b
+    sla c
+    rl b
+    
+    ex de,hl
+    add hl,bc
+    ex de,hl
+    
+    ld b,a
+    and 7
+    
+    rlca
+    rlca
+    ld (_putB_shift1+1),a
+    ld (_putB_shift2+1),a
+    rrca
+    rrca
+    
+    xor b
+    ;a has colum*8 now
+	rra
+    rra
+    rra ;a = col
+    add a,e
+    jr nc,_putB_AddCol_noCarry
+     inc d
+_putB_AddCol_noCarry:
+    
+    
+    ;hl points to the proper mask,graphics bit
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    inc hl
+    ld a,(hl)
+    inc hl
+    ld h,(hl)
+    ld l,a ;bc is mask, hl is graphics
+    ;de is dest
+    
+    ;now we draw
+    ;or-xor logic
+    ld ixl,13
+_putB_drawRow:
+    
+    ;get xor part first
+    
+    push bc
+    
+    ld c,(hl)
+    inc hl
+    ld a,(hl)
+    inc hl
+    push hl
+    
+    ld l,c
+    ld h,0
+    
+_putB_shift2:
+	jr $
+	;0 = 8
+    sla a		
+    adc hl,hl
+	;1
+    sla a		
+    adc hl,hl
+    ;2
+    sla a		
+    adc hl,hl
+    ;3
+    sla a		
+    adc hl,hl
+    ;4
+    sla a		
+	adc hl,hl
+    ;5 = 3
+	sla a		
+    adc hl,hl
+    ;6 = 2
+    sla a		
+    adc hl,hl
+	;7 = 1
+	sla a		
+    adc hl,hl
+    
+    
+    ld (_putB_xor_a+1),a
+    ld a,l
+    ld (_putB_xor_l+1),a
+    ld a,h
+    ld (_putB_xor_h+1),a
+    
+    
+    pop hl
+    
+    pop bc
+    
+    
+    
+    push hl
+    ld a,(bc)
+    ld l,a
+    inc bc
+    ld a,(bc)
+    inc bc
+    ld h,0
+    
+_putB_shift1:
+	jr $
+	;0 = 8
+    sla a		
+    adc hl,hl
+	;1
+    sla a		
+    adc hl,hl
+    ;2
+    sla a		
+    adc hl,hl
+    ;3
+    sla a		
+    adc hl,hl
+    ;4
+    sla a		
+	adc hl,hl
+    ;5 = 3
+	sla a		
+    adc hl,hl
+    ;6 = 2
+    sla a		
+    adc hl,hl
+	;7 = 1
+	sla a		
+    adc hl,hl
+    
+    ;the shift is rightwards on the screen
+    ;hla has the stuff where h is at the byte-border
+    
+    ex de,hl
+    inc hl
+    inc hl
+    or (hl)
+_putB_xor_a:
+    xor 0
+    ld (hl),a
+    
+    dec hl
+    ld a,e
+    or (hl)
+_putB_xor_l:
+    xor 0
+    ld (hl),a
+    
+    dec hl
+    ld a,d
+    or (hl)
+_putB_xor_h:
+    xor 0
+    ld (hl),a
+    ;done, row applied
+    
+    ;now add 16 to hl
+    ld a,$10
+    add a,l
+    jr nc,_putB_NextRowNoCarry
+     inc h
+_putB_NextRowNoCarry:
+	ld l,a
+    ex de,hl
+    pop hl
+    ;now we repeat
+    
+    dec ixl
+    jp nz,_putB_drawRow
+	ret
+
+
+gTable:
+.db 0
+.dw masks
+.dw graphics
+
+.db 0
+.dw masks
+.dw graphics+26
+
+
+graphics:
+.db %00000011,%00000000
+.db %00001100,%11000000
+.db %00110000,%00110000
+.db %11000000,%00001100
+.db %10110000,%00110100
+.db %10001100,%11000100
+.db %10000011,%00000100
+.db %10000000,%00000100
+.db %10000000,%00000100
+.db %11000000,%00001100
+.db %00110000,%00110000
+.db %00001100,%11000000
+.db %00000011,%00000000
+
+.db %00000000,%00000000
+.db %00000011,%00000000
+.db %00001111,%11000000
+.db %00111111,%11110000
+.db %01001111,%11001000
+.db %01110011,%00111000
+.db %01111100,%11111000
+.db %01111111,%11111000
+.db %01111111,%11111000
+.db %00111111,%11110000
+.db %00001111,%11000000
+.db %00000011,%00000000
+.db %00000000,%00000000
+
+
+
+
+masks:
+
+.db %00000011,%00000000
+.db %00001111,%11000000
+.db %00111111,%11110000
+.db %11111111,%11111100
+.db %11111111,%11111100
+.db %11111111,%11111100
+.db %11111111,%11111100
+.db %11111111,%11111100
+.db %11111111,%11111100
+.db %11111111,%11111100
+.db %00111111,%11110000
+.db %00001111,%11000000
+.db %00000011,%00000000

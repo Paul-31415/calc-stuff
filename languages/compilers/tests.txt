@@ -1,0 +1,21 @@
+test progs
+
+fact
+fib
+hello world
+GOL
+Mandelbrot
+
+chess
+
+tetris
+
+3dcube
+
+raytracer
+
+
+misc ideas:
+high-contrast scrolling:
+  display an intermediate frame/frames that look better in motion
+  

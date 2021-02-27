@@ -1,0 +1,62 @@
+
+
+
+
+
+;6 bit stereo
+#define depth 64
+#define offset 18
+int_stereo:;19 to get to interrupt
+	ex af,af'
+	jr nc,r_on
+stereo_smc_jr_origin:
+	;off
+	exx
+	ld b,a
+	ld a,2
+	out (37h),a
+	xor a
+	out (0),a
+	ld a,depth+offset+offset
+	sub b
+	exx
+	scf
+	out (38h),a ;90+11
+	ex af,af'
+	ei
+	ret ;18 = 119
+r_on:
+	ld a,l_on-stereo_smc_jr_origin
+	ld (stereo_smc_jr_origin-1),a
+	ld a,1
+	out (0),a
+	inc a
+	out (37h),a
+r_val:
+	ld a,63 ;can't be too big
+	add offset
+	out (38h),a ;102+11
+	ex af,af'
+	ei
+    ret ;18 = 131
+l_on:
+    ld a,r_on-stereo_smc_jr_origin
+    ld (stereo_smc_jr_origin-1),a
+    ld a,2
+    out (0),a
+    out (37h),a
+l_val:
+    ld a,63
+	add offset
+	exx
+	inc (hl)
+	exx
+    out (38h),a ;117+11
+    ex af,af'
+	ei
+    ret ;18 = 146
+
+;full cycle: (515+128) = 23.3 kHz
+; = 19.9% performance, feels like 3 MHz
+
+	

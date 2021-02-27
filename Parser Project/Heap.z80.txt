@@ -1,0 +1,1295 @@
+;Heap: this does all dealings with the heap
+
+
+;•gc defrag:
+
+
+
+
+
+
+
+
+
+
+
+
+defragment_adjust_ptrs_default: ;adjusts global pointers, is a subroutine for defragment_heap
+	;must conserve hl, de
+	;input to routine:
+        ;		: hl - data cursor
+        ;		: de - destination cursor
+        ;		: bc - last size
+        ;		:(defragment_max_safe_ptr) - start of stuff
+        ;	 MUST PRESERVE: hl,de
+    	
+        ;routine adjusts for the chunk of memory
+        ; from (defragment_max_safe_ptr)+hl-de to hl 
+        ; being moved down to end at de
+        ; i.e. being moved de-hl bytes
+        ;
+    push hl
+    push de
+    
+    ld b,h
+    ld c,l ;set end correct
+    
+    ;set delta to de-hl
+    ex de,hl
+    or a
+    sbc hl,de
+    ex de,hl
+    
+    ;set hl to (defragment_max_safe_ptr)-(de-hl)
+    ld hl,(defragment_max_safe_ptr)
+    or a
+    sbc hl,de
+    
+    call mov_ptrs
+	;inputs : hl - start
+    ;		: de - delta
+    ;		: bc - end
+    pop de
+    pop hl
+    ld (defragment_max_safe_ptr),hl ;store new start
+    ret
+    
+
+    
+    
+    
+    
+    
+    
+heap_garbage_collect: ;goes through the heap refs and deleates unreferenced things
+
+	;todo
+	ld a,E_Version | $80 
+	bjump(_JError)
+
+
+
+
+	;first mark everything in the heap as deleated
+    ld hl,(heapStart)
+_heap_garbage_collect_delLoop:
+	;cp with heaptop
+
+    ex de,hl ;if top <= ptr, we at top
+    ld hl,(heapTop)
+    scf
+    sbc hl,de ;compute top - ptr - 1; if top < ptr + 1, c set
+	jr c,_heap_garbage_collect_delLoop_end
+    ex de,hl
+    
+	ld c,(hl)
+    inc hl
+    ld b,(hl) 
+    set 7,(hl) ;darn, this would be a place where I could use set 7,(ix+*),b
+    inc hl
+    res 7,b
+    
+    add hl,bc
+    jp _heap_garbage_collect_delLoop
+_heap_garbage_collect_delLoop_end:
+	
+    ;now we loop through the global vat and undelete anything that is referenced
+    
+    
+    
+    
+    get_globalVatStart(globalVatStartAddr) ;into hl
+    
+_heap_garbage_collect_global_undelLoop:
+
+	;check if it's less than the end
+    
+	get_globalVatEnd(de)
+	or a
+    sbc hl,de 
+	;depth first, so by this time, we are done
+    ret nc
+    adc hl,de;fix hl and inc it
+    
+    ;get the stuff
+    inc hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    
+    push hl
+    ex de,hl
+    call heap_undelete_item
+    pop hl
+    jp _heap_garbage_collect_global_undelLoop
+    
+
+heap_item_find_start:
+	;inputs
+    
+;undel(obj):    
+heap_undelete_item:
+	;args: hl - obj
+    ;destroys: all
+;  if obj.exists:
+;    return
+;  obj.exists = true
+    dec hl
+    bit 7,(hl)
+	ret z
+    res 7,(hl)
+    inc hl
+;  for ptr in ptrs:
+	ex de,hl
+    ld hl,-20
+    call stack_safety
+    
+    push de
+    getPtrRegistryStart(hl)
+_heap_undelete_item__loop:
+
+	ex de,hl
+    getPtrRegistryEnd(hl)
+    scf
+    sbc hl,de ; while i < end
+	jr nc,_heap_undelete_item__loop_end_check_fail
+	 pop de
+     ret
+_heap_undelete_item__loop_end_check_fail:
+
+
+	ex de,hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld bc,1
+    bit 7,d
+    set 7,d
+    jr nz,_heap_undelete_item__loop_not_run
+     ld c,(hl)
+     inc hl
+     ld b,(hl)
+     inc hl
+_heap_undelete_item__loop_not_run:
+    
+;    if ptr.loc in obj:
+		;de			;(sp)
+	
+    ex (sp),hl
+    call heap_does_de_point_to_in_item_hl_save
+    ex (sp),hl
+    jr nc, _heap_undelete_item__loop
+    
+    ld a,b
+    or c
+    jr z,_heap_undelete_item__loop ;zero size ptr array check
+    inc b
+    
+    ;ptr loc = de
+    ;ptr dest = (de)
+    ;run length + 256 = bc
+    ;input obj = (sp)
+    ;ptr i = hl
+    
+    ex (sp),hl
+    push de
+    
+_heap_undelete_item__inner_rle_loop:
+
+;      undel(find_obj(ptr.dest)) 
+	
+    ;free: de
+    ;ptr loc = hl
+    
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ;ptr dest = de
+    ;find obj:
+    
+    push hl
+    push bc
+    call heap_item_find_start_de
+   	;free: bc,de
+   
+    ;now undel hl
+
+    call nc,heap_undelete_item
+
+	pop bc
+    pop hl
+	
+
+	dec c
+    jr nz,_heap_undelete_item__inner_rle_loop
+    djnz _heap_undelete_item__inner_rle_loop
+	
+    jp _heap_undelete_item__loop
+    
+    
+
+
+
+
+
+
+stack_safety:
+	add hl,sp
+	push de
+    ld de,(stack_limit)
+	or a
+    sbc hl,de ;if de > hl, c
+    pop de
+    ret nc
+    ;stack issue!
+    jp System_raiseStackDepthError
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
+;  
+;del(obj):
+;  obj.exists = false
+;  for ptr in ptrs:
+;    if ptr.loc in obj:
+;      del ptr
+    
+    
+
+  
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+
+
+;•mem manage:
+
+
+;deals with base allocation and memory management
+
+;Including:
+;defragmentation, garbage collection, and references
+
+
+
+;references are just pointers, but they are registered in the reference registry
+
+;when moving a var, the var is moved to the destination, then the 
+; registry is updated:
+;		scan through the registry and add the offset to values in the registry that fell in that var
+; then use the registry to update the pointers to areas in that variable:
+;		scan through the registry and add the offset to values the registry points to that fell in that var
+;
+
+
+
+
+
+
+
+
+;stack (for sanity's sake)
+;ix will be software stack
+#define softSP	ix
+#define softSPh	ixh
+#define softSPl	ixl
+#define stackSafetyMargin 2
+#define heapSafetyMargin 2
+
+
+
+
+heapStart:
+.dw 0	 ;points to the first length prefix thing in the heap (very first heap byte - length of first item)
+heapTop: ;points to first free byte above heap
+.dw 0
+
+soft_push_lp: ;pushes the length-prefixed thing at hl to the software stack
+	push de
+    push bc
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    push de
+    ex de,hl
+    call soft_push_alloc
+    jr nc,_soft_push_lp_err
+    ex de,hl ; put ptr back in hl
+    pop bc ;get length
+    ld a,b
+    or c
+    jr z,_soft_push_lp_empty
+    ld e,softSPl
+    ld d,softSPh
+    ldir ;copy it
+_soft_push_lp_empty:
+_soft_push_lp_err:
+    pop bc
+    pop de
+    ret
+    
+soft_push_de_type:
+soft_push_de_type_adj_mem: ;pushes the thing pointed to by de to the stack and adjusts mem
+    push bc
+    call byte_len
+    ex de,hl
+soft_push_bc_lddr_adj_mem: ;pushes the thing at hl with size bc to the stack, using lddr, adjusts mem
+	push de
+    ld e,softSPl
+    ld d,softSPh
+    dec de
+    dec de
+    dec de ;de points to -3
+    ex de,hl
+    push hl
+    ld h,b
+    ld l,c
+    call soft_push_alloc
+    pop hl
+    jr nc,_soft_push_bc_lddr_adj_mem_err
+    ex de,hl
+    
+    ld a,b
+    or c
+    jr z,_soft_push_bc_lddr_adj_mem_empty
+    
+	add hl,bc
+    dec hl
+    
+    push bc
+    lddr ;copy it
+    
+    
+    ;adjust ptrs
+    ;mov_ptrs:
+	;inputs : hl - start
+    ;		: de - delta
+    ;		: bc - end
+    
+    ;hl = start-1 of source
+    ;bc = 0
+    ;de = start-1 of dest
+    
+    ex de,hl
+    or a
+    sbc hl,de
+    ex de,hl
+    inc hl
+    ;hl = start
+    ;bc = 0
+    ;de = dest - source = delta
+    ;now just get length
+    pop bc
+    call mov_ptrs
+_soft_push_bc_lddr_adj_mem_empty:
+_soft_push_bc_lddr_adj_mem_err:
+    pop de
+    pop bc
+    ret
+    
+    
+    
+soft_push_bc: ;pushes the thing at hl with size bc to the stack
+	push de
+    ex de,hl
+    ld h,b
+    ld l,c
+    call soft_push_alloc
+    jr nc,_soft_push_bc_err
+    ex de,hl
+    
+    ld a,b
+    or c
+    jr z,_soft_push_bc_empty
+    
+	ld e,softSPl
+    ld d,softSPh
+    ldir ;copy it
+_soft_push_bc_empty:
+_soft_push_bc_err:
+    pop de
+    ret
+    
+    
+soft_push_alloc_fail_loud:
+	call soft_push_alloc
+    ret c
+    call raiseErrorInline
+def_Error(E_Memory,0,"push failed")
+
+
+
+
+soft_push_alloc: ;allocs an object of hl bytes on the software stack (checks for heap colision)
+		;destroys: hl,f
+        ;returns: f{ c set on success }
+    push de
+    push softSP
+    push hl
+    ex de,hl
+    scf
+    ld hl,0
+    sbc hl,de
+    dec hl ;2nd byte of the extra two bytes for size
+    ex de,hl
+    add softSP,de
+	;now we check against heaptop
+    push softSP
+    
+    ld de,(heapTop)
+    or a
+    ld hl,-stackSafetyMargin-2
+    sbc hl,de
+    ex de,hl
+    
+    add softSP,de ;c is affected
+    ; if it carried up, then c, so c means it's ok
+    jr nc,_soft_push_abort
+    pop softSP
+    pop de
+    ld (softSP-2),e
+    ld (softSP-1),d
+    pop de
+    pop de
+    ret
+    
+_soft_push_abort:
+    pop hl
+    pop hl
+    pop softSP
+    pop de
+    ret
+
+;for safety, the top of the software stack should have [fe][ff] so that pops when it points to that have no affect
+
+soft_stack_set_start:
+	;sets the start (top in mem) to de
+    ld softSPl,e
+    ld softSPh,d
+    ld (softSP-1),$ff
+	ld (softSP-2),$fe
+    ret
+
+
+soft_pop_discard: ;pops a thing off the software stack without storing it anywhere (i.e. just adjusts softSP)
+	push de
+	ld e,(softSP-2)
+    ld d,(softSP-1)
+    inc de
+    inc de
+	add softSP,de
+	pop de
+    ret
+    
+    
+
+	
+soft_pop_to_heap_top: ;pops a thing off the softstack and sticks it on the top of the heap
+	;returns with de pointing to the first data byte of the newly allocated heap variable
+    
+    ;returns f{c on success}
+    push softSP
+    
+    
+	ld e,(softSP-2)
+    ld d,(softSP-1)
+	add softSP,de
+	inc softSP
+    inc softSP
+    
+    push de
+    ex de,hl
+    call heap_alloc_top
+    pop de
+	;should have succeeded, but just in case
+    jr c, $+2+2+1
+     pop softSp
+     ret
+  	
+    ;hl is now ptr to start of dest
+    ;de is length
+	ex de,hl
+    ld b,h
+    ld c,l
+    pop hl
+    ;save dest
+    push de
+    ldir ;copy data
+    ;done
+    pop de
+  	scf
+    ret
+
+soft_pop_to_heap_top_adjust_mem: ;does thing but also adjusts ptr reg
+	push softSP
+	ld e,(softSP-2)
+    ld d,(softSP-1)
+	add softSP,de
+	inc softSP
+    inc softSP
+    push de
+    ex de,hl
+    call heap_alloc_top
+    pop de
+    jr c, $+2+2+1
+     pop softSp
+     ret
+	ex de,hl
+    ld b,h
+    ld c,l
+    pop hl
+    push de
+    push hl
+    push de
+    push bc
+    ldir ;copy data
+    pop bc
+    pop de
+    pop hl
+    call mov_ptrs_ldir
+    pop de
+  	scf
+    ret
+    
+    
+    
+
+;heap elements:
+;[lenl][lenh] where lenh.7 is whether it's deleated or not
+
+start_empty_heap: ;starts an empty heap at hl
+	ld (heapStart),hl
+    ld (heapTop),hl
+    ret
+
+
+
+heap_alloc_top: ;allocates hl bytes on the top of the heap (does checks for stack colision, nothing  else)
+	;f{ c on success}
+	;returns: hl = ptr to start of data
+	or a ;zcf
+    bit 7,h
+    ret nz ;return error if h has 7 set
+	push de
+    ex de,hl
+    ld hl,(heapTop)
+    set 7,d ;write size deleated at first, undelete if no colision with stack
+    ld (hl),e
+    inc hl
+    ld (hl),d
+    dec hl
+    res 7,d
+    
+	add hl,de
+    inc hl	;length data is +2
+    inc hl
+    ;hl is now new putative value
+    push hl
+    ld de,heapSafetyMargin+2
+    add hl,de
+    
+    ld e,softSPl
+    ld d,softSPh
+    
+    or a
+	sbc hl,de ;if de <= hl (i.e. nc), trouble
+    jr nc,_heap_alloc_top_abort
+	ld hl,(heapTop)
+    inc hl
+    res 7,(hl) ;mark undeleated
+    
+    pop de
+    ld (heapTop),de
+	
+    inc hl ;start of data
+    
+    pop de
+    ret;c is still set
+_heap_alloc_top_abort: ;nc is still set
+	pop de
+    pop de
+	ret
+
+heap_free: ;marks the heap data pointed to by hl as deleated
+	inc hl
+    set 7,(hl)
+    dec hl
+	ret
+
+
+
+
+defragment_heap: ;collapses the heap down (removes deleated things)
+	;input: (defragment_adjust_ptrs+1) - routine to call to adjust pointers
+    	;input to routine:
+        ;		: hl - data cursor
+        ;		: de - destination cursor
+        ;		: bc - last size
+        ;		:(defragment_max_safe_ptr) - start of stuff
+        ;	 MUST PRESERVE: hl,de
+    	
+        ;routine adjusts for the chunk of memory
+        ; from (defragment_max_safe_ptr)+hl-de to hl 
+        ; being moved down to end at de
+        ; i.e. being moved de-hl bytes
+        ;
+    
+    ;destroys:  hl,de,bc, prev heap order
+    
+    
+    
+    ld hl,(heapStart)
+_defragment_heap_jumpToFirstDeleated:
+	;cp with heaptop
+
+    ex de,hl ;if top <= ptr, we at top
+    ld hl,(heapTop)
+    inc de
+    or a
+    sbc hl,de ;compute top - ptr++; if top < ptr++, c set
+	ret c ;if we reached top without gc-ing anything, return for we are done
+    ex de,hl
+    dec hl
+    
+	ld c,(hl)
+    inc hl
+    ld b,(hl)
+    inc hl
+    bit 7,b
+    jr nz,_defragment_heap_jumpToFirstDeleated_end
+    add hl,bc
+    jp _defragment_heap_jumpToFirstDeleated
+_defragment_heap_jumpToFirstDeleated_end:
+	;now we are at start of data first deleated
+    
+    ;now we have to actually start fixing the pointers in the global vat
+    
+    
+    res 7,b
+    ld h,d
+    ld l,e
+    
+    ld (defragment_max_safe_ptr),hl ;save for the pointer-fixer
+    
+    dec de
+    dec de
+    add hl,bc ;set hl to the next var and de to our destination cursor
+_defragment_heap_loop:
+	;check top
+     push de
+ 	 ex de,hl ;if top <= ptr, we at top
+    
+     ld hl,(heapTop)
+     inc de
+     or a
+     sbc hl,de ;compute top - ptr++; if top < ptr++, c set
+     dec de
+    
+     ex de,hl
+	 pop de
+     jr c,_defragment_heap_loop_end
+
+
+
+	ld c,(hl)
+    inc hl
+    ld b,(hl)
+    dec hl
+    bit 7,b
+    res 7,b
+    inc bc
+    inc bc
+    jr z,_defragment_heap_loop_noSkip
+	
+    
+    ;skip it and do ptr corrections for the prev batch
+    add hl,bc
+defragment_adjust_ptrs:
+	call defragment_adjust_ptrs_default
+    
+    
+    
+    jr _defragment_heap_loop
+    
+
+_defragment_heap_loop_noSkip:
+	;copy data down
+    
+    ldir
+    
+    jr _defragment_heap_loop
+
+
+_defragment_heap_loop_end:
+	;de is new heaptop
+    ld (heapTop),de
+defragment_adjust_ptrs_last:
+	jp defragment_adjust_ptrs_default
+
+
+
+defragment_max_safe_ptr:
+.dw 0
+
+
+
+
+
+
+
+    
+    
+    
+find_first_free_in_Heap: ;finds the first free byte in the heap and returns hl pointing to it and bc saying how much is free
+	;output: hl - ptr to free (hl-2 is ptr to length)
+    ;		 bc - length of free chunk or junk if outside heap
+    ; f { c if within heap, nc if at end of heap}
+	ld hl,(heapStart)
+_find_first_free_Heap_loop:
+	;cp with heaptop
+
+    ex de,hl ;if top <= ptr, we at top
+    ld hl,(heapTop)
+    inc de
+    or a
+    sbc hl,de ;compute top - ptr++; if top < ptr++, c set
+	
+    ex de,hl
+    dec hl
+    
+	ld c,(hl)
+    inc hl
+    ld b,(hl)
+    inc hl
+    bit 7,b
+    jr c,_find_first_free_Heap_loop_end ;if cp above yielded out
+    jr nz,_find_first_free_Heap_loop_end_within_heap
+    add hl,bc
+    jp _find_first_free_Heap_loop
+_find_first_free_Heap_loop_end_within_heap:
+_find_first_free_Heap_loop_end:
+	ccf
+	res 7,b
+    ret
+
+
+
+
+
+
+
+
+
+heap_alloc_within: ;tries to allocate a variable within free stuff in the heap, won't put it on the end of the heap
+	;inputs: size: hl
+    ;outputs: hl pointing to start of data
+    ;f: {c on success}
+    push de
+    push bc
+    push hl
+    ld hl,(heapStart)
+_heap_alloc_within_loop:
+	
+    ex de,hl ;if top <= ptr, we at top
+    ld hl,(heapTop)
+    inc de
+    or a
+    sbc hl,de ;compute top - ptr++; if top < ptr++, c set
+    ex de,hl
+    dec hl
+    jr c,_heap_alloc_within_fail
+    
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    inc hl
+    bit 7,b
+    jr z,_heap_alloc_within_loop_occupied
+     ;is it large enough to accommodate? insize <= freesize
+     ex (sp),hl ;get size into hl
+     res 7,b
+     ;cp hl with bc
+     scf
+     sbc hl,bc ;if hl < bc+1 (=  hl <= bc), c is set
+     jr nc,_heap_alloc_within_loop_free_too_small
+      ;ok now we allocate it and return
+      pop de; get ptr into de
+      add hl,bc
+      inc hl
+      ex de,hl
+      ;hl is ptr, de is insize, bc is freesize
+      ;special case of if bc = de + 1, cant fit length prefix so just inc length
+      inc bc
+      
+      push af
+      
+      ld a,c
+      cp e
+      jr nz,heap_alloc_within_loop_free_not_special
+      
+      ld a,b
+      cp d
+      jr nz,heap_alloc_within_loop_free_not_special
+       ;special case
+       inc de
+heap_alloc_within_loop_free_not_special: 
+       pop af
+       dec bc
+       
+       ;put size in
+       dec hl
+       ld (hl),d
+       dec hl
+       ld (hl),e
+       inc hl
+       inc hl
+       
+       push hl
+       
+       add hl,de ;move ptr past data
+      
+      ex de,hl
+      ;subtract insize from freesize
+      or a
+      sbc hl,bc
+      ;now negate hl to get proper answer
+      ld b,h
+      ld c,l
+      ld hl,0
+      or a
+      sbc hl,bc
+      
+      ;hl is now new size
+      ;flags are correct also
+      ex de,hl ;put ptr back in hl, remaining size in de
+      jr z,heap_alloc_within_loop_free_not_special_takes_all
+       ;load deleated area
+       dec de
+       dec de
+       set 7,d
+       ld (hl),e
+       inc hl
+       ld (hl),d
+heap_alloc_within_loop_free_not_special_takes_all:
+      
+      pop hl ;get ptr to data back
+      pop bc
+      pop de
+      scf
+      ret
+      
+      
+_heap_alloc_within_loop_free_too_small:
+	;fix size term
+    add hl,bc
+    inc hl
+    ex (sp),hl
+_heap_alloc_within_loop_occupied:
+    add hl,bc
+    jp _heap_alloc_within_loop
+    
+_heap_alloc_within_fail:
+    or a
+    pop hl
+    pop bc
+    pop de
+    ret
+    
+    
+    
+heap_alloc: ;allocates a heap variable (size hl)
+	;will defrag if it has to
+    
+    ;returns (hl) start of data
+    ; flags: c on success
+    
+    ;first try normal allocation
+    ld (heap_alloc_try_2+1),hl
+	call heap_alloc_top
+    ret c
+heap_alloc_try_2:
+	ld hl,0
+    ;ok try allocating it within the heap
+    call heap_alloc_within
+    ret c
+    
+    ;ok, gc and try again
+    push bc
+    push de
+    call heap_garbage_collect
+    pop de
+    pop bc
+    
+heap_alloc_try_3:
+    ld hl,(heap_alloc_try_2+1)
+    call heap_alloc_within
+    ret c
+    
+    push bc
+    push de
+    call defragment_heap
+    pop de
+    pop bc
+    
+heap_alloc_try_4:
+    ld hl,(heap_alloc_try_2+1)
+    jp heap_alloc_top ;use its return
+    
+    
+
+
+
+
+
+;•heap stuff:
+
+
+
+;.org 0
+#macro jr_de_<_hl_n(label)
+	scf
+    sbc hl,de
+    jr nc,label
+#endmacro
+
+#macro jr_de_≥_hl_n(label)
+	scf
+    sbc hl,de
+    jr c,label
+#endmacro
+
+#macro jr_de_>_hl_n(label)
+	or a
+    sbc hl,de
+    jr c,label
+#endmacro
+
+#macro jr_de_≤_hl_n(label)
+	or a
+    sbc hl,de
+    jr nc,label
+#endmacro
+
+
+heap_item_find_start:
+	;inputs: hl - pointer to something in the heap (anywhere in the data or length)
+    ;outputs: hl - pointer to start of data of that something in the heap
+    ;         f(c set if not found, reset if found)
+    ;
+    ;destroys: de,bc
+    
+    ex de,hl
+heap_item_find_start_de:
+	
+    ld hl,(heapStart)
+    ;first check that it is in the heap
+    scf
+    sbc hl,de 
+    
+    ccf
+    ret c
+    
+    
+    ;now iterate through the heap
+    
+    
+    scf
+    
+    inc de
+    inc de ;do this to offset start so the length bytes are included in object
+    
+_heap_item_find_start_de__loop:
+
+    adc hl,de ;fix the ≥ check
+    
+    ;check if in heap
+    ld bc,(heapTop)
+    scf
+    sbc hl,bc
+    ret c
+    
+    inc hl
+    add hl,bc
+    ;--
+    
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    res 7,b
+    inc hl
+    
+    add hl,bc
+	
+    jr_de_≥_hl_n(_heap_item_find_start_de__loop)
+	;go back one
+    or a
+    sbc hl,bc
+	;this shant carry
+	ret
+	;hl now points to the data term of the object previously pointed within
+    
+    
+;heap_find_references_to_item:
+
+	
+heap_does_hl_point_to_in_item_de:
+	;inputs: hl - pointer
+    ;		 de - item pointer
+    ;outputs: f{c if yes}
+    ;		  de - double decrement of input
+    ;		  bc - increment of input item size
+    ;destroyed - hl
+    ;		 
+    ;		 
+    
+    ex de,hl
+heap_does_de_point_to_in_item_hl:
+    dec hl
+    ld b,(hl)
+    res 7,b
+    dec hl
+    ld c,(hl)
+    ex de,hl
+    inc bc
+    
+	scf
+    sbc hl,de ;hl ≥ de-2
+    ret nc
+    
+    sbc hl,bc ; hl-de+2<len+2
+	ret 
+	;true if hl ≥ de-2 and hl<de+len
+	
+
+
+heap_does_de_point_to_in_item_hl_save:
+	push bc
+    push de
+    call heap_does_de_point_to_in_item_hl
+    ex de,hl
+    inc hl
+    inc hl
+    pop de
+	pop bc
+    ret
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;•Mem mov section:
+
+;handles movement of memory
+
+;must have defined macros: getPtrRegistryStart(reg)
+;and getPtrRegistryEnd(reg)
+
+
+;ptr registry: have top bit clear to 
+
+mov_ptrs_ldir: ;converts ldir's args to mov_ptr's args
+	;inputs : hl - source
+    ;		: de - destination
+    ;		: bc - bytes
+    
+    ;delta = dest-source
+    ex de,hl
+    or a
+    sbc hl,de
+    ex de,hl
+    ;end = source + bytes
+    push hl
+    add hl,bc
+    ld b,h
+    ld c,l
+    pop hl
+	;start = source
+mov_ptrs:
+	;inputs : hl - start
+    ;		: de - delta
+    ;		: bc - end
+    ld (_mov_ptrs_loop_start+1),hl
+    ld (_mov_ptrs_loop_delta+1),de
+    ld (_mov_ptrs_loop_end+1),bc
+    ld (_mov_ptrs_loop_start2+1),hl
+    ld (_mov_ptrs_loop_delta2+1),de
+    ld (_mov_ptrs_loop_end2+1),bc
+    getPtrRegistryEnd(hl)
+    ld (_mov_ptrs_loop_endCond+1),hl
+    push hl
+    getPtrRegistryStart(hl)
+    pop bc
+    push hl
+    or a
+    sbc hl,bc ;if bc > hl, c set, aka if end > start
+    pop hl
+    ret nc ;if end ≤ start, no work needed
+    
+    
+_mov_ptrs_loop:
+	ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    bit 7,d
+    set 7,d
+    ld bc,1
+    jr nz,_mov_ptrs_not_run
+	 ld c,(hl)
+     inc hl
+     ;or b
+     ld b,(hl)
+     inc hl
+_mov_ptrs_not_run:
+	push hl
+	
+	;check if in adjust domain
+    
+_mov_ptrs_loop_start:
+	ld hl,0
+    
+    or a
+    sbc hl,de ;if de > hl, cont
+    ;c set
+    jr nc,_mov_ptrs_loop_Ind
+_mov_ptrs_loop_end:
+	ld hl,0
+    or a
+    sbc hl,de
+    ;if de <= hl, cont
+    ;c clear
+    jr c,_mov_ptrs_loop_Ind
+    
+
+_mov_ptrs_loop_delta:
+	ld hl,0 ;apply delta
+    add hl,de
+    ex de,hl
+
+
+	pop hl
+    push hl
+    dec hl
+	;mask rle back in
+    ld a, (hl)
+    xor d
+    and $80
+    xor d
+    ld (hl),d
+    ; put e back
+    dec hl
+    ld (hl),e
+
+
+	; protection for allowing pointer arrays of size 0
+	ld a,b
+    or c
+    jr z,_mov_ptrs_loop_Ind_exit
+_mov_ptrs_loop_Ind:
+	;de is thing
+    ex de,hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    push hl
+    
+    
+    
+	;check if in adjust domain
+    
+_mov_ptrs_loop_start2:
+	ld hl,0
+    
+    or a
+    sbc hl,de ;if de > hl, cont
+    ;c set
+    jr nc,_mov_ptrs_loop_cond
+_mov_ptrs_loop_end2:
+	ld hl,0
+    or a
+    sbc hl,de
+    ;if de <= hl, cont
+    ;c clear
+    jr c,_mov_ptrs_loop_cond
+    
+
+_mov_ptrs_loop_delta2:
+	ld hl,0 ;apply delta
+    add hl,de
+    
+	pop hl
+    push hl
+	dec hl
+    ld (hl),d
+    dec hl
+    ld (hl),e
+    
+    
+_mov_ptrs_loop_cond:
+    pop hl
+    dec bc
+    ld a,b
+    or c
+    jr nz,_mov_ptrs_loop_Ind
+_mov_ptrs_loop_Ind_exit:
+    
+    pop hl
+    
+_mov_ptrs_loop_endCond:
+	;;;;;;;;;;;
+    ex de,hl
+	getPtrRegistryEnd(hl)
+    scf
+    sbc hl,de ;end if hl <= de
+    ;keep going if hl > de -> nc
+    ex de,hl
+    jr nc,_mov_ptrs_loop
+    ret
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,47 @@
+0x8000,256,f   ,appData
+0x8100,304,f   ,ramCode
+0x8182, 65,m   ,Unknown (crypto mult arg 1)
+0x81c3, 65,m   ,Unknown (crypto mult arg 2)
+0x8259, 16,m   ,MD5Temp
+0x8269,  8,m   ,MD5Length
+0x8292, 16,m   ,MD5Hash
+0x82a5,323,f   ,tempSwapArea
+0x839F,  4,f   ,tempFreeArchive
+0x83a5, 64,m   ,MD5Buffer
+0x843F,  1,k   ,kbdScanCode
+0x8442,  1,k   ,keyDelay
+0x8446,  1,k   ,keyExtend
+0x8447,  1,*   ,contrast
+0x8448,  1,*   ,apdSubTimer
+0x8449,  1,*   ,apdTimer
+0x844a,  1,*   ,curTime (cursor)
+0x844b,  1,*   ,curRow (cursor)
+0x844c,  1,*   ,curCol (cursor)
+0x845A,  7,c   ,lFont_record
+0x8477,  1,+   ,indicBusy
+0x8478, 11,o   ,OP1
+0x8483, 11,o   ,OP2
+0x848e, 11,o   ,OP3
+0x8499, 11,o   ,OP4
+0x84a4, 11,o   ,OP5
+0x84af, 11,o   ,OP6
+0x84D3,  2,?   ,iMathPtr1
+0x84D5,  2,?   ,iMathPtr2
+0x84D7,  2,?   ,iMathPtr3
+0x84D9,  2,?   ,iMathPtr4
+0x84Db,  2,?   ,iMathPtr5
+0x8508,128,t   ,textShadow
+0x858d,  2,A   ,cxMain (for monitor bcall)
+0x8599,  1,A   ,cxPage (for monitor bcall)
+0x8599,  1,!   ,cxCurApp (includes things like homescreen)
+0x85d9,  1,l   ,varClass (linking)
+0x85de,  3,t   ,MenuCurrent
+0x8672,  1,l   ,sndRecState
+0x8674, 23,l   ,header
+0x86d7,  1,d   ,penCol
+0x86d8,  1,d   ,penRow
+0x86dd,  1,t   ,errNo
+0x86ec,768,f   ,saveSScreen
+0x89f0, 60,F   ,Flags
+0x8a3a,531,f   ,statVars
+0x8d1b,  1,t   ,curGX2

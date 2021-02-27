@@ -1,0 +1,317 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define hook_addr $9872
+#define _EnableFontHook $4FE4
+#define _EnableParseHook $5026
+#define defaultFontTable $45ff
+#define FPS $9824
+.org        progStart-2
+.db         $BB,$6D
+
+Install_hook:
+  ld hl, parseHook
+  ld de, hook_addr
+  push de
+    ld bc, hook_start-parseHook
+    ldir
+    
+  
+  
+  push de
+    ld bc, hook_end-hook_start
+    ldir
+    
+  ld bc,431 ;fill w/ 0
+  ld h,d
+  ld l,e
+  dec hl
+  ldir
+  
+  pop hl
+  ld a,1
+  bcall(_EnableFontHook)
+  
+  pop hl
+  ld a,1
+  bcall(_EnableParseHook)
+
+  ret
+
+
+parseHook:
+	   .db 83h 
+       ;b2b2
+       ;abs( is 0xb2
+       ; new syntax: Pt-Change(0-53 (A-Theta small or big [even/odd]), "[hex string img]",size
+        
+        or a                ; Which condition?
+        ret z
+        dec a
+        jr nz,ReturnZ
+        push hl
+        
+        
+        ld hl,$b2b2        ; Is it the abs( token?
+        scf
+        ccf
+        sbc hl,bc ; this affects z flag
+        jr nz,NotAbs
+        pop hl
+        ;does it have 3 args?
+        ld a,h
+        or a
+        jr nz,ReturnZ
+        or l
+        cp 3
+        jr nz,ReturnZ
+        ;get size
+        ;B_CALL(_DeallocFPS)
+        
+        
+        b_call(_ConvOP1)
+        ;de has num, a has lsb 
+      	
+        push de
+        
+        ;get hex string
+        
+        b_call(_PopRealO1)
+        rst 10h ;findsym
+        inc de
+        inc de ; get to data
+        
+        ex de,hl
+       ;ld hl,ptr to string and dealloc fps
+      
+        ex (sp),hl
+        push hl	;put stack like this: top - size, str ptr, ...
+        ;get which one
+       ;ld hl,which one and dealloc fps
+        b_call(_PopRealO1)
+        b_call(_ConvOP1)
+        and 63	;make safe
+        ld l,a
+        ld h,0
+       
+       
+      
+        add hl,hl ; hl*8
+        add hl,hl
+        add hl,hl
+        ld d,h
+        ld e,l
+        ld ix,Fonts - parseHook + hook_addr
+        add ix,de ;ix has ptr, hl has offset as does de
+        
+        ld a,l ; offset small or large char?
+        and 8
+        jr nz,large
+        jr skip
+NotAbs:
+        ld hl,$dada        ; Is it the abs( token?
+        scf
+        ccf
+        sbc hl,bc
+        pop hl
+        jr nz,ReturnZ
+        ;has 2 args?
+        ld a,h
+        or l
+        dec a
+        dec a
+        jr nz,ReturnZ
+        ;get nth byte
+        b_call(_ConvOP1)
+        push de
+        b_call(_PopRealO1)
+		rst 10h ;findsym
+        pop hl
+        add hl,de
+        ld a,(hl)
+        ld hl,Number - parseHook + hook_addr
+        call stoA - parseHook + hook_addr
+        ld hl,FP - parseHook + hook_addr
+        b_call(_Mov9ToOP1)
+        b_call($40B1)
+        or 1                ; set NZ
+        ret
+
+ReturnZ:
+       cp a
+       ret     
+FP:
+.db $00, $82
+Number:
+.db $11, $10, 0,0,0,0,0
+
+stoA:
+    call part - parseHook + hook_addr
+    rld
+    ret
+part:
+	ld	c,-100
+	call	Na1 - parseHook + hook_addr
+	ld	c,-10
+	call	Na1 - parseHook + hook_addr
+    inc hl
+	ld	c,-1
+Na1:	
+    ld	b,-1
+Na2:	
+    inc	b
+	add	a,c
+	jr	c,Na2
+	sub	c		;works as add 100/10/1
+	ld e,a
+    ld a,b
+	rld
+	ld a,e
+	ret
+
+skip:
+         
+         ld a,(ix+15)
+         or 1 ;set small
+         ld (ix+15),a
+         
+         ex (sp),hl ; (sp) and de have offset, hl = size
+         ld a,l ; load size into place
+         ld (ix+0),a ; store size
+         inc ix
+         
+         jr storeSprite
+large:
+		 ld a,(ix+7)
+         or 2 ;set large
+         ld (ix+7),a
+         
+storeSprite:
+        ex (sp),ix ;ix sto de w/ pop
+        pop de
+        pop hl	;get sprite str ptr
+		ld b,7; len
+parseHexStr:
+		 ld a,(hl)
+         sub '0'; A -> 0x11
+         cp $10 ;A < num	C flag is set
+         jr c,noSubhex1
+          sub 7 ; 0x11 -> 0xa
+noSubhex1:
+		 inc hl
+		 rrca
+         rrca
+         rrca
+         rrca
+         ld c,a
+		
+         ld a,(hl)
+         sub '0'; A -> 0x11
+         cp $10 ;A < num	C flag is set
+         jr c,noSubhex2
+          sub 7 ; 0x11 -> 0xa
+noSubhex2:
+		 inc hl
+		 or c ; combine nibbles
+		 ld (de),a
+         inc de
+         djnz parseHexStr
+         ;done!
+        ;dont sto ans
+        res numOP1,(iy+ParsFlag2)
+        or 1                ; set NZ
+        
+        ret
+
+  
+  
+hook_start:
+       .db 83h             ; Required for all hooks
+       ld c,a
+       in a,(04)
+       and %1000
+       jr nz,noQuit
+        b_call($4fE7)
+        b_call($5029) ; disable parser hook also
+        jr retnz
+noQuit:
+       ld a,h              ; what character is to be displayed?
+       or l
+       rrca
+       rrca
+       rrca
+       
+       
+       		;A < num	C flag is set	
+			;A >= num	C flag is reset
+       
+       cp 'A'  ;   64*12/ 16 bytes/char = 48 chars - hook size = A-Theta and rest (A-Theta for now)
+       jr c,retnz ; a >='A'
+       cp $5C ; theta + 1
+       jr nc,retnz	; a <= 'theta'
+       
+       push hl ; save in case not have char
+       
+       ld d,a	;save char
+       
+       ld hl,Fonts - parseHook + hook_addr          ; get our replacement bitmap
+       ; calculate offset value 
+       ld a,d
+       sub 'A' ; 'A' is 0 now
+       ld e,a	; a -> de
+       xor a
+       ld d,a
+	   
+       ex de,hl
+       add hl,hl	;de * 16
+       push hl
+       ;inject a for a*8 if a
+       ld a,c
+       rrca	;check bit 0 - set if big
+       jr nc ,noAdd
+        inc hl 
+noAdd:
+       add hl,hl
+       add hl,hl
+       add hl,hl	;8a+16de
+       add hl,de	; hl += de*16+8a = format: [letter][letter]... [letter] = small:[ size, bitmap(7)] big: [bitmap(7),char exists?]
+       
+       ;check if char exists in set
+       ex (sp),hl
+  
+       inc hl ; + 1 
+       add hl,hl	;
+       inc hl ;+3
+       add hl,hl
+       inc hl ;+7
+       add hl,hl
+       inc hl ;+15
+       add hl,de
+        
+        rlca
+        inc a ; a is either %01 (small) or %10 (large)
+       and (hl)	; check if char exists (z if doesnt)
+       pop hl
+       jr z,retnzPopHl
+       
+       ;dont need the saved offset
+       pop de
+       
+       ld a,c	;check if width mode
+       cp 2
+       jr nz,notWidthMode
+       ld b,(hl)	;store width to b
+       
+notWidthMode:
+       cp a ;set z
+       ret
+retnzPopHl:
+	pop hl
+retnz:
+	xor a
+    inc a
+    ret
+
+Fonts:
+.db 0 ;fill area with no char
+
+hook_end:

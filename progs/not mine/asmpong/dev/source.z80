@@ -1,0 +1,1391 @@
+					;top row must be empty
+#ifndef TI83
+	LD		A, (CONTRAST)
+#else
+	LD		A, 14
+	LD		(CONTRAST), A
+#endif
+	LD		(TEMP_CONTRAST), A
+MAIN_MENU:
+#ifndef ASH
+#ifndef TI83
+#ifndef TI83P
+	RES 		donePrgm, (IY + doneFlags)
+#endif
+#endif
+#endif
+	RES		IndicRun, (IY + IndicFlags)
+	XOR 		A
+	LD 		(INT_END), A			
+	LD 		(INT_MENU), A			
+	LD 		(INT_AI_SCORE), A		
+	LD 		(INT_PLAYER_SCORE), A		
+	LD 		(INT_PLAYER_SCORE+1), A		
+	LD 		(INT_AI_SCORE+1), A
+	LD		(COUNTER), A
+	LD		HL, SHOTL
+	LD		B, 4
+VAR_LOOP:
+	LD		(HL), 0
+	INC		HL
+	DJNZ		VAR_LOOP
+	DI
+	OUT		(4), A
+	EI
+	INC 		A				
+	LD 		(INT_ROW_VECTOR), A		
+	LD 		(INT_COL_VECTOR), A		
+	LD 		A, 12				
+	LD 		(INT_BALL_ROW), A		
+	LD 		A, 18				
+	LD 		(INT_BALL_COL), A		
+	LD 		A, 23				
+	LD 		(INT_AI_PADDLE_ROW), A		
+	LD 		(INT_PADDLE_ROW), A
+#ifdef TIOS
+	LD		HL, (WRITEBACK_DATA)
+	LD		A, H
+	OR		A
+	JP		NZ, PREPARE_FOR_RECOVER	
+#endif
+#ifdef MIRAGE
+	LD		HL, (WRITEBACK_DATA)
+	LD		A, H
+	OR		A
+	JP		NZ, PREPARE_FOR_RECOVER
+#endif
+NO_REC:		
+	CALL		BUFCLR	
+	LD		DE, PLOTSSCREEN+384
+	LD		HL, SPLASH
+	LD		BC, 384
+	LDIR			
+	LD		HL, PLOTSSCREEN+1
+	LD		IX, MENU_TOKS
+	CALL		TOKEN_ROUTINE
+	CALL		TOKEN_ROUTINE
+	CALL		TOKEN_ROUTINE
+	CALL		TOKEN_ROUTINE
+	CALL		OUTPUT_ARROW		
+MENU_LOOP:
+	di
+	CALL		MENU_GK				
+	CP 		$F7				
+	CALL 		Z, MENU_UP			
+	CP		$FE				
+	CALL 		Z, MENU_DOWN			
+	CP		$DF				
+	JP 		Z, GO	
+	CP		$BF
+	JP		Z, GO_SHOOT			
+	CALL 		OUTPUT_ARROW
+	LD		B, 50
+MENU_DELAY:
+	EI
+	HALT
+	DJNZ		MENU_DELAY
+	JP		MENU_LOOP			
+OUTPUT_ARROW:						
+	LD		A, (INT_MENU)
+	LD		H, 0
+	LD		L, A
+	LD		D, H
+	LD		E, L
+	ADD		HL, HL
+	ADD		HL, DE
+	LD		B, 5
+HL_MULT_LOOP:
+	ADD		HL, HL
+	DJNZ		HL_MULT_LOOP
+	LD		DE, PLOTSSCREEN
+	ADD		HL, DE
+	LD		DE, 12
+	LD		IX, ARROW_SPRITE
+	LD		B, 8
+ARROW_LOOP:
+	LD		A, (IX)
+	LD		(HL), A
+	INC		IX
+	ADD		HL, DE
+	DJNZ		ARROW_LOOP			
+	CALL		ifastcopy					
+	RET						
+MENU_UP:						
+	LD 		A, (INT_MENU)			
+	OR		A
+	RET		Z
+	CALL		ERASE_ARROW			
+	LD 		HL, INT_MENU			
+	DEC		(HL)				
+	RET						
+MENU_DOWN:						
+	LD 		A, (INT_MENU)			
+	CP 		3				
+	RET 		Z				
+	CALL		ERASE_ARROW			
+	LD		HL, INT_MENU			
+	INC		(HL)				
+	RET	
+GO_SHOOT:
+	CALL		BUFCLR
+	CALL		SETUP_SHOT_R
+	JP		vv	
+GO:	
+	CALL		BUFCLR	
+VV:	LD 		A, (INT_MENU)			
+	CP 		3
+	JP		Z, NO_SAVE_QUIT
+	LD 		(INT_DIFFICULTY), A		
+	INC		A
+	ADD		A, A
+	ADD		A, A				
+	LD		(SPEED), A
+	CALL		ARENA_SETUP			
+	CALL 		OUTPUT_BALL
+	LD		HL, PLOTSSCREEN
+	LD		DE, saferam2
+	LD		BC, 768
+	LDIR	
+	XOR		A
+	LD		(INT_MENU), A
+	LD		HL, PLOTSSCREEN+122
+	LD		IX, INV_TOKS
+	CALL		TOKEN_ROUTINE
+	CALL		TOKEN_ROUTINE
+INV_MENU_LOOP:
+	CALL		OUTPUT_ARROW_INV
+	CALL		MENU_GK
+	CP		$F7
+	CALL		Z, INV_MENU_UP
+	CP		$FE
+	CALL		Z, INV_MENU_DOWN
+	CP		$DF
+	JP		Z, CHOOSE
+	CP		$BF
+	JP		Z, CHOOSE
+	JR		INV_MENU_LOOP
+OUTPUT_ARROW_INV:
+	LD		A, (INT_MENU)
+	LD		H, 0
+	LD		L, A
+	LD		D, H
+	LD		E, L
+	ADD		HL, HL
+	ADD		HL, DE
+	ADD		HL, HL
+	ADD		HL, HL
+	ADD		HL, HL
+	ADD		HL, HL
+	ADD		HL, HL
+	LD		DE, PLOTSSCREEN+121
+	ADD		HL, DE	
+	LD		IX, ARROW_SPRITE
+	LD		B, 8
+	LD		DE, 12
+OUTPUT_INV_LOOP:
+	LD		A, (IX)
+	LD		(HL), A
+	INC		IX
+	ADD		HL, DE
+	DJNZ		OUTPUT_INV_LOOP
+	CALL		ifastcopy
+	RET
+INV_MENU_UP:
+	LD		A, (INT_MENU)
+	OR		A
+	RET		Z
+	CALL		ERASE_ARROW_INV
+	LD		HL, INT_MENU
+	DEC		(HL)
+	RET
+INV_MENU_DOWN:
+	LD		A, (INT_MENU)
+	CP		1
+	RET		Z
+	CALL		ERASE_ARROW_INV
+	LD		HL, INT_MENU
+	INC		(HL)
+	RET
+ERASE_ARROW_INV:
+	LD		A, (INT_MENU)
+	LD		L, A
+	LD		H, 0
+	LD		D, H
+	LD		E, L
+	ADD		HL, HL
+	ADD		HL, DE
+	ADD		HL, HL
+	ADD		HL, HL
+	ADD		HL, HL
+	ADD		HL, HL
+	ADD		HL, HL
+	LD		DE, PLOTSSCREEN+121
+	ADD		HL, DE
+	LD		DE, 12
+	LD		B, 8
+ERASE_ARROW_INV_LOOP:
+	LD		(HL), 0
+	ADD		HL, DE
+	DJNZ		ERASE_ARROW_INV_LOOP
+	CALL		ifastcopy
+	RET
+INVERT:
+	LD		A, %00010001
+	LD		(PLAYER_PADDLE_BYTE), A
+	LD		A, %10001000
+	LD		(AI_PADDLE_BYTE), A
+	LD		HL, PLOTSSCREEN
+	LD		B, 4
+INVERT_OUTER_LOOP:
+	PUSH		BC
+	LD		B, 192
+INVERT_INNER_LOOP:
+	LD		A, 255
+	XOR		(HL)
+	LD		(HL), A
+	INC		HL
+	DJNZ		INVERT_INNER_LOOP
+	POP		BC
+	DJNZ		INVERT_OUTER_LOOP
+	CALL		ifastcopy
+	CALL		SCORE_OUT
+	XOR		A
+	LD		(INT_PLAYER_SCORE), A
+	LD		(INT_AI_SCORE), A
+	LD		(INT_PLAYER_SCORE+1), A
+	LD		(INT_AI_SCORE+1), A
+	EI
+	LD		B, 20
+	CALL		DELAY_LOOP
+	JR		MAIN_LOOP
+CHOOSE:
+	LD		DE, PLOTSSCREEN
+	LD		HL, saferam2
+	LD		BC, 768
+	LDIR
+	LD		A, (INT_MENU)
+	CP		1
+	JR		Z, INVERT
+	LD		A, %11101110
+	LD		(PLAYER_PADDLE_BYTE), A
+	LD		A, %01110111
+	LD		(AI_PADDLE_BYTE), A 
+	EI
+	LD		B, 50
+	CALL		DELAY_LOOP
+	CALL		SCORE_OUT
+MAIN_LOOP:
+	LD		HL, COUNTER
+	INC		(HL)
+	LD		A, (HL)
+	CP		248
+	CALL		Z, RES_COUNTER
+	CALL 		GETKEY
+	CALL 		AI_MOVE
+	LD 		A, (INT_END)
+	CP 		5
+#ifdef MIRAGE
+	JP 		Z, MM_NO_WB
+#endif
+#ifdef TIOS
+	JP		Z, MM_NO_WB
+#else
+#ifndef MIRAGE
+	JP		Z, MAIN_MENU
+#endif
+#endif
+	CP 		4
+	JP 		Z, END_GAME
+	CALL 		CHECK_WALLS
+	CALL 		OUTPUT_BALL
+	LD 		A, (INT_COL_VECTOR)
+	CP 		1
+	CALL 		Z, INC_COL
+	OR 		A
+	CALL 		Z, DEC_COL
+	LD 		A, (INT_ROW_VECTOR)
+	CP 		1
+	CALL 		Z, INc_ROW
+	OR 		A
+	CALL 		Z, DEC_ROW
+	LD 		A, (INT_BALL_COL)
+	CP 		6
+	CALL 		Z, DEATH_CHECK
+	LD 		A, (INT_BALL_COL)
+	CP 		84
+	CALL 		Z, DEATH_CHECK_AI
+	CALL 		OUTPUT_BALL
+	CALL 		OUTPUT_PADDLE
+	CALL 		OUTPUT_AI_PADDLE
+	CALL		SHOT_ROUTINES_L
+	CALL		SHOT_ROUTINES_R
+	CALL		ifastcopy
+	LD		A, (SPEED)
+	LD		B, A
+SPEED_LOOP:
+	EI
+	HALT
+	DJNZ		SPEED_LOOP
+	JP 		MAIN_LOOP
+RES_COUNTER:
+	LD		(HL), 0
+	RET
+#ifndef MALLARD
+#ifndef ASH
+#ifndef TI83
+#ifndef TI83P
+PREPARE_FOR_RECOVER:
+	res		indicrun, (IY+indicflags)
+	CALL		ARENA_SETUP
+	CALL 		OUTPUT_BALL
+	LD		HL, (WRITEBACK_DATA)
+	LD		A, L
+	AND		15
+	LD		(INT_AI_SCORE), A
+	LD		A, L
+	AND		%11110000
+	RRCA
+	RRCA
+	RRCA
+	RRCA
+	LD		(INT_PLAYER_SCORE), A
+	PUSH		HL
+	CALL		SCORE_OUT
+	POP		HL
+	PUSH		HL
+	BIT		7, H
+	CALL		NZ, SETUP_SHOT_R
+	POP		HL
+	LD		A, H
+	AND		%00000011
+	LD		(INT_DIFFICULTY), A
+	INC		A
+	ADD		A, A
+	ADD		A, A
+	LD		(SPEED), A
+	BIT		6, H
+	JP		NZ, NO_INVERT
+	LD		A, %00010001
+	LD		(PLAYER_PADDLE_BYTE), A
+	LD		A, %10001000
+	LD		(AI_PADDLE_BYTE), A
+	LD		HL, PLOTSSCREEN
+	LD		B, 4
+RECOVER_INV_LOOP_OUT:
+	PUSH		BC
+	LD		B, 192
+RECOVER_INV_LOOP_IN:
+	LD		A, 255
+	XOR		(HL)
+	LD		(HL), A
+	INC		HL
+	DJNZ		RECOVER_INV_LOOP_IN
+	POP		BC
+	DJNZ		RECOVER_INV_LOOP_OUT
+	JP		MAIN_LOOP
+#endif
+#endif
+#endif
+#endif
+TOKEN_ROUTINE:
+	LD		B, 8
+	LD		DE, 8
+OUTER_TOK_LOOP:
+	PUSH		BC
+	LD		B, 4
+INNER_TOK_LOOP:
+	LD		A, (IX)
+	LD		(HL), A
+	INC		HL
+	INC		IX
+	DJNZ		INNER_TOK_LOOP
+	ADD		HL, DE
+	PUSH		HL
+	PUSH		DE
+	CALL		ifastcopy
+	POP		DE
+	POP		HL
+	LD		B, 15
+TOK_DELAY:
+	EI
+	HALT
+	DJNZ		TOK_DELAY
+	POP		BC
+	DJNZ		OUTER_TOK_LOOP
+	RET
+DELAY_LOOP:
+	EI
+	HALT
+	DJNZ		DELAY_LOOP
+	RET
+LOOP_PIC:
+	LD 		(HL), A
+	ADD 		HL, DE
+	DJNZ 		LOOP_PIC
+	RET
+ARENA_SETUP:
+	LD 		DE, plotSScreen			
+	LD 		HL, ARENA_SETUP_1		
+	LD 		BC, 12				
+	LDIR						
+	LD 		DE, plotSScreen+12		
+	LD 		HL, ARENA_SETUP_1
+	LD 		BC, 12
+	LDIR
+	LD 		DE, plotSScreen+24
+	LD 		HL, ARENA_SETUP_1
+	LD 		BC, 12
+	LDIR
+	LD		DE, plotSScreen+732
+	LD 		HL, ARENA_SETUP_1	
+	LD 		BC, 12
+	LDIR
+	LD 		DE, plotSScreen+744
+	LD 		HL, ARENA_SETUP_1
+	LD 		BC, 12
+	LDIR
+	LD 		DE, plotSScreen+756
+	LD 		HL, ARENA_SETUP_1
+	LD 		BC, 12
+	LDIR
+	LD 		B, 58
+	LD 		HL, plotSScreen+36
+	LD 		DE, 12
+	LD 		A, 224
+	CALL 		LOOP_PIC
+	LD 		B, 58
+	LD 		HL, plotSScreen+41
+	LD 		A, 1
+	CALL 		LOOP_PIC
+	LD 		B, 58
+	LD 		HL, plotSScreen+47
+	LD 		A, 7
+	CALL 		LOOP_PIC
+	LD		HL, PLOTSSCREEN+328
+	LD		IX, CENTER_TOK
+	CALL		TOKEN_ROUTINE
+	RET
+CHECK_SCORE:
+	LD 		A, (INT_PLAYER_SCORE)
+	CP 		15
+	CALL 		Z, END_GAME_SET
+	LD 		A, (INT_AI_SCORE)
+	CP 		15
+	CALL 		Z, END_GAME_SET
+	RET
+ERASE_ARROW:
+	LD		H, 0
+	LD		L, A
+	LD		D, 0
+	LD		E, L
+	ADD		HL, HL
+	ADD		HL, DE	
+	LD		B, 5
+ARROW_ERASE_MULT:
+	ADD		HL, HL
+	DJNZ		ARROW_ERASE_MULT
+	LD		DE, PLOTSSCREEN
+	ADD		HL, DE
+	LD		DE, 12
+	LD		B, 8
+ARROW_ERASE_LOOP:
+	LD		(HL), 0
+	ADD		HL, DE
+	DJNZ		ARROW_ERASE_LOOP
+	RET
+SHOT_ROUTINES_L:
+	LD		A, (SHOTL)
+	AND		128		;check state, only top bit needed
+	RET		Z
+	CALL		SHOT_PUT_L
+	LD		A, (SHOTL)
+	AND		127		;don't use upper bit
+	CP		81
+	JR		Z, CHECK_RIGHT_HIT
+	LD		HL, SHOTL
+	INC		(HL)
+	CALL		SHOT_PUT_L
+	RET
+CHECK_RIGHT_HIT:
+	XOR		A
+	LD		(SHOTL), A
+	LD		A, (SHOTLROW)
+	LD		B, A
+	LD		A, (INT_AI_PADDLE_ROW)
+	CP		B
+	RET		P
+	LD		A, (INT_AI_PADDLE_ROW)
+	ADD		A, 14
+	LD		B, A
+	LD		A, (SHOTLROW)
+	CP		B
+	RET		P
+	CALL		OUTPUT_BALL
+	CALL		ADD_SCORE_PLAYER
+	JP		OUTPUT_BALL
+SHOT_PUT_L:
+	LD		A, (SHOTLROW)
+	LD		L, A
+	LD		H, 0
+	LD		D, H
+	LD		E, L
+	ADD		HL, HL
+	ADD		HL, DE
+	ADD		HL, HL
+	ADD		HL, HL
+	LD		DE, PLOTSSCREEN
+	ADD		HL, DE
+	LD		A, (SHOTL)
+	AND		127
+	LD		E, A
+	SRL		E
+	SRL		E
+	SRL		E
+	LD		D, 0
+	ADD		HL, DE
+	AND		7
+	JR		Z, OUT_ALIGNED_L
+	LD		B, A
+	XOR		A
+	LD		C, 255
+ROT_LOOP_L:
+	SRL		C
+	RRA
+	DJNZ		ROT_LOOP_L
+	INC		HL
+	XOR		(HL)
+	LD		(HL), A
+	DEC		HL
+	LD		A, C
+	XOR		(HL)
+	LD		(HL), A
+	RET
+OUT_ALIGNED_L:
+	LD		A, 255
+	XOR		(HL)
+	LD		(HL), A
+	RET
+SHOT_ROUTINES_R:
+	LD		A, (SHOTR)
+	AND		128		;check state, only top bit needed
+	RET		Z
+	CALL		SHOT_PUT_R
+	LD		A, (SHOTR)
+	AND		127		;don't use upper bit
+	CP		7
+	JR		Z, CHECK_LEFT_HIT
+	LD		HL, SHOTR
+	DEC		(HL)
+	CALL		SHOT_PUT_R
+	RET
+CHECK_LEFT_HIT:
+	LD		A, (SHOTRROW)
+	LD		B, A
+	LD		A, (INT_PADDLE_ROW)
+	CP		B
+	JP		P, SETUP_SHOT_R
+	LD		A, (INT_PADDLE_ROW)
+	ADD		A, 14
+	LD		B, A
+	LD		A, (SHOTRROW)
+	CP		B
+	JP		P, SETUP_SHOT_R
+	CALL		OUTPUT_BALL
+	CALL		ADD_SCORE_AI
+	CALL		SETUP_SHOT_R
+	JP		OUTPUT_BALL
+SHOT_PUT_R:
+	LD		A, (SHOTRROW)
+	LD		L, A
+	LD		H, 0
+	LD		D, H
+	LD		E, L
+	ADD		HL, HL
+	ADD		HL, DE
+	ADD		HL, HL
+	ADD		HL, HL
+	LD		DE, PLOTSSCREEN
+	ADD		HL, DE
+	LD		A, (SHOTR)
+	AND		127
+	LD		E, A
+	SRL		E
+	SRL		E
+	SRL		E
+	LD		D, 0
+	ADD		HL, DE
+	AND		7
+	JR		Z, OUT_ALIGNED_R
+	LD		B, A
+	XOR		A
+	LD		C, 255
+ROT_LOOP_R:
+	SRL		C
+	RRA
+	DJNZ		ROT_LOOP_R
+	INC		HL
+	XOR		(HL)
+	LD		(HL), A
+	DEC		HL
+	LD		A, C
+	XOR		(HL)
+	LD		(HL), A
+	RET
+OUT_ALIGNED_R:
+	LD		A, 255
+	XOR		(HL)
+	LD		(HL), A
+	RET
+OUTPUT_PADDLE:
+	LD 		A, (INT_PADDLE_ROW)
+	LD 		L, A
+	LD 		B, 14
+	LD 		H, 0
+	LD 		D, H
+	LD 		E, L
+	ADD 		HL, HL
+	ADD 		HL, DE
+	ADD 		HL, HL
+	ADD 		HL, HL
+	LD 		DE, plotSScreen
+	ADD 		HL, DE
+	LD 		DE, 12
+LOOP_PLAYER:
+	LD		A, (PLAYER_PADDLE_BYTE)
+	LD		(HL), A
+	ADD 		HL, DE
+	DJNZ 		LOOP_PLAYER
+	RET
+ERASE_PADDLE:
+	LD 		A, (INT_PADDLE_ROW)
+	LD 		L, A
+	LD 		B, 14
+	LD 		H, 0
+	LD 		D, H
+	LD 		E, L
+	ADD 		HL, HL
+	ADD 		HL, DE
+	ADD 		HL, HL
+	ADD 		HL, HL
+	LD 		DE, plotSScreen
+	ADD 		HL, DE
+	LD 		DE, 12
+LOOP_PLAYER_ERASE:
+	LD		A, (PLAYER_PADDLE_BYTE)
+	XOR		%00001110
+	LD 		(HL), A
+	ADD 		HL, DE
+	DJNZ 		LOOP_PLAYER_ERASE
+	RET
+OUTPUT_AI_PADDLE:
+	LD 		A, (INT_AI_PADDLE_ROW)
+	LD 		L, A
+	LD 		A, 11
+	LD 		B, 14
+	LD 		H, 0
+	LD 		D, H
+	LD 		E, L
+	ADD 		HL, HL
+	ADD 		HL, DE
+	ADD 		HL, HL
+	ADD 		HL, HL
+	LD 		E, A
+	ADD 		HL, DE
+	LD 		DE, plotSScreen
+	ADD 		HL, DE
+	LD 		DE, 12
+LOOP_AI:
+	LD		A, (AI_PADDLE_BYTE)
+	LD		(HL), A
+	ADD 		HL, DE
+	DJNZ 		LOOP_AI
+	RET
+ERASE_AI_PADDLE:
+	LD 		A, (INT_AI_PADDLE_ROW)
+	LD 		L, A
+	LD 		A, 11
+	LD 		B, 14
+	LD 		H, 0
+	LD 		D, H
+	LD 		E, L
+	ADD 		HL, HL
+	ADD 		HL, DE
+	ADD 		HL, HL
+	ADD 		HL, HL
+	LD 		E, A
+	ADD 		HL, DE
+	LD 		DE, plotSScreen
+	ADD 		HL, DE
+	LD 		DE, 12
+LOOP_AI_ERASE:
+	LD		A, (AI_PADDLE_BYTE)
+	XOR		%01110000
+	LD 		(HL), A
+	ADD 		HL, DE
+	DJNZ 		LOOP_AI_ERASE
+	RET
+ADD_SCORE_PLAYER:
+	CALL		SCORE_ERASE
+	LD 		A, (INT_PLAYER_SCORE)
+	INC 		A
+	LD 		(INT_PLAYER_SCORE), A
+	CALL 		CHECK_SCORE
+	CALL 		NEW_VOLLEY_PLAYER
+	RET
+ADD_SCORE_AI:
+	CALL		SCORE_ERASE
+	LD 		A, (INT_AI_SCORE)
+	INC 		A
+	LD 		(INT_AI_SCORE), A
+	CALL 		CHECK_SCORE
+	CALL 		NEW_VOLLEY_AI
+	RET
+OUTPUT_BALL: 				;Awesome Sprite Routine. TY ASM in 28 Days!! 
+	LD 		IX, BALL_SPRITE		;make ix=location of sprite
+	LD 		B, 4			;make b=4 since ball has 4 rows
+	LD 		A, (INT_BALL_ROW)	;make a=variable
+	LD 		L, A			;make l=a
+	LD 		A, (INT_BALL_COL)	;make a=variable
+	LD 		H, 0			;make h=0
+	LD 		D, H			;make d=0
+	LD 		E, L			;make e=l
+	ADD 		HL, HL			;multiply hl by 12
+	ADD 		HL, DE
+	ADD 		HL, HL
+	ADD 		HL, HL
+	LD 		E, A			;make e=a
+	SRL 		E			;divide e by 8
+	SRL 		E
+	SRL 		E
+	ADD 		HL, DE			;add de to hl
+	LD 		DE, plotSScreen		;make de= location of gbuf
+	ADD 		HL, DE			;add location of gbuf to hl
+	AND 		7			;now remainder=bitmask
+	JR 		Z, _Aligned		;if a=0 go to aligned label
+	LD 		C, A			;make c=a (bitmask)
+	LD 		DE, 12			;make de=12
+_RowLoop:					;loop for each row
+	PUSH 		BC			;push bc onto the stack
+	LD 		B, C			;make b=bitmask (number of times to rotate)
+	LD 		C, (IX)			;make c=current row of sprite
+	XOR 		A			;make a=0
+_ShiftLoop:					;loop for shifting
+	SRL 		C			;shift bit 0 of c into carry
+	RRA					;shift bits of a right, shift carry into bit 7 of a
+	DJNZ 		_ShiftLoop		;do this b times (c=left half, a=right half)
+	INC 		HL			;move hl to right-hand byte of sprite
+	XOR 		(HL)			;XOR a with current byte of gbuf
+	LD 		(HL), A			;make current byte of gbuf=a
+	DEC 		HL			;move hl to left-hand byte of sprite
+	LD 		A, C			;make a=left half of sprite
+	XOR 		(HL)			;xor a with current byte of gbuf
+	LD 		(HL), A			;make current byte of gbuf=a
+	ADD 		HL, DE			;move to next row of gbuf
+	INC 		IX			;move to next row of sprite
+	POP 		BC			;pop bc off of the stack
+	DJNZ 		_RowLoop		;do this b times
+	RET					;return to calling point
+_Aligned:					;routine if the sprite is aligned
+	LD 		DE, 12			;make de=12
+_PutLoop:					;loop for putting the sprite
+	LD 		A, (IX)			;make a= current row of sprite
+	XOR 		(HL)			;xor a with current byte of gbuf
+	LD 		(HL), A			;make current byte of gbuf=a
+	INC 		IX			;next row of sprite
+	ADD 		HL, DE			;next row of gbuf
+	DJNZ 		_PutLoop		;do this b times
+	RET					;return to calling point
+SCORE_ERASE:	
+	CALL		SCORE_OUT
+	RET
+CHECK_WALLS:
+	CALL 		CHECK_TOP
+	CALL 		CHECK_BOTTOM
+	CALL 		CHECK_RIGHT
+	CALL 		CHECK_LEFT
+	RET
+CHECK_TOP:
+	LD 		A, (INT_BALL_ROW)
+	CP 		3
+	CALL 		Z, CHECK_TOP_1
+	RET
+CHECK_TOP_1:
+	LD 		A, 1
+	LD 		(INT_ROW_VECTOR), A
+	RET
+CHECK_BOTTOM:
+	LD 		A, (INT_BALL_ROW)
+	CP 		57
+	CALL 		Z, CHECK_BOTTOM_1
+	RET
+CHECK_BOTTOM_1:
+	XOR 		A
+	LD 		(INT_ROW_VECTOR), A
+	RET
+CHECK_RIGHT:
+	LD 		A, (INT_BALL_COL)
+	CP 		84
+	CALL		Z, CHECK_RIGHT_1
+	RET
+CHECK_RIGHT_1:
+	XOR 		A
+	LD 		(INT_COL_VECTOR), A
+	RET 
+
+CHECK_LEFT:
+	LD 		A, (INT_BALL_COL)
+	CP 		6
+	CALL 		Z, CHECK_LEFT_1
+	RET
+CHECK_LEFT_1:
+	LD 		A, 1
+	LD 		(INT_COL_VECTOR), A
+	RET
+INC_COL:
+	LD 		A, (INT_BALL_COL)
+	INC 		A
+	INC 		A
+	LD 		(INT_BALL_COL), A
+	RET
+DEC_COL:
+	LD 		A, (INT_BALL_COL)
+	DEC 		A
+	DEC 		A
+	LD 		(INT_BALL_COL), A
+	RET
+INc_ROW:
+	LD 		HL, INT_BALL_ROW
+	INC		(HL) 
+	RET
+DEC_ROW:
+	LD 		HL, INT_BALL_ROW
+	DEC		(HL)
+	RET
+SCORE_OUT:
+	LD		HL, (INT_PLAYER_SCORE)
+	LD		D, H
+	LD		E, L
+	ADD		HL, HL
+	ADD		HL, DE
+	ADD		HL, HL
+	LD		DE, NUMBER_SPRITES
+	ADD		HL, DE
+	EX		DE, HL
+	LD		HL, PLOTSSCREEN+40
+	LD		C, 12
+	LD		B, 6 
+	CALL		SCORE_LOOP
+	LD		HL, (INT_AI_SCORE)
+	LD		D, H
+	LD		E, L
+	ADD		HL, HL
+	ADD		HL, DE
+	ADD		HL, HL
+	LD		DE, NUMBER_SPRITES
+	ADD		HL, DE
+	EX		DE, HL
+	LD		HL, PLOTSSCREEN+43
+	LD		C, 12
+	LD		B, 6
+	CALL		SCORE_LOOP
+	RET
+SCORE_LOOP:
+	PUSH		BC
+	LD		B, 0
+	LD		A, (DE)
+	XOR		(HL)
+	LD		(HL), A
+	ADD		HL, BC
+	INC		DE
+	POP		BC
+	DJNZ		SCORE_LOOP
+	RET
+NEW_VOLLEY_PLAYER:
+	CALL		PAUSE
+	LD 		A, 1
+	LD 		(INT_COL_VECTOR), A
+	LD 		(INT_ROW_VECTOR), A
+	LD 		A, 18
+	LD 		(INT_BALL_COL), A
+	LD 		B, 52
+	CALL		irandom
+	ADD 		A, 3
+	LD 		(INT_BALL_ROW), A
+	CALL		SCORE_OUT
+	RET 
+NEW_VOLLEY_AI:
+	CALL		PAUSE
+	XOR 		A
+	LD 		(INT_COL_VECTOR), A
+	INC 		A
+	LD 		(INT_ROW_VECTOR), A
+	LD 		A, 78
+	LD 		(INT_BALL_COL), A
+	LD		B, 52
+	CALL		irandom
+	ADD 		A, 3
+	LD 		(INT_BALL_ROW), A
+	CALL		SCORE_OUT
+	RET 
+GETKEY:
+	DI
+	LD 		A, $FE
+	OUT 		(1), A
+	NOP
+	NOP
+	IN 		A, (1)
+	CP 		$FE
+	JP 		Z, PLAYER_DOWN
+	CP 		$F7
+	JP 		Z, PLAYER_UP
+	LD 		A, $BF
+	OUT 		(1), A
+	NOP
+	NOP
+	IN 		A, (1)
+	CP 		$7F
+	JP 		Z, TEACHER_KEY_SET
+	CP		$BF
+	JP 		Z, END_GAME_SET
+	CP		$FB
+	JP		Z, PAUSE
+	CP		$F7
+	JP		Z, SPEED_UP
+	CP		$EF
+	JP		Z, SLOW_DOWN
+	CP		$DF
+	JP		Z, SETUP_SHOT_L
+	RET
+SETUP_SHOT_L:
+	LD		A, (SHOTR)
+	OR		A
+	RET		Z
+	LD		A, (SHOTL)
+	OR		A
+	CALL		NZ, SHOT_PUT_L
+	LD		A, (INT_PADDLE_ROW)
+	ADD		A, 7
+	LD		(SHOTLROW), A
+	LD		A, %10001000
+	LD		(SHOTL), A
+	CALL		SHOT_PUT_L
+	RET
+SETUP_SHOT_R:
+	LD		A, (INT_AI_PADDLE_ROW)
+	ADD		A, 7
+	LD		(SHOTRROW), A
+	LD		A, %11010100
+	LD		(SHOTR), A
+	CALL		SHOT_PUT_R
+	RET
+PLAYER_UP:
+	LD 		A, (INT_PADDLE_ROW)
+	CP 		3
+	RET 		Z
+	CALL 		ERASE_PADDLE
+	LD 		A, (INT_PADDLE_ROW)
+	SUB 		2
+	LD 		(INT_PADDLE_ROW), A
+	RET
+PLAYER_DOWN:
+	LD 		A, (INT_PADDLE_ROW)
+	CP 		47
+	RET 		Z
+	CALL 		ERASE_PADDLE
+	LD		A, (INT_PADDLE_ROW)
+	ADD		A, 2
+	LD		(INT_PADDLE_ROW), A
+	RET
+PAUSE:
+	LD		A, $FE
+	OUT		(1), A
+	NOP
+	NOP
+	IN		A, (1)
+	CP		$F7
+	RET		Z
+	CP		$FE
+	RET		Z
+	LD		A, $FD
+	OUT		(1), A
+	NOP
+	NOP
+	IN		A, (1)
+	CP		$FD
+	CALL		Z, INC_CONTRAST
+	CP		$FB
+	CALL		Z, DEC_CONTRAST
+	JP		PAUSE
+INC_CONTRAST:
+	DI
+	LD		BC, $0127
+	LD		A, (CONTRAST)
+	CP		C
+	RET		Z
+	ADD		A, B
+	LD		(CONTRAST), A
+	ADD		A, $18 + $C0
+	OUT		($10), A
+	LD		B, 150
+	CALL		FADE_DELAY
+	RET
+DEC_CONTRAST:
+	DI
+	LD		BC, $FF00
+	LD		A, (CONTRAST)
+	CP		C
+	RET		Z
+	ADD		A, B
+	LD		(CONTRAST), A
+	ADD		A, $18 + $C0
+	OUT		($10), A
+	LD		B, 150
+	CALL		FADE_DELAY
+	RET
+FADE_DELAY:
+	EI
+	HALT
+	DJNZ		FADE_DELAY
+	RET
+MENU_GK:
+	LD		A, $FE
+	OUT		(1), A
+	NOP
+	NOP
+	IN		A, (1)
+	CP		$F7
+	RET		Z
+	CP		$FE
+	RET		Z
+	LD		A, $BF
+	OUT		(1), A
+	NOP
+	NOP
+	IN		A, (1)
+	CP		$DF
+	RET		Z
+	CP		$BF
+	RET		Z
+	JP		MENU_GK
+END_GAME_SET:
+	LD 		A, 5
+	LD 		(INT_END), A
+	RET 
+TEACHER_KEY_SET:
+#ifdef MIRAGE
+	CALL		SAVE_STATE
+#endif
+#ifdef TIOS
+	CALL		SAVE_STATE
+	CALL		WRITEBACK
+#endif
+	LD 		A, 4
+	LD 		(INT_END), A
+	RET
+DEATH_CHECK:
+	LD 		A,(INT_BALL_ROW)
+	LD 		B, A
+	LD 		A,(INT_PADDLE_ROW)
+	SUB 		2
+	CP 		B
+	CALL 		P, ADD_SCORE_AI
+	ADD 		A, 20
+	CP 		B 
+	CALL 		M, ADD_SCORE_AI
+	RET
+DEATH_CHECK_AI:
+	LD 		A, (INT_BALL_ROW)
+	LD 		C, A
+	LD 		A, (INT_AI_PADDLE_ROW)
+	ADD 		A, 2
+	CP 		C
+	CALL 		P, RANDOM_AI
+	ADD 		A, 12
+	CP 		C
+	CALL 		M, RANDOM_AI
+	RET
+RANDOM_AI:
+	LD		B, 15
+	CALL		irandom
+	LD 		B, A
+	LD 		A, (INT_DIFFICULTY)
+	CP 		B
+	CALL 		P, ADD_SCORE_PLAYER
+	RET
+;AI ROUTINES
+AI_MOVE:
+	LD		A, (INT_AI_PADDLE_ROW)
+	CP		24
+	JP		M, TOP_HALF
+	JP		P, BOTTOM_HALF
+TOP_HALF:
+	LD		A, (INT_AI_PADDLE_ROW)
+	CP		15
+	JP		M, BOTTOM_TOP_QUARTER
+	JP		P, TOP_TOP_QUARTER
+BOTTOM_HALF:
+	LD		A, (INT_AI_PADDLE_ROW)
+	CP		42
+	JP		M, TOP_BOTTOM_QUARTER
+	JP		P, BOTTOM_BOTTOM_QUARTER
+TOP_BOTTOM_QUARTER:
+	LD		A, (INT_BALL_ROW)
+	CP		36
+	RET		Z
+	JP		M, AI_UP
+	JP		P, AI_DOWN	
+BOTTOM_BOTTOM_QUARTER:
+	LD		A, (INT_BALL_ROW)
+	CP		49
+	RET		Z
+	JP		M, AI_UP
+	JP		P, AI_DOWN
+BOTTOM_TOP_QUARTER:
+	LD		A, (INT_BALL_ROW)
+	CP		19
+	RET		Z
+	JP		M, AI_UP
+	JP		P, AI_DOWN
+TOP_TOP_QUARTER:
+	LD		A, (INT_BALL_ROW)
+	CP		15
+	JP		P, AI_DOWN
+	JP		M, AI_UP
+AI_DOWN:
+	LD 		A, (INT_AI_PADDLE_ROW)
+	CP 		47
+	RET 		Z
+	CALL 		ERASE_AI_PADDLE
+	LD 		A, (INT_AI_PADDLE_ROW)
+	ADD 		A, 2
+	LD 		(INT_AI_PADDLE_ROW), A
+	RET
+AI_UP:
+	LD 		A, (INT_AI_PADDLE_ROW)
+	CP 		3
+	RET		Z
+	CALL 		ERASE_AI_PADDLE
+	LD 		A, (INT_AI_PADDLE_ROW)
+	SUB 		2
+	LD 		(INT_AI_PADDLE_ROW), A
+	RET
+SLOW_DOWN:
+	LD		A, (COUNTER)
+	AND		7
+	RET		NZ			;Only slow down every 8 game cycles
+	LD		A, (SPEED)
+	CP		25
+	RET		Z
+	INC		A
+	LD		(SPEED), A
+	RET
+SPEED_UP:
+	LD		A, (COUNTER)
+	AND		15
+	RET		NZ			;only speed up every 16 game cycles
+	LD		A, (SPEED)
+	CP		1
+	RET		Z
+	DEC		A
+	LD		(SPEED), A
+	RET
+NO_SAVE_QUIT:
+#ifdef MIRAGE
+	CALL		WB_RESET
+#endif
+#ifdef TIOS
+	CALL		WB_RESET
+	CALL		WRITEBACK
+#endif
+END_GAME:
+	LD		A, (TEMP_CONTRAST)
+	LD		(CONTRAST), A
+	ADD		A, $18+$C0
+	OUT		($10), A
+	LD		A, %01100000
+	DI
+	OUT		(4), A
+	EI
+BUFCLR:		
+	XOR		A			;my very own lib to replace _grbufclr (destroys none)
+	LD		(INT_END), A
+	PUSH		BC
+	PUSH		HL
+	LD		B, 4
+	LD		HL, PLOTSSCREEN
+OUTER_BUFLOOP:
+	PUSH		BC
+	LD		B, 192
+BUFLOOP:
+	LD		(HL), 0
+	INC		HL
+	DJNZ		BUFLOOP
+	POP		BC
+	DJNZ		OUTER_BUFLOOP
+	POP		HL
+	POP		BC
+	CALL		ifastcopy
+	RET
+#ifndef MALLARD
+#ifndef TI83
+#ifndef TI83P
+#ifndef MIRAGE
+irandom:					;ion random lib
+	push	hl
+	push	de
+	ld	hl,(randData)
+	ld	a,r
+	ld	d,a
+	ld	e,(hl)
+	add	hl,de
+	add	a,l
+	xor	h
+	ld	(randData),hl
+	sbc	hl,hl
+	ld	e,a
+	ld	d,h
+randomLoop:
+	add	hl,de
+	djnz	randomLoop
+	ld	a,h
+	pop	de
+	pop	hl
+	ret
+ifastCopy:					;Ion fast copy lib
+	di
+	ld	a,$80				; 7
+	out	($10),a				; 11
+	ld	hl,PLOTSSCREEN-12-(-(12*64)+1)	; 10
+	ld	a,$20				; 7
+	ld	c,a				; 4
+	inc	hl				; 6 waste
+	dec	hl				; 6 waste
+fastCopyAgain:
+	ld	b,64				; 7
+	inc	c				; 4
+	ld	de,-(12*64)+1			; 10
+	out	($10),a				; 11
+	add	hl,de				; 11
+	ld	de,10				; 10
+fastCopyLoop:
+	add	hl,de				; 11
+	inc	hl				; 6 waste
+	inc	hl				; 6 waste
+	inc	de				; 6
+	ld	a,(hl)				; 7
+	out	($11),a				; 11
+	dec	de				; 6
+	djnz	fastCopyLoop			; 13/8
+	ld	a,c				; 4
+	cp	$2B+1				; 7
+	jr	nz,fastCopyAgain		; 10/1
+	ret					; 10
+#endif
+#endif
+#endif
+#endif
+#ifdef TIOS
+NO_INVERT:
+	LD		A, %11101110
+	LD		(PLAYER_PADDLE_BYTE), A
+	LD		A, %01110111
+	LD		(AI_PADDLE_BYTE), A
+	JP		MAIN_LOOP
+MM_NO_wB:
+	CALL		WB_RESET
+	JP		MAIN_MENU
+WRITEBACK:
+	bcall(_POPREALO1)
+	bcall(_chkfindsym)
+	LD		HL, WRITEBACK_DATA - progstart + 4
+	ADD		HL, DE
+	EX		DE, HL
+	LD		HL, WRITEBACK_DATA
+	LD		BC, 2
+	LDIR
+	RET
+WB_RESET:
+	LD		HL, 0
+	LD		(WRITEBACK_DATA), HL
+	RET
+SAVE_STATE:
+	LD		A, (INT_PLAYER_SCORE)		;multiple vars compressed to 2 bytes
+	LD		L, A				;left nibble of l=player score, right nibble=AI score
+	LD		H, 0				;bit 7 of h=shooting state, 1 for shoot mode, 0 for not
+	RLC		L				;bit 6 of h=invert mode, 1 for regular, 0 for invert
+	RLC		L
+	RLC		L
+	RLC		L
+	LD		A, (INT_AI_SCORE)
+	OR		L
+	LD		L, A
+	LD		A, (SHOTR)
+	AND		128
+	LD		H, A
+	LD		A, (PLAYER_PADDLE_BYTE)
+	SRL		A
+	OR		H
+	LD		H, A
+	LD		A, (INT_DIFFICULTY)
+	RES		0, H
+	RES		1, H
+	OR		H
+	LD		H, A
+	LD		(WRITEBACK_DATA), HL
+	RET
+#endif
+#ifdef MIRAGE
+NO_INVERT:
+	LD		A, %11101110
+	LD		(PLAYER_PADDLE_BYTE), A
+	LD		A, %01110111
+	LD		(AI_PADDLE_BYTE), A
+	JP		MAIN_LOOP
+MM_NO_wB:
+	CALL		WB_RESET
+	JP		MAIN_MENU
+WRITEBACK:
+	bcall(_POPREALO1)
+	bcall(_chkfindsym)
+	LD		HL, WRITEBACK_DATA - progstart + 4
+	ADD		HL, DE
+	EX		DE, HL
+	LD		HL, WRITEBACK_DATA
+	LD		BC, 2
+	LDIR
+	RET
+WB_RESET:
+	LD		HL, 0
+	LD		(WRITEBACK_DATA), HL
+	RET
+SAVE_STATE:
+	LD		A, (INT_PLAYER_SCORE)		;multiple vars compressed to 2 bytes
+	LD		L, A				;left nibble of l=player score, right nibble=AI score
+	LD		H, 0				;bit 7 of h=shooting state, 1 for shoot mode, 0 for not
+	RLC		L				;bit 6 of h=invert mode, 1 for regular, 0 for invert
+	RLC		L
+	RLC		L
+	RLC		L
+	LD		A, (INT_AI_SCORE)
+	OR		L
+	LD		L, A
+	LD		A, (SHOTR)
+	AND		128
+	LD		H, A
+	LD		A, (PLAYER_PADDLE_BYTE)
+	SRL		A
+	OR		H
+	LD		H, A
+	LD		A, (INT_DIFFICULTY)
+	RES		0, H
+	RES		1, H
+	OR		H
+	LD		H, A
+	LD		(WRITEBACK_DATA), HL
+	RET
+#endif
+WRITEBACK_DATA:
+	.dw		0
+#include "sprites.z80"
+END
+.end

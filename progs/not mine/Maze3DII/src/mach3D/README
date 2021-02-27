@@ -1,0 +1,410 @@
+Mach3D Engine Reference
+(c) 2006 Kevin Harness
+
+I. Introduction
+	The Mach3D engine is a 3D Engine for z80-based graphing calculators.
+	This documentation is intended for those who wish to use and/or modify
+	the Mach3D engine.
+	Note that this documentation is maintained (or not)
+	separately from the code.  Therefore, this documentation is not usually
+	as good for reference as the source code is.  The comment blocks
+	at the beginning of each Mach3D function may describe the technical
+	details of each function more accurately than this documentation does.
+	
+	Maze 3D II was largely written to demonstrate usage of the Mach3D
+	Engine.  It demonstrates the basic elements needed to make a Mach3D
+	program work.
+
+II. Conventions
+	A. MUST, SHOULD, etc.
+		Capitalized words like MUST and SHOULD are used in the spirit
+		of RFCs.  In general:
+		MUST    violation probably causes a calculator crash
+		SHOULD  violation probably causes invalid output
+
+III. Supported systems
+	TI-83+
+
+IV. Language
+	Mach3D is written in a form of z80 assembly language.  The language
+	includes logical constructs that translate directly to assembly
+	language equivalents.  This translation is done with a program
+	called "condition" which is documented separately.
+	"condition"'s documentation was originally distributed
+	with Maze 3D II in the "/src/tools/condition" folder.
+
+V. Function List
+	A. Mach3DInit
+		Description:
+			MUST be called before any other Mach3D function
+			Initializes the Mach3D Engine
+			Allocates several kilobytes of memory for internal use
+			Disables interrupts
+			Insufficent memory causes an error
+			Existence of a program called "MACHMEM" causes an error
+		Inputs:
+			none
+		Outputs:
+			carry set on error
+	B. Mach3DClose
+		Description:
+			Enables interrupts
+			Frees memory allocated by Mach3DInit
+			MUST be called before exiting if Mach3DInit succeeds
+			MAY be called before exiting if Mach3DInit fails
+		Inputs:
+			none
+		Outputs:
+			none
+	C. Mach3DLoadMap
+		Description:
+			Loads a map into the current map buffer
+			SHOULD be called before Mach3DRender
+		Inputs:
+			hl = address of the 16x16 map to load
+		Outputs:
+			none
+	D. Mach3DRender
+		Description:
+			Renders the scene to gbuf in a special format
+			Mach3DLoadMap SHOULD be called first
+			Interrupts MUST be disabled
+		Inputs:
+			(Mach3D_CX) = X coordinate of camera
+			(Mach3D_CY) = Y coordinate of camera
+			(Mach3D_CA) = Angle of camera
+		Outputs:
+			none
+	E. Mach3DFlip
+		Description:
+			Copies contents of gbuf to the screen
+		Inputs:
+			none
+		Outputs:
+			none
+	F. Mach3DDarkSky
+		Description:
+			Changes sky/floor color.
+			Only available if MACH3D_DARK_SKY is defined
+			You SHOULD call this function after Mach3DFlip,
+			but before calling Mach3DRender.
+			When MACH3D_DARK_SKY is not defined, the sky is light.
+			When MACH3D_DARK_SKY is defined, the sky starts dark.
+			Mach3DDarkSky inverts the sky/floor color.
+			Mach3DDarkSky modifies code in the Mach3D Engine.
+			Therefore, sky color is preserved between
+			executions of your program.
+		Inputs:
+			none
+		Outputs:
+			none
+	G. Mach3DGetSin
+		Description:
+			Returns the approximate sine of an angle
+			Only available if MACH3D_MOVEFWD is defined
+		Inputs:
+			a = angle, 256 units in a circle.
+		Outputs:
+			a = 128*sin(angle), signed int
+	G. Mach3DMoveFwd
+		Description:
+			Moves the camera forward 1/8 of a grid line
+			Only available if MACH3D_MOVEFWD is defined
+			Does not do collision checking
+		Inputs:
+			(Mach3D_CX) = X coordinate of camera
+			(Mach3D_CY) = Y coordinate of camera
+			hl = Direction to move
+		Outputs:
+			(Mach3D_CX) = new X coordinate of camera
+			(Mach3D_CY) = new Y coordinate of camera
+	G. Mach3DValidateXY
+		Description:
+			Ensures that camera is not too close to a wall
+			Only available if MACH3D_VALIDATEXY is defined
+			If camera is within MIN_WALL_DIST of a wall,
+			it is pushed away.
+			If the camera is inside a wall block,
+			the user-defined function "Spawn" is called.
+			Spawn SHOULD move the camera to a safe location.
+			Spawn MUST be defined if MACH3D_VALIDATEXY is.
+		Inputs:
+			(Mach3D_CX) = X coordinate of camera
+			(Mach3D_CY) = Y coordinate of camera
+		Outputs:
+			(Mach3D_CX) = new X coordinate of camera
+			(Mach3D_CY) = new Y coordinate of camera
+	H. Mach3DDrawSprite
+		Description:
+			Renders a free-standing billboard sprite
+			Only available if MACH3D_HBUFFER is defined
+			SHOULD be called after Mach3DRender
+			SHOULD be called before Mach3DFlip
+			Interrupts MUST be disabled
+		Inputs:
+			(Mach3D_CX) = X coordinate of camera
+			(Mach3D_CY) = Y coordinate of camera
+			(Mach3D_CA) = Angle of camera
+			(Mach3D_SX) = X coordinate of sprite
+			(Mach3D_SY) = Y coordinate of sprite
+		Outputs:
+			none
+
+VI. User-Supplied Resources:
+	A. Mach3DTextures
+		Mach3DTextures MUST exist.
+		Mach3DTextures MUST be aligned to a 256-byte boundary.
+		Mach3DTextures is a label marking the start of textures.
+		Use texmaker to convert ppm files into includable texture data.
+	B. Mach3DSpriteTexture
+		Mach3DSpriteTexture MUST exist if MACH3D_HBUFFER is defined.
+		Mach3DSpriteTexture MUST be aligned to a 256-byte boundary.
+		Mach3DSpriteTexture is a label marking the sprite texture.
+		Use texmaker to convert ppm files into includable texture data.
+		See also: the variable Mach3DSTexBuf
+	C. Feature Inclusion Constants
+		The following constants control the inclusion of features.
+		These features are optional, so you can have a smaller program
+		if you don't need them.
+		``#define'' these constants to include the features
+		1. MACH3D_MOVEFWD
+			Includes the Mach3DGetSin function
+			Includes the Mach3DMoveFwd function
+		2. MACH3D_VALIDATEXY
+			Includes the Mach3DValidateXY function
+		3. MACH3D_HBUFFER
+			Includes the Mach3DDrawSprite function
+		4. MACH3D_DARK_SKY
+			Includes the Mach3DDarkSky function
+	D. Wall Texture Handling Constants
+		``#define'' as needed to draw walls as desired
+		1. MACH3D_SQUARE_WALLS
+			Makes walls 64x64 pixels.
+			Default: Walls get squished to 64x32 pixels.
+		2. MACH3D_TEX_STRETCH
+			Causes textures to be stretched to fit the wall.
+			Default: textures are tiled to fill stretched walls.
+	E. Numeric Constants
+		The following constants MUST be defined
+		1. FOVPIX
+			Render area is FOVPIX pixels wide (and 64 pixels tall)
+		2. XOFFSET
+			X-coordinate of left side of render area
+		3. FOVANG
+			"Straight Ahead" is FOVANG/2 pixels right of XOFFSET.
+			Recommended:
+			#define FOVANG FOVPIX
+		4. AAVAL
+			antialiasing "jitteriness" factor, 0-255
+		5. MIN_WALL_DIST
+			Mach3DValidateXY will allow the camera within
+			MIN_WALL_DIST units of a wall.  If this is too small,
+			distortion will occur.
+			MIN_WALL_DIST IS RECOMMENDED to be greater than $40.
+			If MACH3D_SQUARE_WALLS is defined, larger values of
+			MIN_WALL_DIST are RECOMMENDED.
+
+VII. Variables
+	A. Mach3D_CX, Mach3D_CY
+		Description:
+			Coordinates of camera
+			MSB is the square on the map grid
+			LSB is the position within the square
+			The LSB and MSB can be addressed separately with:
+			Mach3D_CX.HI
+			Mach3D_CX.LO
+			Mach3D_CY.HI
+			Mach3D_CY.LO
+		Format:
+			16 bits, little endian, unsigned
+		Range:
+			[$0000-$0FFF]
+	B. Mach3D_CA
+		Description:
+			Rotation of camera about the Z-Axis
+			There are 1024 angular units per circle
+			ALWAYS treated mod 1024
+			0 means due east
+			positive angles are clockwise when viewed from above 
+		Format:
+			16 bits, little endian, unsigned
+		Range:
+			[$0000-$FFFF]
+	C. Mach3D_SX, Mach3D_SY
+		Description:
+			Coordinates of the sprite
+			MSB is the square on the map grid
+			LSB is the position within the square
+			The LSB and MSB can be addressed separately with:
+			Mach3D_SX.HI
+			Mach3D_SX.LO
+		Format:
+			16 bits, little endian, unsigned
+		Range:
+			[$0000-$0FFF]
+	D. Mach3DMapBuffer
+		Description:
+			High byte of the 256-byte aligned map buffer.
+			You MUST NOT write to Mach3DMapBuffer.
+			If you dynamically generate a map, and need some free
+			memory to work, you can use 1024 bytes starting
+			at the map buffer.  You can use Mach3DLoadMap
+			to load a map that already resides in the map buffer,
+			as long is it begins exactly at the start of the
+			map buffer.
+			Access to the map buffer is also useful after loading
+			a map, if you want to know where the walls are.
+		Format:
+			8 bits
+		Range:
+			[$80-$FF]
+	E. Mach3DSTexBuf
+		Description:
+			High byte of the 256-byte aligned sprite texture.
+			If you want to change the sprite's texture at runtime,
+			you can modify Mach3DSTexBuf so that it points
+			to the texture you want.  This can be used to animate
+			a sprite, or to draw multiple sprites with multiple
+			calls to Mach3DDrawSprite.
+		Format:
+			8 bits
+		Range:
+			[$00-$FF]
+
+VIII. Coordinate System
+	A. Spatial Coordinates
+		I refer to the space occupied by the map
+		in terms of axes and directions.
+		The terms I use are entirely arbitrary.
+		However, the documentation is internally consistent.
+		The reader is encouraged to use the same set of terms.
+		I define the coordinate system to be left handed.
+		I define the positive x-axis to point East,
+		and the positive y-axis to point South.
+		The following diagram represents the compass rose with my axes:
+	
+		       N
+		       Y-
+		       |
+		W X- --*-- X+ E
+		       |
+		       Y+
+		       S
+
+	B. Angles
+		Angles are usually measured in 1/1024ths of a circle.
+		Positive angles are clockwise on the compass rose:
+
+		     768
+		      |
+		512 --*-- 0, 1024
+		      |
+		     256
+
+IX. Data Formats
+	A. Map Data
+		Order:
+			Map data is formated as a 16x16 array of bytes.
+			This corresponds to the 16x16 map grid.
+			The bytes are arranged in rows (West to East),
+			and the rows are stored in order from North to South.
+		Values:
+			A value of 0 indicates that block of the map is empty.
+			A nonzero value indicates a wall.
+			The value is an index into an array of texture data.
+			The texture so indexed is used to draw the wall.
+		Cartography:
+			You can make maps with the mapmaker utility.
+	B. Wall Textures
+		Size:
+			Wall textures are 64x64 pixels.
+		Format:
+			Somewhat complicated.  Use the source if needed.
+			Or wait until I update this.
+		Creation:
+			To make N textures, make an image 64 pixels tall,
+			and 64*N pixels wide.
+			Texture #1 occupies (0,0) to (63,63).
+			Texture #2 occupies (64,0) to (127,63).
+			Etc.
+			Save this image as a 24-bit color ppm file.
+			Use the texmaker utility to convert it to TASM data:
+			texmaker <mytexture.ppm >mytexture.inc
+	C. Sprite Textures
+		Size:
+			Sprite textures are 32x32 pixels.
+		Format:
+			Slightly more complicated.  Use the source if needed.
+			Or wait until I update this.
+			Sprite textures include transparency data.
+		Creation:
+			To make a sprite texture, make a 32x32 image.
+			Draw it with black for black, white for white,
+			and gray for transparent.
+			Save this image as a 24-bit color ppm file.
+			Use the texmaker utility to convert it to TASM data,
+			using the -t flag to include transparency data.
+			texmaker -t <mytexture.ppm >mytexture.inc
+
+X. Including Mach3D
+	Simply define the relevant user-supplied parts in your code,
+	then include the mach3D engine in its raw assembly form.
+	E.g.
+
+	#define FOVPIX		96
+	#define XOFFSET		0
+	#define FOVANG		FOVPIX
+	#define AAVAL		$A0
+	#define MIN_WALL_DIST	$40
+	;program goes here
+	;including calls to Mach3DInit,
+	;Mach3DLoadMap,
+	;Mach3DRender,
+	;Mach3DFlip,
+	;and Mach3DClose.
+	#include "mach3D.z80"
+	Mach3DTextures:
+	;include your texture file here
+	.end
+
+	Note that the engine is referred to as ``mach3D.z80''
+	instead of ``mach3D.asm''.  ``mach3D.asm'' must be processed
+	by ``condition'' before it can be included and understood by TASM.
+	The RECOMMENDED way to make ``mach3D.z80'' from ``mach3D.asm'' is:
+	condition -i mach3D.asm -o mach3D.z80
+	
+	Also note that the textures are included after the 3D engine.
+	This is RECOMMENDED because the mach3D engine always ends with
+	data that is aligned to a 256-byte boundary.  Therefore
+	one does not have to waste memory on alignment if the textures
+	come immediately after the mach3D engine.  If you do not place
+	your textures immediately following the Mach3D engine, it is
+	your responsiblity to ensure that your textures are aligned
+	to a 256-byte boundary.  If your textures are not so aligned,
+	they will appear to have been designed by Andy Warhol with a
+	bad hangover.
+
+	The mach3D engine needs to include a file containing lookup tables
+	named ``tables.inc''.  This file is generated by ``tablemaker''.
+	You must ensure that ``tables.inc'' is available for mach3D to include.
+
+XI. Tips and tricks
+	Mach3D only supports one freestanding sprite.
+	However, you can draw one sprite, change the sprite texture,
+	load the coordinates of the second sprite, and draw the second
+	sprite.  This is slower, of course, and there will be visual
+	artifacts if the two sprites overlap.  However, this is often
+	not a major concern.  If it is, you can always use a desktop computer,
+	with 3D acceleration and no portability.
+	Future releases may support multiple sprites.  Until then, you'll
+	have to wait or add the functionality yourself.
+	
+	PERFORMANCE:
+	Drawing walls (and sprites) takes more time than anything else.
+	If the map is sparse, and the sprite is far away, there isn't
+	much to draw and the framerate increases.
+	Drawing sprites at close range is VERY expensive.
+	Using sprites to show enemies works well, because the player
+	will avoid them.  Unless your player is a real bad@$$, in which
+	case the player will have to endure lousy framerates.  Serves
+	you right for making the bots too easy.

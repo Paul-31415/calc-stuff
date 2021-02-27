@@ -1,0 +1,167 @@
+; Z80 CPU clock tool
+; 4 Augest 2008
+; Written by (alias) Dr. D'nar
+;
+; Finds the effective CPU clock of an SE/84.  Will not work on a plain TI-83+.
+
+
+
+;====== Equates ================================================================
+.nolist		; Uncomment for massive list file.
+#include "ti83plus.inc"
+.list
+
+; In theory, larger values lead to more accurate results.  Or not.  I donno.
+numOfTicks	.equ	250; 32
+numOfIterations	.equ	200;99 ; 10
+
+
+
+;====== Program Start ==========================================================
+; Header
+	.org	$9D93
+	.db	t2ByteTok, tAsmCmp
+
+; Check model	
+	in	a, ($02)
+	bit	7, a
+	jr	nz, correctModel
+	ld	hl, incorrectModelMsg
+	b_call(_PutS)
+	b_call(_NewLine)
+	ret
+
+
+correctModel:
+; Test each CPU mode
+	ld	hl, startMsg
+	b_call(_PutS)
+	b_call(_NewLine)
+	xor	a
+	out	($20), a
+	call	findCPUSpeed
+	ld	a, 1
+	out	($20), a
+	call	findCPUSpeed
+	ld	a, 2
+	out	($20), a
+	call	findCPUSpeed
+	ld	a, 3
+	out	($20), a
+	call	findCPUSpeed
+	ret
+
+
+findCPUSpeed:
+; The following section calls the speedTest routine several times and averages
+; the results.
+	b_call(_OP1Set0)
+	b_call(_OP1ToOP6)
+	ld	hl, numOfIterations
+	ld	de, 0
+CPULoop:
+	push	hl
+	push	de
+	call	speedTest
+	b_call(_OP6ToOP2)
+	b_call(_FPAdd)
+	b_call(_OP1ToOP6)
+	pop	de
+	pop	hl
+	dec	hl
+	call	cphlde
+	jr	nz, CPULoop
+	
+	b_call(_OP6ToOP1)
+	ld	hl, numOfIterations
+	b_call(_SetXXXXOP2)
+	b_call(_FPDiv)
+	ld	hl, 1000
+	b_call(_SetXXXXOP2)
+	b_call(_FPDiv)
+	b_call(_FPDiv)
+	ld	a, 6;13
+	b_call(_FormEReal)
+	ld	hl, OP3
+	b_call(_PutS)
+	ld	hl, MHzText
+	b_call(_PutS)
+	b_call(_NewLine)
+	ret
+
+
+speedTest:
+; This uses the crystal timers to time a loop which takes a known amount of CPU 
+; clock cycles.  This is then used to calculate the CPU clock speed.  If you 
+; make the loop longer or shorter, remember to update the section below that
+; computes the speed or you might get some wild results!  The loop should be as
+; short as possible for better results.
+	di
+	ld	hl, $FFFF
+	ld	a, $44				; 32768 Hz
+	out	($30), a
+	xor	a
+	out	($31), a
+	ld	a, numOfTicks
+	out	($32), a
+speedLoop:
+	inc	hl				;  6
+	in	a, (4)				; 11
+	bit	5, a				;  8
+	jr	z, speedLoop			; 12
+		   				; 37 cycles
+	xor	a
+	out	($31), a
+	out	($31), a
+	ei
+; Compute speed
+;	push	hl
+;	b_call(_DispHL)
+;	pop	hl
+	push	hl
+	ld	a, 1
+	b_call(_SetXXOP1)
+	ld	hl, 32768
+	b_call(_SetXXXXOP2)
+	b_call(_FPDiv)
+	ld	hl, numOfTicks
+	b_call(_SetXXXXOP2)
+	b_call(_FPMult)
+	b_call(_OP1ToOP4)
+	ld	a, 37
+	b_call(_SetXXOp1)
+	pop	hl
+	b_call(_SetXXXXOP2)
+	b_call(_FPMult)
+	b_call(_OP4ToOP2)
+	b_call(_FPDiv)
+	ret
+
+
+
+;====== Routines ===============================================================
+cphlde:
+; A classic.
+	or	a
+	sbc	hl,de
+	add	hl,de
+	ret
+
+
+
+;====== Data ===================================================================
+		;1234567890123456
+incorrectModelMsg:
+	.db	"An SE/84 is     "
+	.db	"required."
+	.db	0
+startMsg:
+	.db	"Starting CPU    "
+	.db	"speed test..."
+	.db	0
+
+MHzText:
+	.db	"MHz"
+	.db	0
+.end
+.end

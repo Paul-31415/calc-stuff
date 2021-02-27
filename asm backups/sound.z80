@@ -1,0 +1,298 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	saveSScreen 86ECh
+.org        progStart-2
+.db         $BB,$6D
+
+
+#define 	wavelength	1608
+	di
+	ld a,0
+    out (20h),a
+	
+	call make_test_signal
+mainLoop:
+	ld bc, 20;402
+    ld hl, saveSScreen
+    ld de, 4
+    
+	call playBuff
+
+	in a,(4)
+    bit 3,a
+    jr nz,mainLoop
+    xor a
+    out (0),a
+    ei
+	ret
+    
+    
+make_test_signal:
+	ld de,saveSScreen
+	ld bc,20
+    ld hl,test_dat  
+    ldir
+    ret
+test_dat:
+.db %01100110
+.db %00110011
+.db %10011001
+.db %11001100
+.db %00000001
+.db %00000010
+.db %00000100
+.db %00001000
+.db %00010000
+.db %00100000
+.db %01000000
+.db %10000000
+.db %01100000
+.db %00011000
+.db %00000110
+.db 0,0,0,0,0
+
+
+makeSineWave:
+    ld hl,0		;sin
+    ld de,$4000	;cos
+    
+    ld bc, wavelength
+         
+     
+doSineStep:
+	ld a,h
+	call addSaTode
+    ld a,d
+    neg
+    call addSaTohl
+    
+    ;do every 4th
+    ld a,c
+    and 3
+    jr nz,stepCond
+
+	ld a,h
+dest:
+    ld (saveSScreen),a
+    
+    push hl
+    ld hl, (dest+1)
+    inc hl
+    ld (dest+1),hl
+    pop hl
+    
+stepCond:
+    dec bc
+    ld a,b
+    or c
+    jr nz,doSineStep
+    
+    
+    ld bc, 402  
+    ld hl, saveSScreen
+convert:
+	push bc
+	ld bc,4
+levels:   
+    ld d,(hl) ; domain: [-64,64] + dither: [-104,104]
+
+    call rand
+    ;use dither volume of ±42, divide by 3
+	; n/3 = n/4 + n/16 + n/64 +...
+    sra a  ;arithmatic to preserve sign
+    sra a
+    ld e,a
+    sra e
+    sra e
+    add a,e
+    sra e
+    sra e
+    add a,e
+    
+    add a,d
+
+	;quantize to 3 lvls
+    ;  -128	| 0	| 127
+    ;      -42 42
+	;       )   [
+    
+    
+	;A >= num, S and P/V are the same
+    
+    cp -42
+	push af
+	pop de
+    ld a,e
+    ;S 	Z 	– 	H 	– 	P/V 	N 	C
+    rlca
+    rr e
+    rr e
+    xor e  ; a < num, nz
+    and 1
+    jr z,zero
+    ld a,1
+    jr quantEnd
+zero:
+    cp 43
+	push af
+	pop de
+    ld a,e
+    ;S 	Z 	– 	H 	– 	P/V 	N 	C
+    rlca
+    rr e
+    rr e
+    xor e  ; a < num, nz
+    and 1
+    jr z,one
+    ld a,3
+    jr quantEnd
+one:
+	ld a,2
+quantEnd:
+    sla b
+    sla b
+    or b
+    ld b,a
+	
+    dec c
+    jr nz,levels
+    
+    
+	ld (hl),b
+	pop bc
+	inc hl
+    dec bc
+    ld a,b
+    or c
+	jr nz,convert
+
+	ret
+
+	
+
+
+addSaTohl:
+    bit 7,a
+    jr z,addSaTohlpositive
+    dec h
+addSaTohlpositive:
+    add a,l
+    ld l,a
+    jr nc,addSaTohlnoCarry
+    inc h
+addSaTohlnoCarry:
+    ret
+    
+addSaTode:
+    bit 7,a
+    jr z,addSaTodepositive
+    dec d
+addSaTodepositive:
+    add a,e
+    ld e,a
+    jr nc,addSaTodenoCarry
+    inc d
+addSaTodenoCarry:
+    ret
+    
+
+playBuff:     ; play buff at hl, length bc, de times
+    push hl
+    push bc
+wave:
+byte:
+    ld a,(hl)
+    inc hl
+	
+
+    out (0),a
+    rra
+    rra
+    out (0),a
+    rra
+    rra
+    out (0),a
+    rra
+    rra
+    out (0),a
+    
+    dec bc
+    ld a,b
+    or c
+    jr nz,byte
+    
+    pop bc
+    pop hl
+    push hl
+    push bc
+    
+    dec de
+    ld a,d
+    or e
+    jr nz,wave
+    pop bc
+    pop hl
+    ret
+delay: ;delay for 67
+	inc ix
+    dec ix
+    inc ix
+    dec ix
+    ;27 left
+    nop
+    nop
+    nop
+    nop
+    xor a
+    jr nz,dskip
+dskip:
+	jr byte
+    
+
+rand:
+    push hl
+    push de
+    push bc
+    ld hl,randSeed
+    ld a,(hl)
+    inc hl
+    ld c,(hl)
+    inc hl
+    ld d,(hl)
+    
+    inc a
+    ld b,a
+    
+    and d
+    inc a
+    xor c
+    ld c,a
+    
+    add a,b
+    rrca
+    xor d
+    ld (hl),a
+    
+    add a,c
+    dec a
+    xor b
+    ld b,a
+    
+    dec hl
+    ld (hl),c
+    dec hl
+    ld (hl),b
+    
+    pop bc
+    pop de
+    pop hl
+    ret
+randSeed:
+.db 0,0,0
+    
+    
+    
+
+
+
+    

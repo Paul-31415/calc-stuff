@@ -1,0 +1,17 @@
+
+Among those files where two routines SP and CP (set and clear pixel).
+The person who signed that file (Thadhg, I believe) emphasizes the fact
+that you have to have two real numbers on the stack when you execute
+any of these routines (otherwise it crashes).  He makes a very crude
+check with "DUP2 DROP2" for two items on the stack.
+
+I use a very simple mechanism to check for two reals on the stack:
+(WARNING: SYSEVAL addresses for the 2BB version).
+
+SP [D19C]
+\<< R\->C C\->R     @ Check for two reals
+  #C1DDh SYSEVAL    @ Convert coordinates into internal type
+  #1ADFEh SYSEVAL   @ Set pixel (use #1ADF2 to clear pixel)
+\>>
+
+CP [A19B]

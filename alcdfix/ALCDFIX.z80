@@ -1,0 +1,214 @@
+
+	.nolist
+	#include "ion.inc"
+	#include "ti83plus.inc"
+	.list
+	.org progstart-2
+	.db $BB,$6D
+	xor a
+	jr nc,Start
+	.db "83+SE  84+(SE) LCD fix",0
+
+Start:
+	bcall(_clrscrn)
+	bcall(_clrlcd)
+	in a,(2)
+	and %10100000
+	jp z,notse		;83+se, 84+, 84+se 
+	ld de,0
+	ld (currow),de
+	ld hl,string
+	bcall(_puts)
+	ld de,1
+	ld (currow),de
+	ld hl,press
+	bcall(_puts)	
+	bcall(_getkey)
+	di
+startwait:
+	in a,($10)		;wait for lcd ready
+	jp m,startwait
+	ld a,1		;8 bit words
+	out ($10),a
+	xor a			;6mhz
+	out ($20),a
+	ld a,$0c		;least delay possible
+	out ($29),a
+Loop:
+	in a,($29)
+	add a,4		;increase hardware delay
+	jp c,quit		;if exceeds $FC quit
+	out ($29),a
+	ld b,32		;test each setting 32 times
+chkloop:
+	push bc
+	call Randbuf	;random buffer
+	call bad		;copy routine based on 60 clocks
+	call Checklcd	;safely compares lcd to buffer
+	pop bc
+	jp nz,Loop		;if failed startover with new setting
+	djnz chkloop	;if setting successful 32 times keep
+quit:
+	bcall(_clrscrn)
+	bcall(_clrlcd)
+	ld de,0
+	ld (currow),de
+	ld hl,Cby
+	bcall(_puts)
+	ld de,1
+	ld (currow),de
+	ld hl,Name
+	bcall(_puts)
+	ld de,2
+	ld (currow),de
+	ld hl,setting
+	bcall(_puts)
+	ld de,3
+	ld (currow),de
+	in a,($29)
+	and %11111100
+	rra
+	rra
+	ld l,a
+	ld h,0
+	bcall(_disphl)
+	ld de,4
+	ld (currow),de
+	ld hl,press
+	bcall(_puts)
+	ld de,5
+	ld (currow),de
+	bcall(_getkey)
+	ret
+notse:
+	bcall(_clrscrn)
+	bcall(_clrlcd)
+	ld de,0
+	ld (currow),de
+	ld hl,nose
+	bcall(_puts)
+	ld de,1
+	ld (currow),de
+	ld hl,nose2
+	bcall(_puts)
+	ld de,2
+	ld (currow),de
+	ld hl,press
+	bcall(_puts)
+	ld de,3
+	ld (currow),de
+	bcall(_getkey)
+	ret
+
+Randbuf:
+	ld hl,gbuf
+	ld bc,768
+randloop:
+	push hl
+rand = $+1
+	ld hl,$9000
+	ld a,r
+	ld d,a
+	ld e,(hl)
+	add hl,de
+	add a,l
+	xor h
+	ld (rand),hl
+	pop hl
+	ld (hl),a
+	inc hl
+	dec bc
+	ld a,b
+	or c
+	jp nz,randloop
+	ret
+
+Bad:				;60 clock delay between writes
+	di
+	ld a,$80
+	out ($10),a
+	nop
+	nop
+	ld hl,gbuf
+	ld de,0
+	ld de,0
+	ld c,$20
+	ld a,c	
+col:
+	out ($10),a
+	dec de
+	ld b,64
+row:
+	ld a,(hl)
+	ld a,(hl)
+	dec de
+	inc hl
+	ld de,0
+	out ($11),a
+	djnz row
+	dec de
+	ld de,0
+	inc c
+	ld a,c
+	cp $2c
+	jp nz,col
+	ret
+
+
+Checklcd:
+	ld a,$80
+	ld e,a
+	ld c,$10
+	ld hl,gbuf
+checkstart:
+	in (c)		;this waits indefinately 
+	jp m,checkstart	;for the lcd to be ready
+	out ($10),a
+	ld d,$20
+colchk:
+	in (c)
+	jp m,colchk
+	out (c),d		;sets col
+dummy:
+	in (c)
+	jp m,dummy
+	in a,($11)		;dummy read
+	ld b,64
+rowchk:
+	in (c)
+	jp m,rowchk
+	in a,($11)
+	cp (hl)		;compares buffer to lcd
+	ret nz
+	inc hl
+	djnz rowchk
+settop:
+	in (c)
+	jp m,settop
+	out (c),e		;sets row
+	inc d
+	ld a,$2c
+	cp d
+	jp nz,colchk
+	ret
+
+nose:
+ .db "This is only for",0
+nose2:
+ .db "83+SE,84+,84+SE ",0
+press:
+ .db "Press "
+ .db 193
+ .db "ENTER]   ",0
+string:
+ .db "May take 10 secs",0
+Cby:
+ .db "Created By:     ",0
+Name:
+ .db "James Montelongo",0
+setting:
+ .db "Driver Setting: ",0
+
+.end
+
+

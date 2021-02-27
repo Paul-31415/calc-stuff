@@ -1,0 +1,6 @@
+
+class hla:
+    def __init__(self,args,*code):
+        self.args = args
+        self.code = code
+        

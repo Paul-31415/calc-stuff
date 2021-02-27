@@ -1,0 +1,401 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Language" content="en-gb">
+<meta name="GENERATOR" content="Microsoft FrontPage 5.0">
+<meta name="ProgId" content="FrontPage.Editor.Document">
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>QuadPlayer</title>
+
+<style>
+p, body, ul, li, h1, h2, h3
+{
+	font-family: Verdana;
+	font-size: 12px;
+}
+
+h1, h2, h3
+{
+	font-family: Arial Black;
+	font-size: 16px;
+	font-weight: bold;
+}
+
+h2
+{
+	font-size: 14px;
+}
+h3
+{
+	font-size: 12px;
+}
+.pseudo
+{
+	font-family: Georgia;
+	background-color: #99CCFF;
+}
+
+tt, .code
+{
+	font-family: Courier New;
+}
+
+.code
+{
+	background-color: #EEEEEE;
+	border: 1px none;
+}
+
+.code, .pseudo
+{
+	border:1px dotted black;
+	padding-left: 6;
+	padding-right: 6;
+	padding-top: 3;
+	padding-bottom: 3;
+}
+
+</style>
+
+
+</head>
+
+<body>
+
+<h1>QuadPlayer - A Four Channel Music Player by Ben Ryves</h1>
+<h3>Jump to section:</h3>
+<ol>
+  <li><a href="#Installation">Installation</a></li>
+  <li><a href="#Sound hardware">Sound hardware</a></li>
+  <li><a href="#How to use the software">How to use the software</a></li>
+  <li><a href="#How it works">How it works</a></li>
+  <li><a href="#Source code">Source code</a></li>
+  <li><a href="#Composing your own songs">Composing your own songs</a></li>
+  <li><a href="#QuadPlayer.exe">QuadPlayer.exe</a></li>
+  <li><a href="#About">About</a></li>
+</ol>
+<h2><a name="Installation">Installation</a></h2>
+<p>I will not go through the process of sending files to your calculator or 
+using a shell. Check your calculator manual and the documentation that comes 
+with the assembly shell you are using.
+<p>A music player is useless without music to play! If you look in the /Songs 
+subfolder you will see some .8XP files - these are the song files. Please note that the player will not run if you have no song files on 
+your calculator. It will quit automatically without an error message.</p>
+<h2><a name="Sound hardware">Sound hardware</a></h2>
+<p>You have a music player, but where does the sound come from? The link port! 
+However, you'll notice that the socket is too small for regular headphones. 
+You'll need some sort of adapter, or can use the AM radio trick.</p>
+<p>For the sound to be reproduced on an AM radio, tune it to a quiet area in the 
+MW range. Now, holding the top of the calculator screen near the radio should 
+produce very low quality sound.<br>
+<br>
+For better sound, you need a converter. All this needs to be is a simple 2.5mm 
+to 3.5mm stereo jack converter - available (so I hear) from Radio Shack in the 
+US. I ordered mine through Maplin Electronics in the UK. Plug the 2.5mm hack 
+into your link port, and then a pair of conventional headphones into the adapted 
+port. Note that the calculator will seem to 'freeze' with the headphones 
+inserted - only insert them once you are in an assembly shell, or the sound 
+program itself.<br>
+<br>
+I had lost my converter by the time I came to write this, so ended up using a 
+bulldog clip, an old TI to TI connection cable and the extension lead from my 
+Sony earphones to test the output from the calculator (VTI's sound is a bit 
+crummy). Plugged into the AUX channel of my HiFi the sound quality was 
+excellent.</p>
+<h2><a name="How to use the software">How to use the software</a></h2>
+<p>Select and run the program from the assembly shell you are using. You will be 
+presented with a list of songs on your calculator (it displays the track title, 
+not the calculator filename). At the bottom of the screen is a row of commands. 
+You run a command by pressing the blue F key underneath it (the keys F1 to F5 
+are also marked Y=, Window, Zoom, Trace and Graph). If the command button is 
+shaded out that means that that command button can not currently be used (for 
+example, you cannot fast forward through a song if you haven't got one playing!)</p>
+<p align="center"><img border="0" src="Images/gui.gif" width="192" height="128"></p>
+<p>You can go up and down through the list of songs by pressing the up and down 
+keys on your calculator. If there are more songs on the calculator than your 
+screen can display then the list of files will scroll as you go further down.</p>
+<p>The different functions are:</p>
+<ul>
+  <li><b>Play</b> - Load the highlighted song and start playing it.</li>
+  <li><b>F. Fw</b> - (Fast Forwards) - Quickly seek through the currently 
+  playing song.</li>
+  <li><b>Stop</b> - Stops the currently playing song and returns you to the list 
+  of songs.</li>
+  <li><b>Info</b> - Displays track title, artist, and album info embedded in the 
+  song file.</li>
+  <li><b>Exit</b> - Will either exit the program or close the Info dialog box, 
+  depending on whether you have the Info dialog box displayed.</li>
+</ul>
+<h2><a name="How it works">How it works</a></h2>
+<p>You've seen mono sound. Then CalcMod did the unthinkable - adding a second 
+channel by exploiting the fact that the TI had two data lines. Now, I've split 
+those two channels up into two channels themselves, and we now have rich 
+four-channel sound at our disposal - just perfect for decent sounding chiptunes!</p>
+<p>You can set the status of the link port directly by outputting bytes to it. 
+The two least significant bits end up as the logic levels of the two data lines. 
+The way that mono sound could be produced was quite simple:</p>
+<p class="pseudo">Set the output low.<br>
+Fixed delay.<br>
+Set the output high.<br>
+Fixed delay.<br>
+Loop.</p>
+<p>By making the delays shorter, the status of the link port would change more 
+frequently over a fixed unit of time - the frequency goes up. The opposite is 
+true if you make the delays longer. You can give the beep a duration in this 
+manner:</p>
+
+<p class="pseudo">Set the output low.<br>
+Delay, and each &quot;tick&quot; of the delay decrease the duration by 1. If it's zero, 
+jump out of the tone loop.<br>
+Set the output high.<br>
+Delay, and each &quot;tick&quot; of the delay decrease the duration by 1. If it's zero, 
+jump out of the tone loop.<br>
+Loop.</p>
+
+<p>The delays could be structured using the B register and a DJNZ loop, for 
+example.</p>
+
+<p>This is all very well and good for mono sound - how about stereo sound? The 
+&quot;Stereo&quot; aspect is only a side-effect of the process of splitting a monophonic 
+sound into a polyphonic sound. In fact, it's not truly polyphonic at all - 
+you're actually just playing two mono tracks independently. Well, imagine we 
+changed our system to this:</p>
+
+<p class="pseudo">Decrease the value for L. If it's zero, toggle the left 
+channel and reset L to the original value.<br>
+Decrease the value for R. If it's zero, toggle the right channel and reset R to 
+the original value.<br>
+Decrease the duration, if it's not zero, loop.</p>
+
+<p>That's all there is to it. The trick here is that we're no longer setting 
+things high or low - we're just toggling them when the time comes.</p>
+
+<p>The jump to four channel sound is a bit different and is achieved by 
+&quot;interlacing&quot; the sound. Imagine now that instead of a single L/R channel (like 
+in CalcMod), we have two of them. Now, instead of just outputting one of them 
+all the time we switch between them each loop. This is why the sound isn't 
+always as &quot;clean&quot; as it is in CalcMod (sometimes there's a faint extra tone in 
+the background) as you build up harmonics. The software switches channels at a 
+much greater frequency than the higher notes in songs (which is why you should 
+try and stick to the lower end of the scale - also, it's a logarithmic scale so 
+the lower frequency notes are more exact) and thus the sound is still decent.</p>
+
+<p>Sadly, the way that sound on the calculator works is that it takes up 100% 
+CPU time (well, I can get away by using some low-level direct key input, but you 
+can't do much else as it messes up the timing) and thus sound in games isn't yet 
+properly possible. You can output brief beeps in non CPU-intensive games, and 
+the delay is not noticed if the game &quot;does something&quot; at that point (see 
+IceClimb, for example). If you have a calculator that can switch into a higher 
+clock frequency mode you could do some crafty things inside the delay loops, but 
+it's still not something I've seen (and I can't implement as I only have a 6MHz 
+TI-83 Plus).</p>
+
+<h2><a name="Source code">Source code</a></h2>
+
+<p>It's in the Source folder and should be assembled with an old copy of Brass 1.</p>
+
+<p>In the /Songs/Source folder you'll find some more source code:</p>
+
+<ul>
+  <li><b>bellon.z80</b>,<b> wallace.z80</b>, (etc) - sample songs.</li>
+  <li><b>notes.inc</b> - include file to aid song creation.</li>
+</ul>
+
+<h2><a name="Composing your own songs">Composing your own songs</a></h2>
+
+<p>This'll need some explaining! Make sure you have an assembler that supports 
+macros (TASM coupled with DevPac8X is perfect).</p>
+
+<p>I've tried to make things easier for you with the <b>notes.inc</b> file. 
+However, the structure of the song files needs some explaining. Firstly, you 
+need the song header:</p>
+
+<p class="code">#include &quot;notes.inc&quot;<br>
+title:&nbsp; .db &quot;Bellon - Stage 7&quot;,0<br>
+artist: .db &quot;Mars Jenkar&quot;,0<br>
+album:&nbsp; .db &quot;Zero Wing&quot;,0</p>
+
+<p>Make sure that you get those sections in - they must be in that order. If you 
+don't want to specify an artist or album, put a space or &quot;Unknown&quot; in. Do NOT 
+erase the line! Also, ensure that you leave the zero at the end of each. Some 
+pitfalls:</p>
+<ul>
+  <li>Make sure that the .org is set to $0000. This is not an assembly program, 
+  this is a data file, and it's not being loaded to a particular address. The 
+  software needs to calculate the location of the song sections, and if you 
+  don't align everything to 0 it will get them wrong!</li>
+  <li>&quot;notes.inc&quot; MUST be included as the FIRST piece of code. It contains a 
+  program header that the software needs to find the song files on the 
+  calculator.</li>
+</ul>
+<p>Now you have the song header in place, you need to break down your song you 
+wish to write into sections. A simple song might be a section all on its own, 
+but if you think of most songs they repeat bits (such as the chorus or verses) 
+and it makes sense to not have to repeat the code for them.</p>
+<p>The way that you define sections is with a label (a piece of text followed by 
+a colon). For example, here is the intro part to the &quot;BELLON&quot; file:</p>
+<p class="code">intro:<br>
+&nbsp;&nbsp;&nbsp; note(a0,a1, e3,c3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a0,a1, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a0,a1, d3,a2, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a0,a1, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a0,a1, a2,c3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a0,a1, a2,d3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a0,a1, a2,c3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a0,a1, a2,d3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, a2,c3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, g2,b2, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, rest, rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, g2,d2, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a0,a1, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a0,a1, a2,e2, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, rest,rest, sixteenth)<br>
+<br>
+&nbsp;&nbsp;&nbsp; ; just bass<br>
+<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g1,g2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(a1,a2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g1,g2, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g1,g2, rest,rest, sixteenth)<br>
+<br>
+&nbsp;&nbsp;&nbsp; endsection</p>
+<p>(If you put a semicolon, &quot;;&quot;, anything after it on that line is ignored by 
+the assembler as a comment). The &quot;note&quot; instruction defines a single note. Each 
+note has 4 tones and a single duration. The syntax is:</p>
+<p class="code">&nbsp;&nbsp;&nbsp; note(left1,left2,right1,right2,duration)</p>
+<p>The actual note values are periods, and instead of you calculating them 
+yourself they are all defined in notes.inc. They all take the form &quot;notename-octave&quot;, 
+so c0 is a C, c1 is also a C (but an octave higher), cs2 is an octave higher and 
+sharp. There are 8 octaves (numbered 0-7), but please stick to the lower ones 
+(you get increased distortion in higher ones), and the available note names are:</p>
+<ul>
+  <li>c - C</li>
+  <li>cs - C# (sharp)</li>
+  <li>d - D</li>
+  <li>eb - Eb (flat)</li>
+  <li>e - E</li>
+  <li>f - F</li>
+  <li>fs - F# (sharp)</li>
+  <li>g - G</li>
+  <li>ab - Ab (flat)</li>
+  <li>a - A</li>
+  <li>bb - Bb (flat)</li>
+  <li>b - B</li>
+</ul>
+<p>You can also specify &quot;rest&quot;, which plays no sound.</p>
+<p>The durations are expressed as fractions of whole notes (easier to copy from 
+music this way). You have:</p>
+<ul>
+  <li>whole</li>
+  <li>half</li>
+  <li>quarter</li>
+  <li>eighth</li>
+  <li>sixteenth</li>
+  <li>thirtysecond</li>
+  <li>sixtyfourth</li>
+  <li>half3</li>
+  <li>quarter3</li>
+  <li>eighth3</li>
+  <li>sixteenth3</li>
+  <li>thirtysecond3</li>
+  <li>sixtyfourth3</li>
+</ul>
+<p>Those that have the number 3 after them are the &quot;triplet&quot; versions. 
+Those that have the letter 'd' after them are the &quot;dotted&quot; versions.</p>
+<p>After each section, you MUST put the instruction &quot;endsection&quot;.</p>
+<p>Once you have structured your sections, you need to piece them together into 
+a song. You do this with the instruction playsection(). You must also make sure 
+that this part comes just after the song header. You put the label of the 
+section you want to play inside the brackets.</p>
+<p>Finally, either end the song section with 
+the instruction &quot;endsong&quot; (which stops playback) or repeatsong(section,count) which loops back to <i>section</i> for <i>count</i> times. You must also make sure that you set 
+&quot;tempo&quot; to something - 100 is a good start value (the smaller the number, the 
+slower the song).</p>
+<p>The best way to show this is to look at one of the existing files, but here's 
+a simplified &quot;song&quot;:</p>
+<p class="code">.org $0000<br>
+#include &quot;notes.inc&quot;<br>
+title:&nbsp; .db &quot;Sample Song&quot;,0<br>
+artist: .db &quot;Ben Ryves&quot;,0<br>
+album:&nbsp; .db &quot;The REadMeIX 2005&quot;,0<br>
+<br>
+tempo = 100<br>
+<br>
+&nbsp;&nbsp;&nbsp; playsection(intro)<br>
+&nbsp;&nbsp;&nbsp; playsection(verse)<br>
+&nbsp;&nbsp;&nbsp; playsection(chorus)<br>
+&nbsp;&nbsp;&nbsp; playsection(verse)<br>
+&nbsp;&nbsp;&nbsp; playsection(chorus)<br>
+&nbsp;&nbsp;&nbsp; playsection(ending)<br>
+&nbsp;&nbsp;&nbsp; endsong<br>
+<br>
+<br>
+intro:<br>
+&nbsp;&nbsp;&nbsp; note(f0,f1, c3,f3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(f0,f1, c3,f3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, d3,g3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, d3,g3, quarter)<br>
+&nbsp;&nbsp;&nbsp; endsection<br>
+<br>
+verse:<br>
+&nbsp;&nbsp;&nbsp; note(f0,f1, c3,f3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, d3,g3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, d3,g3, quarter)<br>
+&nbsp;&nbsp;&nbsp; endsection<br>
+<br>
+chorus:<br>
+&nbsp;&nbsp;&nbsp; note(f0,f1, c3,f3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, d3,g3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, d3,g3, quarter)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, d3,g3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, d3,g3, quarter)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, d3,g3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(g0,g1, d3,g3, quarter)<br>
+&nbsp;&nbsp;&nbsp; endsection<br>
+<br>
+ending:<br>
+&nbsp;&nbsp;&nbsp; note(d0,d1, a2,d3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(d0,d1, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(d1,d2, a2,d3, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; note(d0,d1, rest,rest, sixteenth)<br>
+&nbsp;&nbsp;&nbsp; endsection<br>
+<br>
+.end</p>
+<p>Please upload any good songs to ticalc.org - or, if not, at least send a copy 
+to me so I can host it and include it in future releases of this software. If 
+you need any help with the above process, do not hesitate to contact me!</p>
+<h2><a name="QuadPlayer.exe">QuadPlayer.exe</a></h2>
+<p>To aid the writing of songs, there is a Windows-based song player in the 
+/Songs/Windows Player folder.</p>
+<h2><a name="About">About</a></h2>
+<p>This software was lovingly hand-crafted by Ben Ryves.
+Some bits were ruthlessly stolen - i_LargeSprite is a slightly modified 
+ionLargeSprite that ORs a sprite rather than XORs it. In fact, that's the only 
+bit of the software that was stolen, really. The duration equates are from 
+CalcMod, the note equates were calculated by me (the ones in CalcMod were way 
+out in places). If you want to thank me, drop me an email or send me some 
+Strongbow in the post. If you want to report a bug, email me or send me some 
+arsenic in the post. I will try to fix bugs that I can replicate.</p>
+<ul>
+  <li><a href="http://www.benryves.com">http://www.benryves.com</a> - my 
+  website.</li>
+  <li><a href="mailto:benryves@benryves.com">benryves@benryves.com</a> - my 
+  (highly original) email address and MSN contact info.</li>
+</ul>
+
+</body>
+
+</html>

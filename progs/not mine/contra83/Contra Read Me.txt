@@ -1,0 +1,178 @@
+=====================
+Contra  Documentation
+=====================
+
+Version 1.0 - Released 1/1/05 
+
+Produced By: Outer Limit Software 
+
+Programmed By: Bryan Thomas
+
+Original Concept and Splash Screen By: Andrew Tobin
+
+Webpage: 	www.olsoft.tk
+		www.unitedti.org	
+
+--------------
+Contents 
+--------------
+
+1. About Contra
+2. Storyline 
+3. Files Included in Zip 
+4. System Requirements 
+5. Installation 
+6. Instructions 
+7. Game Controls 
+8. For best performance
+9. Game tips
+10. Troubleshooting
+11. Known Bugs
+12. Further Information
+
+------------------------
+1. About Contra
+-------------------------
+
+Contra is a remake of the classic NES game. This project was first introduced by my good friend Andrew. One night he came  over and he had this crazy idea of making a BASIC Contra. I was very skeptical and denied the possibility of it ever being possible but as me and him talked I realized that a lot of the stuff he was saying wasn't exactly impossible in BASIC. So we talked till 3:30 am about how we would program such extreme features. I had ideas in my mind, but I didn't want to influence Andrew to much since it was his project. 
+
+However as he programmed he ran into a lot of problems, and eventually gave up the project. I realized that it had a lot of potential and asked him If I could continue the project. He gladly said yes and I began coding Contra.
+
+I too became discouraged. The initial hurdles and problems I had to overcome were extreme and I realized exactly how hard this project would be to code. I kept the game as fast as I could, and I was fragile with every new engine addition I added. Somehow I kept the speed and found out that the game was possible. After I discovered new ways to achieve speed in BASIC, Contra finally began to piece itself together.
+
+Now, it is the most revolutionary BASIC game ever. Completely coded in pure BASIC (using not one ASM Utility or outside code) and includes some of the most flawless graphics ever. Contra is an inspiration to all basic programmers, and is one of the greatest achievements to ever come to BASIC.
+
+---------------
+2. Storyline
+----------------
+
+You are Bill (codename Scorpion). Your brother Lance (codename Maddog) and you are special forces for the Military and have won many battles. One day, you were notified that Alien intruders who called themselves "Red Falcons" had landed on a nearby Island. So you and Maddog were sent on an urgent mission to observe their military power. Some how a Red Falcon picked up on your brothers signal, and ambushed him. You and your brother fought valiantly, and dished out a lot of casualties, but the Aliens had too many forces and too much firepower. Eventually the Red Falcons overran you, and kidnapped Maddog. You were left in the middle of a baron island to rot and die, but a miraculous event happened. You discovered a working transporter on a dead Alien. You had never seen such technology before, but you soon got it working and warped off the island. You re-supply and leave headquarters. 
+
+Now it's all you. You must travel to all parts of the world and destroy these aliens. You must send them back to where they came from, while rescuing your brother from almost certain death. It will not be an easy task without your brothers help, but you must be strong and find your brother before its to late. You could of easily asked for backup but you refused, saying "This time... it's personal!"
+
+------------------------------------------
+3. Files Included in 83Contra.zip 
+-------------------------------------------
+
+-Contra.8xp
+-Cinstall.8xp
+-Cinstal2.8xp
+-Zsub.8xp
+-Znme.8xp
+-Pic1.8xi
+-Contra Read Me.txt
+
+---------------------------------
+4. System Requirements 
+---------------------------------
+
+The total size of the memory used is around 10000 bytes (not including in game consumption). However the game has a very large in game consumption and uses everything from strings to pictures. So I recommend that Contra is the only thing on your calculator.
+
+-------------------
+5. Installation 
+-------------------
+
+1) Send the large Cinstall.8xp to your calc
+2) Run the Program and it should install halfway
+2) Delete or Archive Cinstall.8xp and send Cinstal2.8xp to your calculator
+3) Run the Program. It should fully install.
+2) Delete or Archive Cinstal2.8xp
+4) Send Zsub.8xp; Znme.8xp; Contra.8xp; Pic1.8xi to your calc
+5) Run Contra
+6) Start !!!
+
+--------------------
+6. Instructions 
+--------------------
+
+Your objective is to destroy the 6 bosses that are entrapping your brother. To do this you must travel through many frames and 6 levels. However watch out for mines, Enemies, water, and of course the boss. While your playing. Shoot as many enemies and get as many weapon upgrades as possible to get your score very high. So you can get the high score.
+
+-----------------------
+7. Game Controls 
+-----------------------
+
+Menu Controls: 
+up/down = Move through the menu choices 
+Enter or 2nd = Confirm the highlighted choice 
+
+In Game Controls: 
+Left and Right = Move left and right
+Up = Jump
+Down = Jump Down
+Alpha = Turn Around
+2nd = Shoot
+Mode = Pause
+Math = NULL (cancel last getkey)
+
+--------------------------------
+8. For Best Performance
+--------------------------------
+
+- Have your calc completely reset before Contra is sent to your calculator
+- Select "Yes" every time you are asked to garbage collect
+- Do not tamper with save lists, high score lists, or strings (most are hack proof and will result in the reset of all files)
+- Have the latest TI OS version (Contra was tested and programmed on OS version 1.1.6).
+
+-----------------
+9. Game tips
+-----------------
+
+- The lag in Contra is a bit hard to get used to, just keep practicing and you will get good pretty fast
+- Don't press keys to fast because it will sometimes override getkeys and make your guy move the wrong way and into a pit. If you do use the NULL key to cancel it real fast.
+- Running and jumping allows you to jump really far. If you don't have enough space to run and jump move as much as possible and just maybe you will make that long jump
+- Save often, the game is very challenging and saving will help a lot
+- Look at the level and envision the correct and easiest path through the obstacles, take it slow and concentrate
+- The way Contra is made, what looks like a solid wall really is not. You can pass through any line in Contra so be careful what you press.
+
+-----------------------------
+10. Trouble Shooting
+-----------------------------
+
+The following are possible solutions to possible errors that one might run into while playing Contra
+
+ERR: MEMORY
+	This means that you do not have enough memory to support Contra
+		Possible fixes:
+		-Archive programs that you want to keep and clear you RAM
+		-Archive or delete enough space to allow Contra the running space required
+ERR: UNDEFINED
+	This means Contra is missing an essential variable that it needs to run
+		Possible fixes:
+		-Make sure Pic1 is sent to your calculator
+		-Make sure that you properly installed the levels and data through CINSTALL
+ERR: ARCHIVED
+	This means that a variable either used by Contra or another game is archived and 	Contra cannot access it
+		Possible Fixes:
+		-Make sure the following variables are not archived: Pic1; Pic2; Pic0; Str9
+			Str8; Str1; [A]; L1-L6; All real VARS
+		-Make sure all Contra programs are not archived
+		-If you get the error when trying to install delete all of these archived 			vars (if they are already on your calc); LO1-LO6;  LP1-LP6; LQ1-LQ6; 			LR1-LR6; LS1-LS6; LT1-LT6
+
+You should not encounter any other errors. If you do please report the bug. 
+(see instructions below)
+
+-------------------------------
+11. Known Bugs
+-------------------------------
+
+As of now there are no known bugs for the TI-83/+/SE. However It has not been tested on the the 84 Plus, and a beta tester did report a land error that occured on the 84 Plus. When he sent the calc state to me, I was surprised to find out that there was not any errors at all for my calculator.
+
+Overall this game as only been tested for the 83 Plus consoles. Therefore its performance on other consoles are not guarenteed.
+
+If you do discover a bug in Contra. Please report it. (See below for bug info)
+
+-------------------------------
+12. Further Information 
+-------------------------------
+
+Outer Limit Software (OLS) is a group of programmers who program for the TI-83/+/SE calculators in the TI-BASIC language. OLS aim to continually provide high-quality TI-BASIC programs. OLS is an affiliate of United TI (unitedti.org). 
+
+If you have any suggestions, comments, or find any bugs in this game, you may contact Bryan Thomas at the following E-mail address: Breemum@gmail.com. If you are writing to report a bug, please be sure to state exactly what the problem is and describe exactly what you did before the problem occurred. If you don't do so, it will be very hard to tell what is going wrong! 
+
+You can get the latest version of this game, as well as other programs of ours, from our web page - www.olsoft.tk 
+
+Outer Limit Software would like to thank everyone who supports OLS. 
+
+========================================
+Copyright © 2005 - Outer Limit Software
+========================================

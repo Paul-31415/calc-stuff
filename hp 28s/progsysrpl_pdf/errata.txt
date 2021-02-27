@@ -1,0 +1,45 @@
+Programming in System RPL
+-------------------------
+
+Errata
+Date of this errata: May 22, 2002
+
+Changes since last errata are marked with a * instead of -.
+
+
+
+Page 20
+* The address for TYPERRP is 03FC7.
+
+
+Page 77
+* The stack diagram for SWAPUnDrop is
+  ( meta1 meta2 -> meta2 ob1..obn )
+  Its description should read:
+  "Swaps two metas and drops the count. Should be called swapDROP."
+
+
+Page 83
+- The stack diagram for UMSIGN is ( u -> % ).
+
+
+Page 100
+- The arguments for SETHASH are reversed. The correct stack diagram
+  is:
+  ( #libnum hxs -> )
+  Also, in the HP49G (and HP48 with ROM versions P and R) this
+  function works properly.
+(Reported by Jordi Hidalgo)
+
+
+Page 181
+- The stack diagram for KINVISLF is ( $ -> $' $'' )
+  $'' contains any incomplete trailing backslash sequence which was
+  present in $.
+- The entries KVIS, KVISLF and KINVISLF respect the current
+  translation mode set in the IOPAR variable.
+
+
+Page 247
+- The description for LAM8 is missing in the table. It is a bint with
+  the width of the browser lines.

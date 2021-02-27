@@ -1,0 +1,775 @@
+#include "ti83plus.inc"
+_HomeUp         EQU 4558h
+#DEFINE NEWXY(x,y) 3,(x<<4)+y  ;Y=LSN,X=MSN
+#DEFINE DRAWBLANKS(x,y,c) call RenderBlanks \ .db (x<<4)+y,c
+.org $9D93
+.db $BB,$6D
+ xor a
+ jr nc,ProgramStart
+.db "Cellular Automata 2.1",0 ;ION/nostub header
+c.CustomRuleset:
+.db "Custom Ruleset",0
+.db 9
+.db 9,9,9,9,9,9,9,9,9  ;rebirth table
+.db 9
+.db 9,9,9,9,9,9,9,9,9  ;survival table
+
+Options:
+.db 0     ;For SMC'ing some possible option bits if need be
+;bit 0: INTERNAL: Set to 0 if starting program, or loading new image
+;bit 1: OPTION  : Set to 1 to disable screen-wrap
+;bit 2: OPTION  : Set to 1 to allow 15MHz speed, if available
+;bit 3: 
+;bit 4:
+;bit 5:
+;bit 6: INTERNAL: Set to 1 for step-by-step mode
+;bit 7: INTERNAL: Used elsewhere...
+
+ProgramStart:
+ jp RealProgramStart
+;=============================================================================
+#include "Cellsubs.z80" ;contains subroutines and rulesets
+#include "Cherries.z80" ;contains the only call that matters.
+#include "Cellrule.z80" ;contains rulesets, tables, and image files with rtns
+;Notes: Use two vertically-aligned buffers: plotsscreen and savesscreen.
+;       save 64 bytes slack on either side left and right (above and below
+;       memory-wise).
+;Also, using this rebuild to take a break from E:SoR. Yup.
+;
+;=============================================================================
+
+RealProgramStart:
+ bcall(_RunIndicOff)
+ ld hl,appbackupscreen
+ call clearwritebuf+3  ;break-in, re-use clearing code.
+ ld (stack),sp
+ in a,(6)
+ ld (page),a
+ ld hl,plotsscreen
+ ld (readbuf),hl
+ ld hl,savesscreen
+ ld (writebuf),hl
+ ld hl,c.Life
+ ld (rules),hl
+ ld hl,Options
+ res 0,(hl)         ;reset "continue" state to "begin"
+; call getdefaultimage  ;Give ourself a default image from the git-go
+; call swapbuffers      ;swap image to read buffer so CA can work on it
+MainMenuDoInit:
+ ld hl,Str.Title
+ call DispNew
+ call DispString  ;display immediately after, which is Str.TitleMenu1
+ jr MainMenuRefresh
+MainMenu:
+ ld hl,0
+ ld (menutemp2),hl   ;reset menutemp2 for menus that don't go together well.
+ call keywait
+ sub 5
+ jr z,ProgramEnd     ;quit keys hit
+ inc a
+ jp z,MainMenuAccept ;accept key hit
+ add a,2
+ jp p,MainMenu       ;neg nums are either up/down. Go on if it is so.
+MainMenuRefresh:
+ ld hl,menutemp1
+ ld de,(256*4)+3
+ call MoveArrow
+ jr MainMenu
+
+MenuCredits:
+ ld hl,Str.Credits
+ call DispNew
+ call keywait
+
+MainMenuSecond:
+ ld hl,Str.Title
+ call DispNew
+ ld hl,Str.TitleMenu2
+ call DispString
+ jr MainMenuSecondRefresh
+MainMenuSecondLoop:
+ call keywait
+ sub 5
+ jr z,MainMenuDoInit
+ inc a
+ jr z,MainMenuSecondAccept
+ add a,2
+ jp p,MainMenuSecondLoop
+MainMenuSecondRefresh:
+ ld hl,menutemp3
+ ld de,(256*2)+3
+ call MoveArrow
+ jr MainMenuSecondLoop
+MainMenuSecondAccept:
+ ld a,(menutemp3)
+ or a
+ jp z,MenuOptions
+ dec a
+ jr z,MenuCredits
+ jr MainMenuDoinit
+ 
+MenuStartCA:
+ call keyrelease
+ call StartCellularAutomaton
+ jr MainMenuDoinit
+ 
+ProgramEnd:
+ call keyrelease
+ ld hl,(readbuf)
+ ld de,plotsscreen
+ or a
+ sbc hl,de
+ call nz,copytoreadbuf
+ bcall(_ClrScrnFull)
+ bcall(_ClrLCDFull)
+ bcall(_HomeUp)
+ ld a,(page)
+ out (6),a
+ ld sp,(stack)
+ pop hl
+ push hl
+ bit 7,h
+ ret nz  ;a shell is running our program from RAM. Don't bother.
+ cp 8    ;get return base page. If page<8, then returning to OS. Manual wback.
+ ret nc
+ ld hl,Str.This
+ rst 20h
+ bcall(_ChkFindSym)
+ ret c   ;don't attempt to write back if we can't find ourselves
+ ld a,b
+ or a
+ ret nz  ;don't bother if it's archived. What's it doing there anyway?
+ ld hl,29
+ add hl,de
+ ld de,c.CustomRuleset
+ ld bc,38
+ ex de,hl
+ ldir     ;written back.
+ ret
+
+MainMenuAccept:
+ ld a,(menutemp1)
+ sub 4
+ jp z,MainMenuSecond
+ inc a
+ jr z,ProgramEnd
+ inc a
+ jr z,MenuStartCA
+ inc a
+ jp z,MenuChangeRules
+MenuSaveLoad:
+ call BuildThumbnailLUT
+ ld hl,Str.SaveLoad
+ call DispNew
+MenuSaveLoadRefresh
+ call MenuSaveLoadDynamics
+MenuSaveLoadLoop:
+ call keywait
+ sub 5
+ jp z,MainMenuDoInit
+ inc a
+ jr z,MenuSaveLoadAccept
+;up=-2 down=-1. menutemp2+0=up/down
+ add a,2
+ jp m,_
+;right=0, left=1  menutemp2+1=left/right. Good. we can just load directly.
+ ld (menutemp2+1),a
+ jr MenuSaveLoadRefresh
+_:
+ ld b,a
+ ld a,(menutemp2)
+ inc b
+ jr nz,_  ;jump if up key was hit
+ cp NUMINTERNALPICS+10-1
+ jr nz,$+4
+ ld a,-1
+ inc a
+ jr ++_
+_:
+ or a
+ jr nz,$+4
+ ld a,NUMINTERNALPICS+10
+ dec a
+_:
+ ld (menutemp2),a
+ jr MenuSaveLoadRefresh
+MenuSaveLoadAccept:
+ ld a,(menutemp2+1)
+ or a
+ ld a,(menutemp2)
+ jr nz,MenuSaveLoadSave
+ cp 10
+ jr nc,_  ;skip if loading from default image
+ call BufferPic
+ jr c,MenuSaveLoadRefresh  ;do not allow buffering a nonexistent pic
+_:
+ call copytoreadbuf
+ ld hl,Options
+ res 0,(hl)       ;reset bit to do "Begin Run"
+ jr MenuSaveLoadRefresh
+_:
+ call loadinternalimage
+ jr --_
+MenuSaveLoadSave:
+ cp 10
+ jr nc,MenuSaveLoadRefresh  ;kill routine if shitting.
+ call lookuppic
+ jr c,_
+ bcall(_DelVarArc)
+_:
+ ld hl,$0310
+ bcall(_EnoughMem)
+ jr nc,_
+ ld hl,Str.OutOfMemory
+ call DispString
+ call keywait
+ jp MenuSaveLoadRefresh
+_:
+ ld hl,picvar
+ rst 20h
+ bcall(_CreatePict)
+ push de
+  inc de
+  inc de
+  ld hl,12
+  bcall(_InsertMem)
+ pop hl
+ ld (hl),$00
+ inc hl
+ ld (hl),$03  ;forcing size of new pic file to use last row as well
+ inc hl
+ ld de,(readbuf)
+ ld b,64
+_:
+ push bc
+  push de
+   ld b,12
+_: ld a,(de)
+   ld (hl),a
+   inc hl
+   push bc
+    ex de,hl
+    ld bc,64
+    add hl,bc
+    ex de,hl
+   pop bc
+   djnz -_
+  pop de
+ pop bc
+ inc de
+ djnz --_
+ jp MenuSaveLoadRefresh
+
+MenuSaveLoadDynamics:  ;changing strings and thumbnails
+ DRAWBLANKS(0,1,16)
+ ld a,(menutemp2)
+ cp 10
+ jr nc,MSLDNoPic       ;0-10=pics
+ push af
+  inc a
+  cp 9+1
+  jr nz,_
+  xor a
+_ add a,'0'
+  ld (Str.Pic+5),a
+  ld hl,Str.Pic
+  call DispString
+ pop af
+ call BufferPic  ;NC=Displayed, C=does not exist
+ jr nc,_
+ ld hl,Str.Empty
+ call DispString
+_:
+ jr MSLDOthers
+MSLDNoPic:
+ ld a,(menutemp2)
+ sub 10
+ push af
+  add a,'0'
+  ld (Str.Internal+5),a
+  ld hl,Str.Internal
+  call DispString
+ pop af
+ call loadinternalimage
+ xor a
+ ld (menutemp2+1),a  ;disable saving if trying to do internal image
+MSLDOthers:
+ ld hl,$0702
+ ld (currow),hl
+ ld de,(256*'>')+'-'
+ ld a,(menutemp2+1)
+ or a
+ jr z,_
+ ld de,(256*'-')+'<'
+_:
+ ld a,e
+ bcall(_PutC)
+ ld a,d
+ bcall(_PutC)
+ 
+ ld hl,(writebuf)
+ ld c,$20
+ call DispThumbnail
+ ld hl,(readbuf)
+ ld c,$20+6
+ call DispThumbnail
+ ret
+ 
+BufferPic:  ;copies from pic file to v-aligned writebuf
+ call clearwritebuf
+ ld a,(menutemp2)
+ call getpic
+ ret c
+ ld a,c
+ ld c,63
+ or a
+ jr nz,_
+ inc c    ;pics come in two sizes. Those that use and don't use row 63
+_
+ ld b,12
+ ld de,(writebuf)
+BufferPicLoop:
+ in a,(6)
+ push bc
+  push af
+   push hl
+    ld b,c   ;counter thing.
+_   ld a,(hl)
+    ld (de),a
+    inc de
+    call Add12toHLPaged
+    djnz -_
+   pop hl
+  pop af
+ pop bc
+ out (6),a
+ call IncHL
+ djnz BufferPicLoop
+ ret
+
+DispThumbnail: ;in: HL=v-aligned buffer, C=starting LCD column $20+(0 or 6)
+ xor a
+ out ($20),a  ;force slow mode
+_:
+ ld a,$80+$20
+ out ($10),a  ;11  meet the cursor mid-screen
+ push hl      ;22
+ pop hl       ;32
+ push hl      ;43
+ pop hl       ;53
+ ld b,32      ;60
+ nop \ ld a,c ;68
+ out ($10),a  ;11
+_:
+ ld a,(hl)
+ inc hl
+ or (hl)
+ ld de,63
+ add hl,de
+ ld e,a
+ rra
+ or e
+ ld e,a
+ ld a,(hl)
+ inc hl
+ or (hl)
+ ld d,a
+ rra
+ or d
+ ld d,a        ;xAABBCCD
+ push hl
+  ld hl,$8000
+  ld L,a       ;right side
+  ld d,(hl)
+  ld L,e       ;left side
+  ld a,(hl)
+  xor d
+  and %11110000
+  xor d
+ pop hl
+ out ($11),a   ;11 Yus!
+ ld de,-63     ;
+ add hl,de     ;
+ djnz -_       ;
+ ld de,64      ;
+ add hl,de     ;
+ ld a,c
+ inc a
+ cp $20+6
+ ret z
+ cp $20+12
+ ret z
+ ld c,a
+ jr --_
+ 
+BuildThumbnailLUT:
+ ld hl,$8000
+_:
+ ld e,L
+ ld d,0
+ ld b,4
+_:
+ xor a
+ sla e
+ adc a,a
+ sla e
+ adc a,a
+ or a
+ jr z,_
+ scf
+_:
+ rr d
+ djnz --_
+ ld a,d
+ rlca
+ rlca
+ rlca
+ rlca
+ or d
+ ld (hl),a
+ inc L
+ jr nz,---_
+ ret 
+
+MenuChangeRules:
+;Str.Ruleset:
+;.db "Current ruleset "
+;.db "                "
+;.db "Change rules to:",0
+ ld hl,Str.Ruleset
+ call DispNew  ;next position set by data string
+ ld hl,(rules)
+ bcall(_PutS)
+MenuChangeRulesRefresh:
+ DRAWBLANKS(0,3,48)
+ ld hl,$0003
+ ld (currow),hl
+ ld a,(menutemp2)
+ call scraperuletable
+ bcall(_PutS)
+ ld de,$0004
+ ld (currow),de
+ ld a,'B'
+ bcall(_PutC)
+ call ShowRuleNums
+ push hl
+  bcall(_NewLine)
+ pop hl
+ ld a,'S'
+ bcall(_PutC)
+ call ShowRuleNums
+MenuChangeRulesLoop:
+ call keywait  ;only allow for custom ruleset editing in dedicated routine
+ sub 5
+ jp z,MainMenuDoInit ;quit keys hit
+ inc a
+ jr z,MenuChangeRulesCustom ;accept key hit
+ add a,2
+ jp p,MenuChangeRulesLoop
+ inc a               ;zero if on down
+ ld a,(menutemp2)
+ jr z,_
+ sub 1
+ jr nc,$+4
+ ld a,NUMRULESETS-1
+ jr ++_
+_:
+ cp NUMRULESETS-1
+ jr nz,$+4
+ ld a,-1
+ inc a
+_:
+ ld (menutemp2),a
+ jr MenuChangeRulesRefresh
+ 
+MenuChangeRulesCustom:
+;insert dedicated rules changing code
+ ld a,(menutemp2)
+;check to see if custom rule is selected. If so, then start the manual loading
+;else, just get that rule and refresh the table.
+ cp NUMRULESETS-1
+ jr z,MenuChangeRulesDedicated
+ call scraperuletable
+ ld (rules),hl
+ jp MenuChangeRules
+MenuChangeRulesDedicated:
+ ld hl,Str.InputRules
+ call DispString
+ xor a
+ ld (menutemp2+1),a
+MenuChangeRulesDedicatedRefresh:
+ DRAWBLANKS(0,7,15)
+ call getcurrentchangeset
+ bcall(_PutC)
+ call ShowRuleNums
+MenuChangeRulesDedicatedLoop:
+ bcall(_getcsc)
+ or a
+ jr z,MenuChangeRulesDedicatedLoop
+ ld hl,menutemp2+1
+ cp skEnter
+ jr nz,++_
+_:
+ ld a,(hl)
+ inc a
+ ld (hl),a
+ cp 2
+ jr nz,MenuChangeRulesDedicatedRefresh
+ dec hl
+ ld a,(hl)
+ call scraperuletable
+ ld (rules),hl
+ jp MenuChangeRules
+_:
+ cp sk2nd
+ jr z,--_
+ cp skMode
+ jr nz,_
+ ld a,(hl)
+ sub 1
+ ld (hl),a
+ jp c,MenuChangeRules
+ jr MenuChangeRulesDedicatedRefresh
+_:
+ cp skClear
+ jr nz,++_
+ call getcurrentchangeset
+ inc hl
+ ld b,9
+_:
+ ld (hl),$09
+ inc hl
+ djnz -_
+ jr MenuChangeRulesDedicatedRefresh
+_:
+ ld hl,menuchagnededicatedrulestable
+ ld bc,$0900
+_:
+ cp (hl)
+ inc hl
+ jr z,_
+ inc c
+ djnz -_
+ jr MenuChangeRulesDedicatedLoop
+_:
+ ld e,c   ;save value fetched
+ ld d,0   ;just for kicks.
+ call getcurrentchangeset
+ add hl,de
+ inc hl
+ ld a,(hl)
+ cp 9
+ jr nz,_
+ ld (hl),e
+ jr MenuChangeRulesDedicatedRefresh
+_:
+ ld (hl),$09
+ jr MenuChangeRulesDedicatedRefresh
+ 
+menuchagnededicatedrulestable:
+.db sk0,sk1,sk2,sk3,sk4,sk5,sk6,sk7,sk8
+
+ 
+getcurrentchangeset:
+ ld hl,$0007
+ ld (currow),hl
+ ld hl,c.CustomRuleset
+ call skipstring
+ ld a,(menutemp2+1)
+ or a
+ ld a,'B'
+ ret z
+ ld bc,10
+ add hl,bc
+ ld a,'S'
+ ret
+
+ShowRuleNums:
+ ld b,(hl)
+ inc hl
+_:
+ ld a,(hl)
+ inc hl
+ cp 9
+ jr z,_
+ add a,'0'
+ bcall(_PutC)
+_:
+ djnz --_
+ ret
+ 
+NUMMENUOPTIONOPTIONS = 2
+MenuOptions:
+ ld hl,Str.Options
+ call DispNew
+ xor a
+ jr MenuOptionsRefresh
+MenuOptionsLoop:
+ call keywait
+ sub 5
+ jp z,MainMenuSecond
+ inc a
+ jr z,MenuOptionsAccept
+ add a,2
+ jp p,MenuOptionsLoop
+MenuOptionsRefresh:
+ ld hl,menutemp2
+ ld de,(256*NUMMENUOPTIONOPTIONS)+2
+ call MoveArrow
+ jr MenuOptionsLoop
+MenuOptionsAccept:
+ ld a,(menutemp2)
+ cp NUMMENUOPTIONOPTIONS
+ jp z,MainMenuSecond
+ inc a
+ ld b,a
+ ld a,1
+_:
+ rlca
+ djnz -_
+ ld b,a
+ ld a,(Options)
+ xor b
+ ld (Options),a
+ jp MenuOptions
+
+
+ 
+keywait: ;out: 0=up,1=down,2=right,3=left,4=accept,5=goBack,6=del
+ push hl
+  push bc
+_: bcall(_getcsc)  ;then wait until a key is pressed
+   or a
+   jr z,-_
+keywaitbreak:
+   ld bc,9  ;one more to an impossible value so C=0 means nothing was found
+   ld hl,keywaittable
+   cpir
+   inc c
+   dec c
+   jr z,-_  ;go back. wait for a recognized key.
+   ld hl,keywaitgettable
+   add hl,bc
+   ld a,(hl)
+  pop bc
+ pop hl
+ ret
+keywaittable:
+;   9    8      7       6       5      4      3      2      1
+.db skUp,skDown,skRight,skLeft,skEnter,sk2nd,skMode,skClear,skDel,0 ;9 entries
+keywaitgettable:
+;   1 2 3 4 5 6 7 8 9
+.db 6,5,5,4,4,3,2,1,0
+
+;HL=pointer to a menutemp location. E=offset D=menuOptions(startFromZero)
+;A=(-2:up,-1=down,0=None,ShowArrow)
+MoveArrow:
+ or a
+ jr z,MoveArrowShow
+ ld c,(hl)
+ inc a               ;zero if on down
+ jr z,_
+ ld a,(hl)
+ sub 1
+ jr nc,$+3
+ ld a,d
+ ld (hl),a
+ jr ++_
+_:
+ ld a,(hl)
+ cp d
+ jr nz,$+4
+ ld a,-1
+ inc a
+ ld (hl),a
+_:
+ ld a,c
+ add a,e
+ ld (currow),a
+ xor a
+ ld (curcol),a
+ ld b,3
+_:
+ ld a,' '
+ bcall(_PutC)
+ djnz -_
+MoveArrowShow:
+ ld a,(hl)
+ add a,e
+ ld L,a
+ ld h,0
+ ld (currow),hl
+ ld hl,Str.Arrow
+ jp DispString
+
+
+
+
+ 
+
+Str.Arrow:
+.db "-->",0
+Str.Pic:
+.db NEWXY(2,2),"Pic_",0
+Str.Internal:  ;probably not going to be used
+.db NEWXY(2,2),"Int_",0
+Str.OutOfMemory:
+.db NEWXY(0,1)
+.db "Out of memory!",0
+ 
+Str.Title:
+.db " 2D Cellular",1
+.db 4,4," Automata "
+.db 5,0
+Str.TitleMenu1:
+.db 4,"Save/Load",1
+.db 4,"Change Rules "
+.db 4,2,0,"Continue",0,"Begin",0," Run",1
+.db 4,"Quit Program "
+.db 4,"Next",0
+
+Str.TitleMenu2:
+.db 4,"Options",1
+.db 4,"Credits",1
+.db 4,"Prev",0
+
+Str.Options:
+.db "  2DCA Options",1
+.db 5
+.db 4,2,1,"Dead borders",0,"Wraparound",0,1
+.db 4,"Fast mode ",2,2,"on ",0,"off",0
+.db 4,"Go back",0
+
+
+Str.Empty:
+.db NEWXY(1,1),"Empty",0
+Str.Credits:
+.db "Main: Iambian",1
+.db "Help: Runer112",1
+.db "Spcl: Geekboy",1
+.db 5
+.db "Timmy!...Cow???",0
+
+Str.SaveLoad: ;$1E=uparrow,$1F=downarrow
+.db "<-Save -- Load->"
+.db NEWXY(10,2),"Scrn",1
+.db 5,0
+
+Str.InputRules:
+.db NEWXY(0,4)
+.db "Input rules with"
+.db "numkeys. Confirm"
+.db "with 2nd/ENTER.",0
+
+Str.Ruleset:
+.db "Current ruleset:",1
+.db "Change rules to:"
+Str.SetXYto01:
+.db NEWXY(0,1),0
+;    1234567890123456
+Str.This:
+.db protProgObj,"CELLAUTO",0
+
+
+
+.echo "Program Size: ",$-$9D93

@@ -1,0 +1,99 @@
+
+
+
+
+def freetree(size):
+    return [[-1,1,False]]+[["i'm a free node", i + 2, False] for i in range(size)]+[["lastFree","NIL",false]]
+
+def getNewNode(nodes):
+    ans = nodes[0][1]
+    if ans<0:
+        print("gc needed")
+        1/0
+    nodes[0][1] = cdr(nodes,ans)
+    return ans
+
+
+def car(nodes,node):
+    return nodes[node][0]
+def cdr(nodes,node):
+    return nodes[node][1]
+def cons(nodes,arg1,arg2):
+    ans = getNewNode(nodes)
+    nodes[ans][0] = arg1
+    nodes[ans][1] = arg2
+    return ans
+def atom(nodes,node):
+    return type(node) == type("atom")
+def eq(nodes,a1,a2):
+    return a1 == a2
+def null(nodes,v):
+    return v == "NIL" 
+
+def equal(nodes,x,y):
+    if atom(nodes,x):
+        return atom(nodes,y) and eq(nodes,x,y)
+    return equal(nodes,car(nodes,x),car(nodes,y)) and equal(nodes,cdr(nodes,x),cdr(nodes,y))
+
+def pairlis(nodes,x,y,a):
+    if null(nodes,x):
+        return a
+    return cons(nodes,cons(nodes,car(nodes,x),car(nodes,y)),pairlis(nodes,cdr(nodes,x),cdr(nodes,y),a))
+def assoc(nodes,x,a):
+    if equal(nodes,car(nodes,car(nodes,a)),x):
+        return car(nodes,a)
+    return assoc(nodes,x,cdr(nodes,a))
+
+def evalquote(nodes,fn,x):
+    return lapply(fn,x,"NIL")
+
+def lapply(nodes,fn,x,a):
+    if atom(nodes,fn):
+        if eq(nodes,fn,"CAR"):
+            return car(nodes,car(nodes,x))
+        if eq(nodes,fn,"CDR"):
+            return cdr(nodes,car(nodes,x))
+        if eq(nodes,fn,"CONS"):
+            return cons(nodes,car(nodes,x),car(nodes,cdr(nodes,x)))
+        if eq(nodes,fn,"ATOM"):
+            return atom(nodes,car(nodes,x))
+        if eq(nodes,fn,"EQ"):
+            return eq(nodes,car(nodes,x),car(nodes,cdr(nodes,x)))
+        return lapply(nodes,leval(nodes,fn,a),x,a)
+    if eq(nodes,car(nodes,fn),"LAMBDA"):
+        return leval(nodes,car(nodes,cdr(nodes,cdr(nodes,fn))),
+                     pairlis(nodes,car(nodes,cdr(nodes,fn)),x,a))
+    if eq(nodes,car(nodes,fn),"LABEL"):
+        return lapply(nodes,car(nodes,cdr(nodes,cdr(nodes,fn))),
+                      x,cons(nodes,cons(nodes,car(nodes,cdr(nodes,fn)),car(nodes,cdr(nodes,cdr(nodes,)))),a))
+
+
+
+def leval(nodes,e,a):
+    if atom(nodes,e):
+        return cdr(nodes,assoc(nodes,e,a))
+    if atom(nodes,car(nodes,e)):
+        if eq(nodes,car(nodes,e),"QUOTE"):
+            return car(nodes,cdr(nodes,e))
+        if eq(nodes,car(nodes,e),"COND"):
+            return evcon(nodes,cdr(nodes,e),a)
+        return lapply(nodes,car(nodes,e),evlis(nodes,cdr(nodes,e),a),a)
+    return lapply(nodes,car(nodes,e),evlis(nodes,cdr(nodes,e),a),a)
+
+def evcon(nodes,c,a):
+    if "T" == leval(nodes,car(nodes,car(nodes,c)),a):
+        return leval(nodes,car(nodes,cdr(nodes,car(nodes,c))),a)
+    return evcon(nodes,cdr(nodes,c),a)
+
+def evlis(nodes,m,a):
+    if null(m):
+        return "NIL"
+    return cons(nodes,leval(nodes,car(nodes,m),a),evlis(nodes,cdr(nodes,m),a))
+
+
+
+def traverse(nodes):
+    return 1/0
+    
+    
+    

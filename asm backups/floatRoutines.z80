@@ -1,0 +1,1151 @@
+
+
+
+
+Int16ToFloat: ;hl to (de), 
+	;signed
+    xor a
+    bit 7,h
+    jr z,_Int16ToFloatPos
+	 push de
+     ex de,hl
+     or a ;clcf
+     sbc hl,hl
+	 sbc hl,de
+     pop de ;hl is negated
+     ld a,$80
+_Int16ToFloatPos:
+    ld c,a
+    ld a,h
+    or l
+    jr nz,_Int16ToFloatNon0
+     ld (de),a
+     inc de
+     ld (de),a
+     inc de
+     ld (de),a
+     inc de
+     ld (de),a
+     ret
+_Int16ToFloatNon0:
+	ld b,127+14
+    add hl,hl ;bc signed
+_Int16ToFloatSlaLoop:
+	add hl,hl
+    jr c,_Int16ToFloatSlaLoopEnd
+    dec b
+    jr _Int16ToFloatSlaLoop
+    ;a 1 in  the 15th bit decs 0 times, 1st bit decs 14 times
+    
+_Int16ToFloatSlaLoopEnd: 
+	;now we put it in (de)
+    ex de,hl
+    ld a,b
+    srl a
+    rr d
+    rr e
+    or c
+    ld (hl),a
+    inc hl
+    ld (hl),d
+    inc hl
+    ld (hl),e
+    inc hl
+    ld (hl),0
+    ret
+    
+    
+
+floatReciprocal: ;1/(hl) by newton-raphson method
+
+	
+	;Xn+1 = Xn*(2-D*Xn)
+	;initial estimation: negate exponent and subtract 1
+    ; 
+    ; 1/(2^e * m) = 2^-e * 1/m = 2^(-e-1) * 2/m
+    ;	m in [1,2) 1/m in [1,0.5)	   		2/m in [2,1)
+    ;
+	call floatExp
+    ; -exp = -(exp-127)+127
+    
+    ;5 = 1.25e2 1.25->1.75 1.75/n ~= 0.2 = 1.75e-3, e $81 -> $7c
+    ld b,127
+    sub b
+    neg
+    add a,b 
+    dec a
+    ld e,a
+    
+    ;estimation of 2/m
+    ;
+    ; 2/m ~= 3-m
+    ;
+    call floatUMant
+    
+    ;mantissa in abc
+    ;negate m
+    ld d,a ;tmp storage
+    xor a ; res c also
+  
+    sbc a,c ;negative of c
+    ld c,a
+    ld a,0
+    sbc a,b
+    ld b,a
+    ld a,0
+    sbc a,d
+    
+    ld d,$80
+    add a,d
+    ld d,a
+    jr nc,_floatReciprocal_noCarry
+     ;if this happens, it's because  3-m in (1,2] is 2, so we should fudge it down to 2-epsilon
+     ;2-epsilon is 1.111 1111  1111 1111  1111 1111
+     ld a,$ff
+     ld b,a
+     ld c,a
+_floatReciprocal_noCarry:
+	;now we make a float out of it
+    push hl
+    ld hl,_floatReciprocal_x + 1
+    and $7f
+    ld (hl),a
+    inc hl
+    ld (hl),b
+    inc hl
+    ld (hl),c
+    pop hl
+    ld a,e
+    rrca
+    xor (hl)
+    and $7f
+    xor (hl)
+    ld (_floatReciprocal_x),a
+    ld a,e
+    ex de,hl
+    ld hl,_floatReciprocal_x+1
+    rrca
+    xor (hl)
+    and $80
+    xor (hl)
+    ld (hl),a
+    
+    ;now we do our repeated approximation
+    
+    ;D is de now
+   
+    ld b,3 ;3 iterations
+_floatReciprocal_RefineStep: ;;Xn+1 = Xn*(2-D*Xn)
+	push bc
+    ld bc,_floatReciprocal_x ;de is D
+    ld hl,_floatReciprocal_dx
+    call floatMulStoAns
+    ld a,(hl)
+    xor $80
+    ld (hl),a ;negate 
+    push de ;save
+     ld bc,_floatReciprocal_dx
+     ld de,_floatReciprocal_2
+     call floatAddStoAns ;adds bc,de stores at hl
+     
+	 ld de,_floatReciprocal_x
+     ld h,d
+     ld l,e
+     call floatMulStoAns ;bc*de ->hl
+ 	pop de
+    pop bc
+   djnz _floatReciprocal_RefineStep
+    
+    ;now we return reciprocal in hl
+    ret
+    
+    
+_floatReciprocal_x:
+.db 0,0,0,0
+_floatReciprocal_dx: ;Xn+1 = Xn*(2-D*Xn)
+.db 0,0,0,0
+_floatReciprocal_2:
+.db $40,0,0,0  
+	
+    ;x = 48/17 - 32/17 * d
+    ;our guess has to have an error less than 1 to converge
+    
+floatMulStoAns: ;bc*de -> hl, destroys a
+	push bc
+    push de
+    push hl
+    push hl
+    push de
+    ld h,b
+    ld l,c
+    ld de,_floatMulStoAnsBuff1
+    ld bc,4
+    ldir
+    pop hl
+    ld de,_floatMulStoAnsBuff2
+    ld bc,4
+    ldir
+    ld de,_floatMulStoAnsBuff1
+    ld hl,_floatMulStoAnsBuff2
+    call floatMul
+    pop de
+    ld bc,4
+    ldir
+    pop hl
+    pop de
+    pop bc
+    ret
+_floatMulStoAnsBuff1:
+.db 0,0,0,0
+_floatMulStoAnsBuff2:
+.db 0,0,0,0
+
+floatAddStoAns: ;bc+de -> hl, destroys a
+	push bc
+    push de
+    push hl
+    push hl
+    push de
+    ld h,b
+    ld l,c
+    ld de,_floatMulStoAnsBuff1	;this is atomic and not meant to have these buffs persist so I can use them
+    ld bc,4
+    ldir
+    pop hl
+    ld de,_floatMulStoAnsBuff2
+    ld bc,4
+    ldir
+    ld de,_floatMulStoAnsBuff1
+    ld hl,_floatMulStoAnsBuff2
+    call floatAdd
+    pop de
+    ld bc,4
+    ldir
+    pop hl
+    pop de
+    pop bc
+    ret
+
+floatSqrt: ;take square root of float at hl, destroys hl
+	;we will use newtons
+	push hl
+    ld de,_floatSqrt_X
+    ld bc,4
+    ldir
+    pop hl
+    ld de,_floatSqrt_a
+    ld bc,4
+    ldir
+    ld hl,_floatSqrt_X
+    
+    
+    
+    
+    bit 7,(hl)
+    jr z,_floatSqrtPos
+	 ;ret nan    
+     ld (hl),$7f
+     inc hl
+     ld (hl),$84
+     xor a
+     inc hl
+     ld (hl),a
+     inc hl
+     ld (hl),a
+     ret
+_floatSqrtPos:
+    
+    ;first we make a good guess (hopefully to save a lot of time)
+    ; 
+    ; √(2^e * m) = 2^(e/2) * √m
+    ; m is in [1,2) so √m is in [1,√2)
+    ;I will shift right the mantissa (except the implicit bit) to approx √m
+    ;
+    ; error is squared per iteration
+    ; max (proportional) error to start with is 1.5-√2 is ~0.09 is 3.4 bits of precision
+    ; 3 -> 6 -> 12 -> 24
+    ; 3 iterations
+    
+    
+    ld c,0
+    push hl
+    inc hl
+    ld a,(hl)
+    res 7,a
+    srl a
+    rl c
+    ld b,a
+    ld a,(hl)
+    and $80
+    or b
+    ld (hl),a
+    inc hl
+    ld a,(hl)
+    rr c
+    rla
+    ld (hl),a
+    inc hl
+    ld a,(hl)
+    rla
+    ld (hl),a ;done
+    pop hl
+    
+    
+    ld c,0
+    ;now we half the exponent and, if it was odd, multiply by √2
+    call floatExp
+    ld b,127
+    sub b
+    rra ;div by 2
+    jr nc, _floatSqrt_NoSetRoot2Flag
+     inc c
+_floatSqrt_NoSetRoot2Flag:
+    ;now we load the exp back in
+    add a,b
+    call floatSetExp
+    
+    ;now we check if to mul by √2
+    rr c
+    jr nc, _floatSqrt_noMulRoot2
+     ;mul hl by root 2
+     ld d,h
+     ld e,l
+     ld bc,_floatSqrt_root2
+     call floatMulStoAns ;bc*de ->hl
+_floatSqrt_noMulRoot2:
+	
+	ld b,3 ;    
+_floatSqrt_newtonsMethod:	;x = (x+a/x)/2 ,x is (hl), a is (hl)
+	push bc
+    ld hl,_floatSqrt_X
+    call floatReciprocal
+    ex de,hl
+    ld hl,_floatSqrt_AoverX
+    ld bc,_floatSqrt_a
+    call floatMulStoAns
+    ex de,hl
+    ld hl,_floatSqrt_X
+    ld b,h
+    ld c,l
+    call floatAddStoAns ;adds bc,de stores at hl
+    ld b,-1
+    call floatChangeExp ;quick div by 2
+    pop bc
+   djnz _floatSqrt_newtonsMethod
+   ret
+    
+    
+    
+_floatSqrt_root2:
+.db $3f,$b5,$04,$f3    
+_floatSqrt_a:
+.db 0,0,0,0
+_floatSqrt_X:
+.db 0,0,0,0
+_floatSqrt_AoverX:
+.db 0,0,0,0
+
+
+
+floatChangeExp: ;float exp += b, does no checks for inf/nan/subnormal
+    call floatExp
+    add a,b
+floatSetExp: ;sets float exp to a, uses b
+	ld b,0
+    rra
+    rr b
+    xor (hl)
+    and $7f
+    xor (hl)
+    ld (hl),a
+    inc hl
+    ld a,b
+    xor (hl)
+    and $80 ;only keep top now
+    xor (hl)
+    ld (hl),a
+    dec hl
+	ret
+
+
+
+
+floatMulPreserveArgs: ;muls de,hl rets ans at hl, preserved de, saves old hl in bc
+	push hl
+    push de
+    push de
+    ld de,_floatAddPreserveArgsBuff1
+    ld bc,4
+    ldir
+    pop hl
+    ld de,_floatAddPreserveArgsBuff2
+    ld bc,4
+    ldir
+    ld de,_floatAddPreserveArgsBuff2
+    ld hl,_floatAddPreserveArgsBuff1
+    call floatMul
+    pop de
+    pop bc
+    ret
+
+
+
+_floatMulIN:
+    
+    ld b,2
+_floatMulINL:
+	push hl ;quicker than 4 decs 
+    ;check is inf/NaN
+     ld a,(hl)
+     and $80
+     inc hl
+     xor (hl) 
+     and $7f
+     xor (hl) ;a now has exp which has to be 1s
+     ld c,a
+     ld a,(hl)
+     and $7f ;mask off exp
+     inc hl
+     or (hl)
+     inc hl
+     or (hl) ;rets z for inf
+   pop hl
+   	;if nz, is nan/has mantissa
+    ld a,c
+    jr z ,_floatMulINLInf
+	 
+     cp $ff ;if z, it's nan
+     ret z
+     ;it's finite with mantissa
+     ;the other is the inf, so ret it
+     ex de,hl
+     ret
+_floatMulINLInf:
+	;now check if it is 0
+    or a
+    jr nz,_floatMulINNoRetNan
+    ; so now hl is 0
+     ;get inf in hl
+     ex de,hl
+     inc hl
+     inc (hl) 
+     inc (hl) ;ret different error code
+     dec hl
+     ret
+    
+_floatMulINNoRetNan:
+    ;now check if the other is nan
+    ex de,hl
+    djnz _floatMulINL
+    ;now none are nan/0
+    ;so our sign thing makes it so we can just ret now
+    ret
+    
+   
+
+
+;time
+;0*0	~580
+;1*0	~64k (aka too many)
+;
+;
+floatMul: ;muls hl and de, returns ans in (hl), destroys all
+    ;do signs on both so i can ignore them later
+    ld a,(de)
+    and $80
+    xor (hl)
+    ld (hl),a ;xor of signs with hl's exp
+    ld a,(de)
+    xor (hl)
+    and $7f ;take only hl's sign 
+    xor (hl)
+    ld (de),a
+    
+	call floatExp
+    ;check for inf/nan
+    xor $ff
+    jr z,_floatMulIN
+    cpl
+    ld c,a
+    ex de,hl  
+    call floatExp
+    xor $ff
+    jr z,_floatMulIN
+    cpl
+    ;now we add exponents and offset
+   push hl ;signed add with no sign extention
+    ld l,a
+    ld h,0
+    ld b,h
+    add hl,bc 
+    ;now we add offset
+    ;0 0111 1111 1 000 0000 ... is 1
+    ; ex of 127 is 1, so 127 + 127 + c = 127
+    ld bc,-127
+    add hl,bc
+    ld b,h
+    ld c,l
+   pop hl
+    ;now we check for stuff like e>254 and e<0
+    ld a,b
+    rlca ;if c, ret 0
+	jr nc,_floatMulResNotUnder
+     ;return 0
+     push hl
+     ld a,(hl)
+     and $80 ;keep sign
+     ld (hl),a
+     xor a
+     inc hl
+     ld (hl),a
+     inc hl
+     ld (hl),a
+     inc hl
+     ld (hl),a
+     pop hl
+     ret
+	 
+_floatMulResNotUnder:
+	;check for overflow
+    inc bc ;make it so that ff puts a bit in b
+    ld a,b
+    
+    dec bc
+    or a ;if any bits were in b, it's an overflow
+	jr z,_floatMulResNotOver
+_floatMulRetInf:
+    ;return inf
+     push hl
+     ld a,(hl)
+     or $7f ;keep sign
+     ld (hl),a
+     xor a
+     inc hl
+     ld (hl),$80
+     inc hl
+     ld (hl),a
+     inc hl
+     ld (hl),a
+     pop hl
+     ret
+_floatMulResNotOver:
+	;c is exp
+    
+    ;now we can do the mantissa multiplication in peace
+    ;i'll use some large ints 
+    ;
+   	;we can forget de now
+    
+    push hl
+    push bc
+    call floatUMant
+    ld hl,_floatMul_r1
+    ld (hl),a
+    inc hl
+    ld (hl),b
+    inc hl
+    ld (hl),c ;ld into r1
+    inc hl
+    ex de,hl
+    call floatUMant
+    ex de,hl
+    ld (hl),a
+    inc hl
+    ld (hl),b
+    inc hl
+    ld (hl),c ;ld into r2
+    inc hl
+    
+    ld (hl),0 ;zero rAns
+    ld bc,5
+    ld d,h
+    ld e,l
+    inc de
+    ldir
+    
+    ;now we do the multiply
+    ld ixh,24 ;24 bits of multiplying, this is our counter
+_floatMulMulLoop:
+	ld hl,_floatMul_rAns
+    ld b,7
+    call sraBIntB ; shift ans right
+    
+	ld hl,_floatMul_r2
+    ld b,3
+    call sraBIntB ;r2 is our shift right reg
+    jr nc ,_floatMulMulLoopNoAdd
+     ld bc,4 ;32 bits including the guard byte
+     ld hl,_floatMul_rAns
+     ld de,_floatMul_r1extd
+     call addBIntC
+_floatMulMulLoopNoAdd:
+    dec ixh
+    jr nz,_floatMulMulLoop
+    ; ex 1.0 * 1.0
+    ; 
+    ; 00 00 00
+    ; 00 10 00
+    ;ex 1.0 * 1.1 = 1.1
+    ; 00 10 00
+    ; 00 11 00
+    ;ex 1.1 * 1.1 = 10.01
+    ; 00 11 00
+    ; 01 00 10
+    
+    
+    
+    ;ok, now rans has  answer with implicit bit in first byte if exp needs to increase
+    
+    
+    pop bc ;get exp back
+    
+    ld hl,_floatMul_rAns
+    ld a,(hl)
+    or a ;check bit
+    jr z,_floatMulNoIncExp
+     inc hl
+     ex de,hl
+     inc c
+     ld a,c
+     cp $ff
+     pop hl
+     jp z,_floatMulRetInf
+	 
+_floatMulLoad_rAns_and_exp_ca: ;takes exp in c and a, mantissa in rAns+1, (hl) as float
+     rra
+    push hl
+     xor (hl)
+     and $7f ;preserve (hl)'s sign
+     xor (hl)
+     ld (hl),a
+     inc hl
+     
+     ;load the rest
+     ld a,(de)
+     rr c
+     rra
+     ld (hl),a ;byte 2
+     inc hl
+     inc de
+     ld a,(de)
+     rra
+     ld (hl),a ;byte 3
+     inc hl
+     inc de
+     ld a,(de)
+     rra
+     ld (hl),a ;byte 4
+     inc hl
+ 	pop hl
+     ret
+_floatMulNoIncExp:
+	
+    ;normalize
+_floatMulNorm:
+	ld hl,_floatMul_rAns
+    ld b,7
+    call slaBIntB ; shift ans left
+    ld a,(hl)
+    or a
+    jr nz,_floatMulNormalized
+    
+    dec c
+    jr nz,_floatMulNorm
+    ;subnormal case
+    
+    
+_floatMulNormalized:
+    ld de,_floatMul_rAns + 1
+	pop hl
+    ld a,c
+    jr _floatMulLoad_rAns_and_exp_ca
+    
+    
+_floatMul_r1extd:
+.db 0 ;always 0, so it'll carry properly
+_floatMul_r1:
+.db 0,0,0
+_floatMul_r2:
+.db 0,0,0
+_floatMul_rAns: ;7 for guard digit
+.db 0,0,0,0,0,0,0
+    
+
+
+floatExp: ;gets exponent at hl into a
+    ld a,(hl)
+    inc hl 
+    xor (hl)
+    and $7f
+    xor (hl) ;this masks on bit 7 of (hl)
+    dec hl
+    rlca
+    ret
+    
+    
+floatUMant:	;gets float mantissa at hl into abc unsigned
+   push hl ;quicker than 4 decs 
+    ld a,(hl)
+    inc hl 
+    xor (hl)
+    and $7f
+    xor (hl) 
+   ld a,(hl)
+   inc hl
+   ld b,(hl)
+   inc hl
+   ld c,(hl)
+   pop hl
+   jr z,floatUMantSubnormal
+	 or $80 ;implicit 1
+     ret
+floatUMantSubnormal:
+   ;sla also
+   sla c
+   rl b
+   rla
+   ret
+   
+   
+ 
+
+  
+
+
+
+ ;2752 tstates for normal add
+ ;912 tstates when add does nothing
+ ;896 nan + n
+ ;800 inf + n
+ ;864 inf + inf
+ ;
+floatAddPreserveArgs: ;adds de,hl rets ans at hl, preserved de, saves old hl in bc
+	push hl
+    push de
+    push de
+    ld de,_floatAddPreserveArgsBuff1
+    ld bc,4
+    ldir
+    pop hl
+    ld de,_floatAddPreserveArgsBuff2
+    ld bc,4
+    ldir
+    ld de,_floatAddPreserveArgsBuff2
+    ld hl,_floatAddPreserveArgsBuff1
+    call floatAdd
+    pop de
+    pop bc
+    ret
+    
+    
+_floatAddPreserveArgsBuff1:
+.db 0,0,0,0
+_floatAddPreserveArgsBuff2:
+.db 0,0,0,0
+   
+_floatAddINLOtherIsInf:
+	pop hl
+    ex de,hl ;so we return the inf
+    ret
+_floatAddIN:
+    ;check if nan first
+    ld b,2 ;loopcounter
+_floatAddINL:
+   push hl ;quicker than 4 decs 
+    ;check is inf/NaN
+    ld a,(hl)
+    and $7f
+    inc hl 
+    or (hl)
+    xor $ff
+    jr nz,_floatAddINLOtherIsInf
+    
+    ld a,(hl)
+    and $7f ;mask off exp
+    inc hl
+    or (hl)
+    inc hl
+    or (hl)
+   pop hl
+    ret nz ;if nan, ret it 
+    ;now we do inf case
+    ex de,hl
+  djnz _floatAddINL
+   ;ok so they are both infs now
+   ;ret nan if they have opposite signs
+   ld a,(de)
+   xor (hl)
+   ;do sign , cc is p because that means not S which means signs the same
+   ret p 
+   ;ret a nan
+   inc hl
+   inc (hl) ; 1000 0000 to 1000 0001
+   dec hl
+   ret
+   
+;big endian: .db $3f,$80,$00,$00 is 1
+floatAdd: ;adds (hl) to (de) result in (hl), destroys float at de
+	; 0 0111111;1 000 0000;0000 0000;0000 0000 = 1
+
+    call floatExp
+    ;check for inf/nan
+    xor $ff
+    jr z,_floatAddIN
+    cpl
+    ld b,a
+    ex de,hl  ;(2,1)
+    call floatExp
+    xor $ff
+    jr z,_floatAddIN
+    cpl
+    sub b
+    ;
+    ;a < b, C set ( (a,b):(1,2)
+    jr nc ,_floatAddnoSwap
+     ex de,hl ;(1,2)
+     neg
+_floatAddnoSwap:
+	
+    ;now (hl) has the highest exp, a has difference in exps
+    
+	;now we can do the add
+    ;a is unsigned
+    ;if a > 25, the addition has no effect
+    
+    cp 26
+    ;a < num, c set
+	ret nc
+    push af;a is our difference in exponents
+     ;save it
+    push de ; save so we can use for pointers
+
+    ;now we do the actual adds
+    ;I'll be using some int40s for this
+    
+    ld de,_floatAdd_r1 
+	call floatUMant ;load (1) into r1
+    ex de,hl
+    ld (hl),0
+    inc hl
+    ld (hl),a
+    inc hl
+    ld (hl),b		;load this way for sign byte and guard byte
+    inc hl
+    ld (hl),c
+    inc hl
+    ld (hl),0
+    inc hl ;sets hl to r2
+    ex de,hl
+    ex (sp),hl ;swap pointers to floats
+    call floatUMant ;load (2) into r2
+    ex de,hl
+    ld (hl),0
+    inc hl
+    ld (hl),a
+    inc hl
+    ld (hl),b
+    inc hl
+    ld (hl),c
+    inc hl
+    ld (hl),0
+    
+    
+    ;now we do stuff with r1 and r2
+    
+    ;do signs
+    ;de is (2)
+    ld a,(de)
+    ld hl,_floatAdd_r2
+    rla ;put sign into carry
+    call c,negBInt40
+	ex de,hl
+    ex (sp),hl 
+    ex de,hl   ;get (1) into de
+    
+    ld a,(de)
+    ld hl,_floatAdd_r1
+    rla ;put sign into carry
+    call c,negBInt40
+    
+    ;now we do the shifts
+    pop hl
+    pop af
+    ;hl:(2),de:(1),a:expdiff
+    ld (_floatAdd_p2),hl
+    ex de,hl
+	ld (_floatAdd_p1),hl
+    ;now we can just use hl and de for stuff
+    ld b,a 
+    ;now we compute loops and stuff
+    ld hl,_floatAdd_r2
+    sra a ;sra is ok because a < 26
+    sra a
+    sra a ;a //= 8
+    jr z,_floatAddSmallShift
+     ld c,a
+     push bc; save this
+     ld ixh,a ;counter
+_floatAddLargeShiftLoop:
+      call sraBInt40_8
+      dec ixh
+      jr nz,_floatAddLargeShiftLoop
+     ;now we correct b
+     pop bc
+     ld a,c
+     rlca
+     rlca
+     rlca
+     neg
+     add a,b
+     ld b,a
+_floatAddSmallShift: 
+    ld a,b
+    or a;flags
+    jr z,_floatAddNoShift
+_floatAddSmallShiftLoop:
+     call sraBInt40
+     dec a ;a is preserved
+    jr nz,_floatAddSmallShiftLoop
+_floatAddNoShift:
+    ;now they are all shifted properly so now we add
+	ld de,_floatAdd_r1
+    call addBInt40 ;our result is in r2
+    
+    ld a,(hl)
+    and $80; just sign
+    ;now we do sign
+    ld (_floatAdd_resSign),a ;this is in r1 so it's safe
+    call nz,negBInt40 ;make it positive
+    
+    
+    ;now we do the renormalize
+    
+    ;check for 0 case
+    ld a,(hl)
+    ld b,4
+_floatAddCheck0:
+    inc hl
+    or (hl)
+	djnz _floatAddCheck0
+	jr nz,_floatAddResNot0
+	 ;now we ret 0 in (hl)
+     ld hl,(_floatAdd_p1)
+     xor a
+	 ld (hl),a
+     inc hl
+     ld (hl),a
+     inc hl
+     ld (hl),a
+     inc hl
+     ld (hl),a
+     ld hl,(_floatAdd_p1)
+     ret
+
+_floatAddResNot0:
+	;now we do the shift game
+	;check bit 0,0 of r2 to see if to inc exp
+    ld hl,_floatAdd_r2
+    ld a,(hl)
+    rrca ;put into carry
+    jr nc,_floatAddResNotLargerExp
+	 ;check for inf
+     ld hl,(_floatAdd_p1)
+     call floatExp
+     inc a
+     ld c,a
+     xor $ff ;check for inf
+     jr nz,_floatAddResNotInf
+     	;return ±inf
+        ld a,(hl)
+        or $7f
+        ld (hl),a
+        inc hl
+        ld (hl),$80
+     	inc hl
+        xor a
+     	ld (hl),a
+     	inc hl
+     	ld (hl),a
+        ld hl,(_floatAdd_p1)
+        ret
+_floatAddResNotInf:
+	  xor $ff
+      jr _floatAddResNotInfEnd
+_floatAddResNotLargerExp:
+	;now we do the bit shift game
+    ;c is our exp
+    ld hl,(_floatAdd_p1)
+    call floatExp
+    inc a
+    ld c,a
+    ;dec c
+    ld hl,_floatAdd_r2
+_floatAddNormShiftLoop:
+     ld a,(hl)
+     or a
+     jr nz ,_floatAddStoreRes
+	 call slaBInt40
+    dec c
+    jr nz,_floatAddNormShiftLoop
+	;subnormal case
+    call sraBInt40
+    
+    
+_floatAddStoreRes:
+_floatAddResNotInfEnd:
+    ;now we load it back together
+    ld hl,_floatAdd_r2+1
+    ld e,c
+    ld b,(hl)
+    inc hl
+    ld c,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    bit 0,d
+    jr z, _floatAddnoroundUp ;round ties to odd
+     set 1,d;1 for the sr later
+_floatAddnoroundUp:
+	
+    ld a,e
+    srl a
+    rr b
+    rr c
+    rr d ;srl abcd
+    
+    ld hl,_floatAdd_resSign
+    or (hl) ;get sign
+    
+	ld hl,(_floatAdd_p1)
+	ld (hl),a
+    inc hl
+    ld (hl),b
+    inc hl
+    ld (hl),c
+    inc hl
+    ld (hl),d
+    ld hl,(_floatAdd_p1)
+    ret;finally done
+    
+
+_floatAdd_p1:
+.db 0,0
+_floatAdd_p2:
+.db 0,0
+_floatAdd_r1:
+_floatAdd_resSign:
+.db 0,0,0,0,0
+_floatAdd_r2:
+.db 0,0,0,0,0
+    
+
+
+;BInt is big endian int (ie first in mem is msb)
+sraBInt40: ;sras int40 at hl, destroys b
+    ld b,5
+sraBIntB: 
+    push hl ;faster than decing
+    ;set carry to sign
+    rlc (hl) 
+    rrc (hl) 
+_sraBInt40Loop:
+     rr (hl)
+     inc hl ;no effect on Carry
+	djnz _sraBInt40Loop
+    pop hl
+    ret 
+
+slaBInt40: ;slas int40 at hl, destroys a,b
+    ld b,5
+slaBIntB: 
+    ld a,l
+    add a,b
+    ld l,a
+    ld a,0
+    adc a,h
+    ld h,a
+    or a;ccf
+_slaBInt40Loop:
+     dec hl
+     rl (hl)
+	djnz _slaBInt40Loop
+    ret 
+    
+sraBInt40_8: ;sras int40 at hl by 8 bits, destroys bc,de,a
+    ld bc,5
+sraBIntBC_8: 
+	dec bc
+	add hl,bc  
+    ;shift right = shift upwards so I need lddr
+    ld d,h
+    ld e,l
+    ;dest is 1 more than hl
+    dec hl
+	lddr
+    ;now sign extend
+    ;hl is back where it was 
+    ex de,hl
+    ld a,(hl)
+    rla ;put sign into carry
+    ld a,0
+    sbc a,a ;if carry, a is ff
+    ld (hl),a
+    ret 
+    
+negBInt40: ;negs int40 at hl, destroys a,b
+    ld b,5
+negBIntB: 
+    ld a,l
+    add a,b
+    ld l,a
+    ld a,0
+    adc a,h
+    ld h,a
+    xor a ;res c
+_negBInt40Loop:
+     dec hl
+     sbc a,(hl)
+     ld (hl),a
+     ld a,0
+	djnz _negBInt40Loop
+    ret 
+
+
+
+addBInt40: ;add hl,de where both are int40's, destroys (hl), bc
+    ld bc,5
+addBIntC: ;add hl,de where both are size C bytes, b must be 0
+    add hl,bc
+    ex de,hl
+    add hl,bc
+    ex de,hl
+    ld b,c
+    xor a;clear carry and a
+_addBInt40Loop:
+     dec de ;no effect on Carry
+     ld a,(de)
+     dec hl
+     adc a,(hl)
+     ld (hl),a
+    
+	djnz _addBInt40Loop
+    ret ;also rets carry flag if result had carry
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+

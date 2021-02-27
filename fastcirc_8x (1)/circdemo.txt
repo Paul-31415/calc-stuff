@@ -1,0 +1,18 @@
+Arrows    Move circle center
+[+]       Increase circle radius
+[-]       Decrease circle radius
+[CLEAR]   Exit
+
+
+Drool-proof instuctions
+TI-82:
+  Hit [PRGM], move hilight to CRASH, press [ENTER] twice, move
+  hilight to "FastCircle Demonstration", press [ENTER].
+TI-83:
+  Hit [PRGM], move hilight to A, press [ENTER] twice, move hilight
+  to "FastCircle Demonstration", press [ENTER].
+TI-83 Plus:
+  Hit [2nd][0], move arrow to Asm(, press [ENTER], press [PRGM], move
+  hilight to CIRCDEMO, press [ENTER] twice.
+TI-86:
+  Type Asm(circdemo), press [ENTER].

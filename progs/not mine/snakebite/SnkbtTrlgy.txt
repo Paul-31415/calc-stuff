@@ -1,0 +1,40 @@
+
+Second Table Productions presents...
+
+
+
+			S  N  A  K  E  B  I  T  E
+				TRILOGY
+
+
+----------------------------------------------------------------------
+
+SNAKEBITE v1.9-
+	This is the original Snakebite.  The object of the game is to 
+	remain in the room as long as possible.  The snake can bounce 
+	off the ceiling and floor but the game ends if you touch your-
+	self or the barriers.
+
+SNAKEBITE v2.2-
+	The second version Snakebite. This one is a little bit faster 
+	than the original and includes a random level generator.  The
+	object of the game is the same as it is in the original.
+
+SNAKEBITE v3.o-
+	The final version of Snakebite.  This version has many 
+	improvements that include:
+			-very fast,
+			-better level generator,
+			-cool graphics.
+
+	The object of version 3.0 is different from the others.  In 
+version 3.o, you push [2nd] to make the snake "bounce" whenever you 
+want it to.  This version is alot faster and more challenging than the 
+others, so don't get mad when you can't get it right the first time.
+
+Thanks for dl!
+
+E-mail me for suggestions, comments, and/or glitches.
+
+S.Brush,
+x-follower@Juno.com

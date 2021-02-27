@@ -1,0 +1,219 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;; LOGO ;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+#include "stdheader.h"
+
+IONHEADER("test")
+	xor	a
+	ret
+
+/*
+ * Line parsing
+ */
+
+	near skip
+	endskip
+	near skip\	endskip
+near skip\endskip
+
+/*
+ * Case sensitivity
+ */
+
+near skip z\endskip
+NEAR SKIP Z\ENDSKIP
+Near Skip Z\EndSkip
+
+/*
+ * Comment tests
+ */
+
+;asm comment 1
+	;asm comment 2
+	ld	a,(IX+(2-3)) ;asm comment 3
+//c++ comment 1
+	//c++ comment 2
+	ld	a,(IX+(2-3)) //c++ comment 3
+/* c comment 1 */
+	/* c
+	comment
+	2 */
+	ld	a,(IX+(2-3)) /* c comment 3 */
+	ld/* c comment 4 */a,(IX+(2-3))
+	ld/* c
+	comment
+	5*/a,(IX+(2-3))
+/*
+ * prefix tests
+ */
+
+	near skip\endskip
+	near skip z\endskip
+	near skip p\endskip
+
+	size skip\endskip
+	size skip z\endskip
+	size skip p\endskip
+
+	far skip\endskip
+	far skip z\endskip
+	far skip p\endskip
+
+	speed skip\endskip
+	speed skip z\endskip
+	speed skip p\endskip
+
+/*
+ * option tests
+ */
+
+	do
+option "prefix" "_C"
+		near skip\endskip
+	enddo
+option "prefix" "C"
+
+option "anonprefix" "anon"
+@@:	jr	@B
+option "anonprefix" "A"
+
+option near
+	skip\endskip
+	skip z\endskip
+	skip p\endskip
+
+option size
+	skip\endskip
+	skip z\endskip
+	skip p\endskip
+
+option far
+	skip\endskip
+	skip z\endskip
+	skip p\endskip
+
+option speed
+	skip\endskip
+	skip z\endskip
+	skip p\endskip
+
+/*
+ * String constant tests
+ */
+
+	.db 'c','h','a','r','"','\'
+	.db "str","'quote'"
+	.db "label: @@"
+	.db "skip\\endskip"
+	.db "\"more qoutes\""
+	.db ";comments"
+	.db "//comments"
+	.db "/*comments*/"
+	.db "tricky escape\\"
+
+/*
+ * Anonymous label tests
+ */
+
+@@:	jr @B
+@@:	jr @2B
+	jr @2F
+@@:	jr @F
+@@
+
+/*
+ * condition tests
+ */
+
+far skip z\endskip
+far skip eq\endskip
+
+far skip nz\endskip
+far skip ne\endskip
+
+far skip c\endskip
+far skip a<n\endskip
+far skip n>a\endskip
+
+far skip nc\endskip
+far skip a>=n\endskip
+far skip n<=a\endskip
+
+far skip p\endskip
+
+far skip m\endskip
+
+far skip pe\endskip
+far skip v\endskip
+
+far skip po\endskip
+far skip nv\endskip
+
+skip djnz\endskip
+if ndjnz\endif
+
+/*
+ * skip/if tests
+ */
+
+	near skip
+	endskip
+
+	near skip
+	near else
+	endskip
+
+	near skip z
+	near else
+	endskip
+
+	near if
+	endif
+
+	near if
+	near else
+	endif
+
+	near if nz
+	near else
+	endif
+
+/*
+ * loop tests
+ */
+
+	do
+	enddo
+
+	do
+	near loop
+
+	do
+	near until
+
+	do
+	loop djnz
+
+	do
+	near loop z
+
+	do
+	near until nz
+
+	do
+	near while z
+
+	do
+		do
+			near	again
+			near	again	z
+			near 2	again
+			
+			near	break
+			near	break	z
+			near 2	break
+		enddo
+	enddo
+
+

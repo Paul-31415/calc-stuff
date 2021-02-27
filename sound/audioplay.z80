@@ -1,0 +1,836 @@
+ 
+    
+
+#include "ti83plus.inc"
+#define     progStart   $9D95
+.org        progStart-2
+.db         $BB,$6D
+
+tests:
+	;fast mode
+	ld a,1
+    out ($20),a
+    
+    di
+mainLoop:
+    
+    ld a,$ff
+    out (1),a
+    
+    ld hl,(active_wave)
+	ld a,(wave_stretch)
+    ld e,a
+    ld a,$fd
+    out (1),a
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    inc hl
+    ld ix,64
+    call play4_hl_bc_rate_e_ix_times
+	
+    ;getkey
+    in a,(1)
+    rra
+    jr c,enter_not_pressed
+     ld hl,(active_wave)
+     call shift_right_wave
+     ld hl,saveSScreen
+     ld (active_wave),hl
+     jr mainLoop
+enter_not_pressed:
+    rra
+    jr c,plus_not_pressed
+     ;freq up
+     ld a,(wave_stretch)
+     dec a
+     ld (wave_stretch),a
+     jr mainLoop
+plus_not_pressed:
+    rra
+    jr c,minus_not_pressed
+     ;freq down
+     ld a,(wave_stretch)
+     inc a
+     ld (wave_stretch),a
+     jr mainLoop
+minus_not_pressed:
+    rra
+    jr c,times_not_pressed
+     ;wave next
+     ld a,(which_wave)
+     inc a
+     ld b,a
+     call get_bth_wave
+     ld a,(hl)
+     inc hl
+     or (hl)
+     jr z,mainLoop
+      ld a,(which_wave)
+      inc a
+      ld (which_wave),a
+      dec hl
+      ld (active_wave),hl
+     jr mainLoop
+times_not_pressed:
+    rra
+    jr c,divide_not_pressed
+     ;wave prev
+     ld a,(which_wave)
+     dec a
+     bit 7,a
+     jr nz,mainLoop
+     ld (which_wave),a
+     ld b,a
+     call get_bth_wave
+     ld (active_wave),hl
+     jr mainLoop
+divide_not_pressed:
+    rra
+    jr c,mainLoop
+    xor a
+    out (0),a
+    ei
+	ret 
+wave_stretch:
+.db 0
+which_wave:
+.db 0
+
+active_wave:
+.dw wavetable
+	
+    
+get_bth_wave:
+	ld hl,wavetable
+    ld a,b
+    or a
+    ret z
+_get_bth_wave_next:
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    inc de
+    srl d
+    rr e
+    add hl,de
+    djnz _get_bth_wave_next
+    ret
+	
+shift_right_wave: ;copies the wave at hl into saveSScreen right shifted one
+	ld de,saveSScreen
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    inc hl
+    ex de,hl
+    ld (hl),c
+    inc hl
+    ld (hl),b
+    inc hl
+    ex de,hl
+    
+    inc bc
+    srl b
+    rr c
+shift_right_wave_loop:
+	ld a,(hl)
+    and $ee
+    rrca
+    ld (de),a
+    inc hl
+    inc de
+    dec bc
+    ld a,b
+    or c
+    jr nz,shift_right_wave_loop
+    ret
+    
+    
+    
+; 362+2e
+; 41,436.46hz to 17,201.83hz at 15Mhz
+wavetable: ;format: [word len, bytes*(len/2)], freqs given are max freqs
+.dw 4 ;simple square
+.db $0f,$0f
+;simple saw: 2,590hz
+.dw 16
+.db $01,$23,$45,$67, $89,$ab,$cd,$ef
+;triangle: 1,381hz
+.dw 30
+.db $01,$23,$45,$67, $89,$ab,$cd,$ef, $ed,$cb,$a9,$87, $65,$43,$21
+;square:
+
+;undithered sine-table:
+.dw 377 ;55-110 ;109.911
+.db $88,$88,$88,$88,$99,$99,$99,$99,$aa,$aa,$aa,$aa,$bb,$bb,$bb,$bb,$cc,$cc,$cc,$cc,$cd,$dd,$dd,$dd,$dd,$de,$ee,$ee,$ee,$ee,$ee,$ee,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$fe,$ee,$ee,$ee,$ee,$ee,$ee,$dd,$dd,$dd,$dd,$dd,$cc,$cc,$cc,$cc,$cc,$bb,$bb,$bb,$bb,$aa,$aa,$aa,$aa,$99,$99,$99,$98,$88,$88,$88,$87,$77,$77,$77,$76,$66,$66,$66,$55,$55,$55,$55,$44,$44,$44,$44,$33,$33,$33,$33,$33,$22,$22,$22,$22,$22,$11,$11,$11,$11,$11,$11,$10,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$11,$11,$11,$11,$11,$11,$12,$22,$22,$22,$22,$23,$33,$33,$33,$33,$44,$44,$44,$44,$55,$55,$55,$55,$66,$66,$66,$66,$77,$77,$77,$70
+.dw 188 ;110-220 ;220.406
+.db $88,$88,$99,$99,$aa,$aa,$bb,$bb,$cc,$cc,$cd,$dd,$dd,$ee,$ee,$ee,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$fe,$ee,$ee,$ed,$dd,$dd,$cc,$cc,$cb,$bb,$ba,$aa,$a9,$99,$98,$88,$87,$77,$66,$66,$55,$55,$44,$44,$33,$33,$32,$22,$22,$11,$11,$11,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01,$11,$11,$12,$22,$22,$33,$33,$34,$44,$45,$55,$56,$66,$67,$77
+.dw 94 ;220-440 ;440.813
+.db $88,$99,$aa,$bb,$cc,$cd,$de,$ee,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ee,$ed,$dc,$cc,$bb,$aa,$99,$88,$76,$65,$54,$43,$33,$22,$11,$10,$00,$00,$00,$00,$00,$00,$00,$01,$11,$22,$33,$34,$45,$56,$67
+.dw 47 ;440-880 ;881.63
+.db $89,$ab,$cc,$de,$ff,$ff,$ff,$ff,$ee,$dc,$ba,$98,$76,$54,$32,$11,$00,$00,$00,$00,$12,$33,$45,$60
+.dw 24 ;880-1760 ;1726.52
+.db $8a,$cd,$ef,$ff,$ed,$ca,$85,$32,$10,$00,$12,$35
+.dw 12 ;1760-3520
+.db $8c,$ef,$ec,$83,$10,$13
+.dw 6  ;3520-7040
+.db $8e,$e8,$11
+.dw 3 ;7040-14080
+.db $8e,$10
+;2 ulp dithered sine table
+.dw 377
+.db $78,$88,$89,$88,$99,$99,$9a,$99,$aa,$aa,$aa,$ba,$ab,$bb,$bb,$cc,$cc,$bc,$cc,$cc,$dd,$dd,$dd,$dd,$dd,$de,$ed,$ed,$ee,$ee,$ee,$ef,$ff,$fe,$ee,$fe,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ef,$ff,$ff,$fe,$ff,$ee,$ef,$ee,$dd,$ed,$ed,$dd,$dd,$dd,$dd,$cd,$cc,$cc,$cc,$cc,$bb,$bb,$bb,$ab,$ab,$ba,$a9,$aa,$aa,$99,$98,$98,$88,$88,$88,$78,$77,$77,$77,$76,$66,$66,$66,$56,$55,$55,$54,$44,$44,$44,$44,$43,$34,$33,$33,$23,$33,$32,$22,$22,$21,$11,$11,$11,$11,$11,$11,$01,$00,$01,$01,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01,$00,$11,$11,$11,$11,$12,$12,$22,$22,$23,$23,$33,$33,$33,$33,$33,$34,$44,$44,$44,$44,$55,$55,$56,$65,$66,$66,$66,$77,$77,$78,$70
+.dw 188
+.db $88,$98,$99,$a9,$9a,$aa,$bb,$bb,$bc,$cc,$dd,$dd,$de,$ed,$ee,$ff,$ee,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$ee,$ee,$de,$ee,$de,$dc,$dc,$dc,$cc,$cb,$ba,$aa,$a9,$99,$98,$88,$87,$77,$76,$66,$55,$55,$44,$43,$33,$33,$32,$32,$11,$11,$11,$11,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01,$00,$10,$01,$11,$21,$21,$33,$33,$33,$44,$34,$45,$55,$56,$66,$67,$77
+.dw 94
+.db $88,$8a,$aa,$bb,$bc,$cd,$de,$ee,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$fe,$ee,$ee,$dc,$cc,$ba,$aa,$99,$88,$77,$65,$54,$44,$33,$22,$11,$10,$00,$00,$00,$00,$00,$00,$00,$11,$12,$22,$23,$34,$55,$56,$67
+.dw 47
+.db $79,$ab,$cd,$dd,$ff,$ff,$ff,$ff,$ee,$dc,$bb,$98,$76,$54,$32,$11,$10,$00,$00,$00,$12,$24,$45,$60
+.dw 24
+.db $89,$cd,$ff,$ff,$fd,$ba,$86,$31,$00,$00,$12,$35
+.dw 12
+.db $8c,$ff,$fb,$83,$00,$03
+.dw 6
+.db $7e,$e8,$01
+.dw 3
+.db $7e,$0
+;2 ulp dithered triangle wave table
+.dw 377
+.db $ff,$ff,$ff,$ff,$ff,$ef,$ff,$ee,$ef,$ee,$ed,$ee,$dd,$dd,$dd,$dc,$dc,$dc,$cd,$dc,$cc,$cc,$cc,$bc,$cc,$bb,$cb,$ba,$aa,$ab,$ab,$ba,$ba,$a9,$aa,$a9,$a9,$99,$99,$99,$89,$99,$88,$88,$88,$78,$88,$77,$87,$77,$77,$77,$76,$76,$76,$66,$66,$66,$65,$65,$55,$55,$55,$55,$54,$55,$44,$44,$43,$34,$33,$33,$33,$33,$33,$23,$32,$23,$22,$32,$22,$12,$11,$22,$11,$11,$11,$01,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01,$10,$00,$01,$10,$11,$11,$12,$12,$21,$12,$22,$22,$22,$23,$32,$23,$32,$33,$33,$33,$34,$33,$44,$44,$44,$45,$45,$55,$55,$55,$55,$56,$66,$66,$66,$66,$66,$67,$77,$77,$77,$77,$78,$87,$77,$88,$88,$88,$89,$89,$99,$89,$99,$99,$99,$a9,$aa,$aa,$aa,$aa,$ab,$ba,$aa,$bb,$bb,$bb,$bc,$bb,$cc,$cc,$cc,$cc,$cc,$cd,$dd,$dd,$dd,$ed,$dd,$ee,$ee,$ee,$ee,$fe,$ef,$ff,$ff,$ff,$ff,$ff,$f0
+.dw 188
+.db $ff,$ff,$ff,$ff,$ee,$ee,$ed,$dd,$dc,$cc,$cc,$cb,$cb,$bb,$aa,$ba,$aa,$aa,$99,$98,$88,$88,$88,$87,$77,$77,$77,$76,$65,$56,$56,$55,$55,$54,$34,$44,$33,$33,$22,$22,$21,$21,$11,$11,$11,$00,$00,$00,$00,$00,$10,$11,$11,$22,$12,$22,$33,$33,$34,$34,$44,$44,$44,$55,$65,$66,$67,$76,$66,$78,$78,$88,$88,$98,$99,$99,$a9,$aa,$aa,$aa,$bb,$bc,$bc,$bb,$dc,$cd,$dd,$dd,$dd,$de,$ef,$ef,$ff,$ff
+.dw 94
+.db $ff,$fe,$fe,$ed,$cd,$cb,$bb,$bb,$a9,$a9,$98,$87,$77,$76,$66,$55,$45,$44,$33,$23,$21,$10,$00,$00,$00,$01,$12,$13,$23,$34,$45,$55,$56,$66,$67,$78,$88,$99,$aa,$ab,$bb,$cc,$cd,$de,$ee,$ef,$ff
+.dw 47
+.db $fe,$ed,$dc,$bb,$a9,$98,$76,$65,$53,$33,$12,$10,$01,$12,$24,$44,$56,$68,$89,$9a,$bb,$dd,$ee,$f0
+.dw 24
+.db $fe,$db,$a9,$76,$54,$20,$01,$33,$56,$78,$ab,$de
+;2 ulp dithered sawtooth wave table
+.dw 377
+.db $00,$00,$00,$00,$00,$00,$00,$00,$01,$01,$01,$01,$11,$11,$10,$11,$11,$11,$11,$12,$12,$11,$22,$22,$12,$22,$12,$21,$21,$22,$22,$22,$22,$22,$22,$22,$23,$33,$33,$32,$33,$33,$33,$33,$33,$33,$34,$44,$33,$34,$43,$34,$44,$44,$54,$45,$44,$44,$44,$54,$55,$55,$55,$45,$55,$55,$55,$55,$65,$56,$55,$66,$55,$65,$66,$66,$66,$66,$66,$67,$66,$66,$67,$67,$67,$77,$77,$77,$77,$77,$77,$88,$87,$87,$88,$88,$77,$88,$87,$88,$88,$88,$88,$88,$98,$89,$89,$99,$99,$99,$89,$99,$99,$99,$99,$99,$99,$99,$aa,$99,$a9,$aa,$aa,$aa,$aa,$ab,$bb,$aa,$ab,$ba,$aa,$ba,$bb,$bb,$bb,$bb,$bb,$cb,$bb,$cb,$bc,$bb,$cc,$bc,$cb,$cb,$cc,$cc,$cc,$cc,$dd,$dc,$dd,$dc,$dc,$dd,$cd,$dc,$dd,$dd,$dd,$dd,$dd,$ed,$dd,$dd,$ee,$ee,$ee,$de,$ee,$ef,$ee,$fe,$ee,$ee,$ff,$fe,$ff,$ff,$fe,$ff,$ff,$ff,$ff,$ff,$ff,$ff,$f0
+.dw 188
+.db $00,$00,$00,$00,$00,$01,$11,$00,$11,$11,$11,$11,$12,$22,$22,$22,$22,$23,$22,$33,$33,$33,$33,$34,$44,$44,$44,$44,$45,$54,$54,$55,$55,$55,$65,$56,$66,$66,$66,$66,$66,$67,$77,$77,$77,$87,$77,$78,$78,$88,$88,$89,$88,$89,$99,$99,$99,$99,$aa,$aa,$aa,$9a,$aa,$ab,$ba,$ba,$bb,$bb,$bc,$bb,$cc,$bc,$bc,$cc,$cc,$dd,$cc,$dc,$cd,$dd,$dd,$dd,$ee,$ee,$ee,$ee,$fe,$fe,$ff,$fe,$ff,$ff,$ff,$ff
+.dw 94
+.db $00,$00,$00,$01,$11,$11,$12,$22,$22,$32,$33,$33,$33,$45,$54,$45,$55,$66,$56,$66,$76,$77,$77,$87,$88,$88,$99,$99,$99,$9a,$aa,$aa,$ab,$bb,$bc,$bb,$cc,$cd,$dc,$dd,$dd,$ed,$de,$ff,$ee,$ff,$ff
+.dw 47
+.db $00,$00,$11,$22,$22,$33,$34,$45,$55,$66,$67,$77,$88,$98,$99,$aa,$ba,$bb,$cc,$dd,$dd,$ee,$ef,$f0
+.dw 24
+.db $00,$12,$33,$44,$56,$67,$88,$9a,$ab,$cc,$dd,$ef
+;chords:
+;2:3
+.dw 188
+.db $78,$99,$aa,$cc,$dd,$dd,$ee,$ef,$ff,$ff,$ff,$fe,$ee,$ed,$dc,$bb,$ba,$99,$97,$86,$75,$65,$55,$43,$33,$33,$22,$33,$33,$33,$34,$44,$45,$55,$55,$77,$77,$77,$78,$88,$88,$98,$98,$88,$88,$87,$78,$78,$78,$77,$76,$67,$77,$77,$77,$77,$78,$88,$89,$9a,$aa,$aa,$ab,$bb,$cc,$cc,$cd,$dd,$cc,$cc,$cc,$ba,$ba,$a9,$98,$87,$76,$55,$44,$33,$22,$21,$11,$00,$00,$00,$00,$01,$11,$23,$33,$44,$45,$67
+;3:4
+.dw 188
+.db $78,$9a,$cc,$dd,$ee,$ef,$ff,$ff,$ef,$fd,$dd,$cb,$a9,$87,$75,$54,$43,$22,$11,$21,$11,$12,$22,$34,$44,$55,$77,$88,$99,$aa,$bb,$bb,$bb,$bb,$bb,$ba,$aa,$99,$98,$88,$88,$77,$77,$76,$77,$77,$77,$87,$88,$88,$88,$88,$88,$78,$87,$77,$76,$66,$55,$44,$54,$44,$44,$44,$55,$56,$66,$78,$9a,$9b,$bc,$cd,$dd,$ee,$ee,$de,$dd,$dc,$cb,$a9,$88,$66,$55,$42,$22,$10,$00,$00,$00,$00,$12,$23,$45,$56
+;4:5
+.dw 188
+.db $88,$ab,$cd,$de,$ff,$ff,$ff,$ee,$db,$aa,$87,$65,$43,$32,$11,$11,$01,$12,$33,$45,$66,$78,$aa,$ab,$cd,$dc,$dd,$cc,$bb,$a9,$a8,$87,$76,$65,$65,$55,$54,$55,$65,$66,$76,$77,$88,$78,$88,$88,$88,$88,$87,$77,$77,$78,$87,$88,$98,$9a,$aa,$aa,$aa,$ab,$aa,$a9,$87,$77,$65,$44,$43,$23,$32,$22,$33,$44,$56,$88,$aa,$bc,$dd,$ee,$ee,$fe,$dd,$dc,$ba,$87,$66,$43,$22,$10,$00,$00,$00,$12,$34,$56
+;5:6
+.dw 188
+.db $89,$ac,$de,$ff,$ff,$ff,$ed,$cb,$98,$65,$43,$11,$00,$10,$12,$24,$56,$78,$aa,$cc,$de,$dd,$dd,$cb,$aa,$98,$66,$64,$44,$44,$33,$44,$55,$67,$78,$99,$9a,$9a,$aa,$99,$99,$88,$88,$77,$78,$77,$78,$78,$88,$88,$88,$87,$77,$76,$66,$56,$55,$66,$66,$67,$89,$99,$ab,$bb,$cc,$cc,$ba,$a9,$87,$66,$53,$22,$12,$22,$22,$34,$67,$79,$ac,$ce,$de,$ff,$ee,$dc,$ca,$97,$64,$32,$20,$00,$00,$02,$24,$46
+;6:7
+.dw 188
+.db $89,$bc,$ef,$ff,$ff,$ec,$b9,$87,$43,$21,$10,$00,$12,$35,$68,$9b,$cd,$ee,$ee,$dd,$cb,$98,$76,$43,$33,$22,$33,$45,$56,$89,$9a,$ab,$bc,$bb,$a9,$98,$87,$66,$65,$55,$66,$66,$77,$88,$88,$88,$88,$87,$78,$77,$87,$88,$89,$99,$99,$99,$98,$98,$77,$66,$45,$44,$44,$44,$66,$88,$9a,$cc,$cd,$dd,$cb,$ba,$97,$65,$32,$21,$11,$12,$35,$67,$8a,$bd,$ef,$ff,$fd,$dc,$a8,$75,$42,$10,$00,$00,$23,$46
+;7:8
+.dw 188
+.db $79,$bd,$ef,$ff,$fd,$cb,$86,$43,$20,$00,$01,$24,$68,$9b,$ce,$ee,$ee,$dc,$a9,$75,$43,$21,$11,$23,$56,$78,$aa,$cc,$dd,$cb,$a9,$87,$65,$55,$44,$55,$56,$78,$88,$99,$a9,$99,$98,$87,$88,$78,$77,$88,$88,$78,$87,$76,$66,$55,$65,$66,$77,$89,$aa,$ab,$aa,$a9,$98,$76,$54,$43,$33,$35,$56,$89,$ac,$cd,$de,$dc,$ca,$87,$54,$31,$01,$12,$34,$67,$9b,$ce,$ef,$fe,$dc,$a8,$75,$21,$00,$00,$12,$45
+;square wave
+.dw 32
+.db $00,$00,$00,$00, $00,$00,$00,$00, $ff,$ff,$ff,$ff, $ff,$ff,$ff,$ff
+.dw 0;end 
+    
+    
+    
+signed_saturating_add_a_b:
+	add a,b
+    ret po ;parity odd = overflow false
+    ;sign of result is wrong then
+    ld a,$80
+    ret p ;positive is sign = 0 is result should be -128
+    ;result should be 127
+    dec a
+    ret ;15/27/35
+    
+    
+nibble_add_a_b: ;adds a and b as nibble vectors
+	add a,b
+    ;now subtract 16 if half-carry
+    push af
+    ex (sp),hl
+    bit 4,l
+    pop hl
+    ret z
+    sub 16
+    ret ;63/74
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+play8_hl_bc: ;plays the bytestring at hl length bc as 8 bit audio
+	
+    inc bc
+    dec hl
+_play8_hl_bc_loop:
+	inc hl ;6
+	
+    ld a,3 ;7
+    out (0),a ;11
+    
+    ld a,(hl)
+    ;delay(a) {
+    rra
+    jr c,$+2+1 ;12/11
+     nop
+    rra
+    jr nc,$+2+2 ;12/14
+     jr nc,$+2
+    rra
+    jp nc,$+3+1;10/14
+     nop
+    rra
+    jp nc,$+3+2;10/18
+     nop
+     nop
+    and $0f
+    inc a
+    dec a
+    jr nz,$-1 ;16a+15
+    ;} total:77+a
+    out (0),a ; a is 0 rn; 11
+    
+    ld a,(hl); 7
+    cpl      ; 4
+    ;delay(a) {
+    rra
+    jr c,$+2+1 ;12/11
+     nop
+    rra
+    jr nc,$+2+2 ;12/14
+     jr nc,$+2
+    rra
+    jp nc,$+3+1;10/14
+     nop
+    rra
+    jp nc,$+3+2;10/18
+     nop
+     nop
+    and $0f
+    inc a
+    dec a
+    jr nz,$-1 ;16a+15
+    ;} total:77+a
+    
+    ;constant time looping
+    
+    dec bc ;6
+    ld a,b ; 4
+    or c   ; 4
+    jp nz,_play8_hl_bc_loop ;10
+    ;loop time: 77 + 154 + 255
+    ;          = 486 = 30,864.20hz at 15Mhz
+    ;                = 12,345.68hz at  6Mhz
+  	ret
+    
+play4_hl_bc: ;plays the bytestring at hl length bc as 4 bit packed nibble audio 
+	
+    inc bc
+    
+    
+    ld d,(hl)
+    inc hl
+_play4_hl_bc_loop:
+
+    ld a,3 ;7
+    out (0),a ;11
+    ld a,d  ;4
+    ;delay(a) {
+    rrca
+    jr c,$+2+1 ;12/11
+     nop
+    rrca
+    jr nc,$+2+2 ;12/14
+     jr nc,$+2
+    rrca
+    jp nc,$+3+1;10/14
+     nop
+    rrca
+    jp nc,$+3+2;10/18
+     nop
+     nop
+    ;} total:59+a%16
+    xor a     ;4
+    out (0),a ;11
+    
+    ld a,d    ; 4
+    ;delay(~a) {
+    rrca
+    jr nc,$+2+1 ;12/11
+     nop
+    rrca
+    jr c,$+2+2 ;12/14
+     jr c,$+2
+    rrca
+    jp c,$+3+1;10/14
+     nop
+    rrca
+    jp c,$+3+2;10/18
+     nop
+     nop
+    ;} total:59+(~a)%16
+    and $0f ;7
+    
+    jr nz,$+2+2 ;(7+6+7=20)/12
+     ld a,(hl)
+     inc hl
+    jp z,$+3+2;10/18
+     nop
+     nop
+    ;so its 30/30
+    ld d,a  ;4
+    
+    ;constant time looping
+    
+    dec bc ;6
+    ld a,b ; 4
+    or c   ; 4
+    jp nz,_play4_hl_bc_loop ;10
+    ;loop time: 102 + 118 + 15
+    ;          = 235 = 63,829.79hz at 15Mhz
+    ;                = 25,531.91hz at  6Mhz
+  	ret
+    
+play4_hl_bc_rate_e: ;plays the bytestring at hl length bc as 4 bit packed nibble audio with rate defined by e 
+	
+    inc bc
+    
+    
+    ld d,(hl)
+    inc hl
+_play4_hl_bc_rate_e_loop:
+    
+    ld a,e ;4
+    ;delay(2a) {
+    rra
+    jr nc,$+2+2 ;12/14
+     jr nc,$+2
+    rra
+    jp nc,$+3+1;10/14
+     nop
+    rra
+    jp nc,$+3+2;10/18
+     nop
+     nop
+    and $1f
+    inc a
+    dec a
+    jr nz,$-1 ;16a+15
+    ;} total:66+2a
+
+    ld a,3 ;7
+    out (0),a ;11
+    ld a,d  ;4
+    ;delay(a) {
+    rrca
+    jr c,$+2+1 ;12/11
+     nop
+    rrca
+    jr nc,$+2+2 ;12/14
+     jr nc,$+2
+    rrca
+    jp nc,$+3+1;10/14
+     nop
+    rrca
+    jp nc,$+3+2;10/18
+     nop
+     nop
+    ;} total:59+a%16
+    xor a     ;4
+    out (0),a ;11
+    
+    ld a,d    ; 4
+    ;delay(~a) {
+    rrca
+    jr nc,$+2+1 ;12/11
+     nop
+    rrca
+    jr c,$+2+2 ;12/14
+     jr c,$+2
+    rrca
+    jp c,$+3+1;10/14
+     nop
+    rrca
+    jp c,$+3+2;10/18
+     nop
+     nop
+    ;} total:59+(~a)%16
+    and $0f ;7
+    
+    jr nz,$+2+2 ;(7+6+7=20)/12
+     ld a,(hl)
+     inc hl
+    jp z,$+3+2;10/18
+     nop
+     nop
+    ;so its 30/30
+    ld d,a  ;4
+    
+    ;constant time looping
+    
+    dec bc ;6
+    ld a,b ; 4
+    or c   ; 4
+    jp nz,_play4_hl_bc_rate_e_loop ;10
+    ;loop time: 102 + 118 + 15
+    ;          = 301+2e = 49,833.89hz to 18,495.68hz at 15Mhz
+    ;                   = 19,933.55hz to  7,398.27hz at  6Mhz
+    ; range of 1:2.694 or 1.43 octaves = 17.16 semitones
+    ; fine adjustment of 11.47 cents to 4.27 cents
+  	ret
+    
+    
+    
+play4_hl_bc_rate_e_ix_times: ;plays the bytestring at hl length bc as 4 bit packed nibble audio with rate defined by e 
+                             ; ix times
+                             ;samples are played in this order: .db $12,$34
+	
+    
+    ld (_play4_hl_bc_rate_e_ix_times_saveBounds+1),hl
+    ld (_play4_hl_bc_rate_e_ix_times_saveBounds+1+3),bc ;32
+    
+	jp _play4_hl_bc_rate_e_ix_times__instart ;42
+    
+
+_play4_hl_bc_rate_e_ix_times_inner_loop:
+	;37 t-states to kill
+    ;be usefull, check for off button
+    in a,(4) ;26
+    and $08 ;19 ;z if [on] held
+    ret z   ;14
+    ld a,0  ;7
+    ld a,0  ;0
+	jp _play4_hl_bc_rate_e_ix_times_inner_loop_fast ;-10
+_play4_hl_bc_rate_e_ix_times_outer_loop:
+_play4_hl_bc_rate_e_ix_times_saveBounds:
+	ld hl,0   ;10 ;+20
+    ld bc,1   ;10 ;+30
+_play4_hl_bc_rate_e_ix_times__instart:
+    ld d,(hl) ;7  ;27 ;+37
+    dec ix ;10 ;+47 -->           +37
+    
+_play4_hl_bc_rate_e_ix_times_inner_loop_fast:
+    
+    ld a,e ;4
+    ;delay(2a) {
+    rra
+    jr nc,$+2+2 ;12/14
+     jr nc,$+2
+    rra
+    jp nc,$+3+1;10/14
+     nop
+    rra
+    jp nc,$+3+2;10/18
+     nop
+     nop
+    and $1f
+    inc a
+    dec a
+    jr nz,$-1 ;16a+15
+    ;} total:66+2a
+
+    ld a,3 ;7
+    out (0),a ;11
+    ld a,d  ;4
+    ;delay(a) (little nibble endian){
+    ;(little nibble endian)
+;    rrca
+;    jr c,$+2+1 ;12/11
+;     nop
+;    rrca
+;    jr nc,$+2+2 ;12/14
+;     jr nc,$+2
+;    rrca
+;    jp nc,$+3+1;10/14
+;     nop
+;    rrca
+;    jp nc,$+3+2;10/18
+;     nop
+;     nop
+	;big nibble endian:
+    rlca
+    jp nc,$+3+2;10/18
+     nop
+     nop
+    rlca
+    jp nc,$+3+1;10/14
+     nop
+    rlca
+    jr nc,$+2+2 ;12/14
+     jr nc,$+2
+    rlca
+    jr c,$+2+1 ;12/11
+     nop
+    ;} total:59+a%16
+    xor a     ;4
+    out (0),a ;11
+    
+    ld a,d    ; 4
+    ;delay(~a) {
+    rlca
+    jp c,$+3+2;10/18
+     nop
+     nop
+    rlca
+    jp c,$+3+1;10/14
+     nop
+    rlca
+    jr c,$+2+2 ;12/14
+     jr c,$+2
+    rlca
+    jr nc,$+2+1 ;12/11
+     nop
+    ;} total:59+(~a)%16
+    ;little nibble endian
+    ;and $0f ;7
+    ;big:
+    and $f0 ;7
+    
+    jr nz,$+2+2 ;(7+6+7=20)/12
+     inc hl
+     ld a,(hl)
+    jp z,$+3+2;10/18
+     nop
+     nop
+    ;so its 30/30
+    ld d,a  ;4
+    
+    ;86+184 = 270 t-states from inner loop fast
+    
+    
+    ;constant time loop logic:
+    ld a,ixh;8
+    or ixl  ;8
+    ret z;5  ;23 ;this exit point is at pos: -65 ( = right after the dec bc) = 6 t-states from start
+                 ; from inner loop fast
+    
+    
+    dec bc;6
+    ld a,b;4
+    or c  ;4;14
+    jp nz,_play4_hl_bc_rate_e_ix_times_inner_loop ;10 ;10 ;45 ;total is 45+47(above) ;so full loop total is 270+45+47 = 362
+    jp _play4_hl_bc_rate_e_ix_times_outer_loop ;10 ;10 ; 10; 55 ; +10
+    
+    ;loop time: 362+2e
+    ;          =        = 41,436.46hz to 17,201.83hz at 15Mhz
+    ; range of 1:2.409 or 1.268 octaves = 15.22 semitones
+    ; fine adjustment of 9.645 cents to 3.975 cents
+
+
+
+play8_hl_bc_de_times:
+	;plays bytestring at hl, len bc as 8 bit audio de times
+    
+    
+    ld (_play8_hl_bc_ix_times__saveVals+1),hl
+    ld (_play8_hl_bc_ix_times__saveVals+3+1),bc
+    
+    dec hl
+    
+_play8_hl_bc_ix_times__inner_loop:
+	
+    in a,(3) ;11
+    bit 3,a ;8
+    ret z ;5 = 24
+    
+    
+    inc hl ;6
+    jp _play8_hl_bc_ix_times__inner_loop_fast ;10 = 16
+	
+	
+_play8_hl_bc_ix_times__outer_loop:
+	dec de ;6
+    ld a, d;4
+    or e;4
+    ret z ;5 ;19
+_play8_hl_bc_ix_times__saveVals:
+	ld hl,0 ;10
+    ld bc,1 ;10 ;26
+	
+_play8_hl_bc_ix_times__inner_loop_fast:
+    ;common chunk {
+    ld a,3 ;7
+    out (0),a ;11
+    
+    ld a,(hl) ;7
+    ;delay(a) {
+    rra
+    jr c,$+2+1 ;12/11
+     nop
+    rra
+    jr nc,$+2+2 ;12/14
+     jr nc,$+2
+    rra
+    jp nc,$+3+1;10/14
+     nop
+    rra
+    jp nc,$+3+2;10/18
+     nop
+     nop
+    and $0f
+    inc a
+    dec a
+    jr nz,$-1 ;16a+15
+    ;} total:77+a
+    out (0),a ; a is 0 rn; 11
+    
+    ld a,(hl); 7
+    cpl      ; 4
+    ;delay(a) {
+    rra
+    jr c,$+2+1 ;12/11
+     nop
+    rra
+    jr nc,$+2+2 ;12/14
+     jr nc,$+2
+    rra
+    jp nc,$+3+1;10/14
+     nop
+    rra
+    jp nc,$+3+2;10/18
+     nop
+     nop
+    and $0f
+    inc a
+    dec a
+    jr nz,$-1 ;16a+15
+    ;} total:77+a
+    
+    ;constant time looping
+    dec bc ;6
+    ld a,b ; 4
+    or c   ; 4
+    
+    ;} end common chunk: time: 61
+    
+    jr z, _play8_hl_bc_ix_times__outer_loop ;outer path: 12+19+26 = 57
+    jp nz,_play8_hl_bc_ix_times__inner_loop ;inner path: 17+24+16 = 57
+    ;loop time: 61 + 154 + 255 + 57 = 527
+    ;          = 486 = 28,462.998hz at 15Mhz
+    ;                = 11,385.199hz at  6Mhz
+  	
+    
+
+    
+    
+    
+play8_gen_hl_b: ;plays the generator routine at hl as 8 bit audio, takes input in b
+                ;destroys a
+		      ;the generator is responsible for halting and having good timing
+	
+    ld a,3 ;7
+    out (0),a ;11
+    
+    ld a,b ; 4
+    ;delay(a) {
+    rra
+    jr c,$+2+1 ;12/11
+     nop
+    rra
+    jr nc,$+2+2 ;12/14
+     jr nc,$+2
+    rra
+    jp nc,$+3+1;10/14
+     nop
+    rra
+    jp nc,$+3+2;10/18
+     nop
+     nop
+    and $0f
+    inc a
+    dec a
+    jr nz,$-1 ;16a+15
+    ;} total:77+a
+    out (0),a ; a is 0 rn; 11
+    
+    ld a,b; 4
+    cpl      ; 4
+    ;delay(a) {
+    rra
+    jr c,$+2+1 ;12/11
+     nop
+    rra
+    jr nc,$+2+2 ;12/14
+     jr nc,$+2
+    rra
+    jp nc,$+3+1;10/14
+     nop
+    rra
+    jp nc,$+3+2;10/18
+     nop
+     nop
+    and $0f
+    inc a
+    dec a
+    jr nz,$-1 ;16a+15
+    ;} total:77+a
+    
+    jp (hl) ;4
+    ;loop time: 45 + 154 + 255 + gen (which has a min of 10)
+    ;          = 454 + gen 
+    
+play4_gen_hl_b: ;plays the generator routine at hl as 8 bit audio, takes input as a single nibble in b
+                ;destroys a
+		      ;the generator is responsible for halting and having good timing
+	
+    ld a,3 ;7
+    out (0),a ;11
+    
+    ld a,b ; 4
+    ;delay(a) {
+    rrca
+    jr c,$+2+1 ;12/11
+     nop
+    rrca
+    jr nc,$+2+2 ;12/14
+     jr nc,$+2
+    rrca
+    jp nc,$+3+1;10/14
+     nop
+    rrca
+    jp nc,$+3+2;10/18
+     nop
+     nop
+    ;} total:59+a%16
+    xor a ;4
+    
+    out (0),a ; a is 0 rn; 11
+    
+    ld a,b; 4
+    ;delay(a) {
+    rrca
+    jr nc,$+2+1 ;12/11
+     nop
+    rrca
+    jr c,$+2+2 ;12/14
+     jr c,$+2
+    rrca
+    jp c,$+3+1;10/14
+     nop
+    rrca
+    jp c,$+3+2;10/18
+     nop
+     nop
+    ;} total:59+a%16
+    
+    jp (hl) ;4
+    ;loop time: 45 + 118 + 15 + gen (which has a min of 10)
+    ;          = 178 + gen 

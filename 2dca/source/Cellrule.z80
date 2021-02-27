@@ -1,0 +1,243 @@
+ruletable:
+.dw c.2x2
+.dw c.34Life
+.dw c.Amoeba
+.dw c.Anneal
+.dw c.Assimilation
+.dw c.Coagulations
+.dw c.Coral
+.dw c.DayAndNight
+.dw c.Diamoeba
+.dw c.DotLife
+.dw c.DryLife
+.dw c.Flakes
+.dw c.Fredkin
+.dw c.Gnarl
+.dw c.HighLife
+.dw c.Life
+.dw c.LiveFreeorDie
+.dw c.LongLife
+.dw c.Majority
+.dw c.Maze
+.dw c.Mazectric
+.dw c.Move
+.dw c.PseudoLife
+.dw c.Replicator
+.dw c.Seeds
+.dw c.Serviettes
+.dw c.Stains
+.dw c.WalledCities
+.dw c.CustomRuleset
+ruletableend:
+
+scraperuletable:
+ ld hl,ruletable
+ add a,a
+ add a,L
+ ld L,a
+ jr nc,$+3
+ inc h
+ ld a,(hl)
+ inc hl
+ ld h,(hl)
+ ld L,a
+ ret
+
+;Ruleset tables:
+;Format:
+;.db #ofentries,#ofneighborsToRetunToLife
+;.db #ofentries,#ofneighborsToKeepThisAlive
+
+#DEFINE NE 9  ;null entry
+c.Life:
+.db "Game of Life",0
+.db 1, 3    ;1 entry,   3 neighbors need to come back to life
+.db 2, 2,3  ;2 entries, 2 and 3 neighbors needed to survive.
+
+c.Seeds:
+.db "Seeds",0
+.db 1, 2
+.db 1, NE
+
+c.Serviettes:
+.db "Serviettes",0
+.db 3, 2,3,4
+.db 1, 9
+
+c.Flakes:
+.db "Flakes",0
+.db 1, 3
+.db 9, 0,1,2,3,4,5,6,7,8
+
+c.Gnarl:
+.db "Gnarl",0
+.db 1, 1
+.db 1, 1
+
+c.Maze
+.db "Maze",0
+.db 1, 3
+.db 5, 1,2,3,4,5
+
+c.2x2
+.db "2 by 2",0
+.db 2, 3,6
+.db 3, 1,2,5
+
+c.Replicator
+.db "Replicator",0
+.db 4, 1,3,5,7
+.db 4, 1,3,5,7
+
+c.Amoeba:
+.db "Amoeba",0
+.db 3, 3,5,7
+.db 4, 1,3,5,8
+
+c.HighLife:
+.db "High Life",0
+.db 2, 3,6
+.db 2, 2,3
+
+c.WalledCities:
+.db "Walled Cities",0
+.db 5, 4,5,6,7,8
+.db 4, 2,3,4,5
+
+c.Stains:
+.db "Stains",0
+.db 4, 3,6,7,8
+.db 6, 2,3,5,6,7,8
+
+c.Coagulations:
+.db "Coagulations",0
+.db 3, 3,7,8
+.db 6, 2,3,5,6,7,8
+
+c.PseudoLife:
+.db "PseudoLife    ",0
+.db 3, 3,5,7
+.db 3, 2,3,8
+
+c.Move:
+.db "Move",0
+.db 3, 3,6,8
+.db 3, 2,4,5
+
+c.34Life:
+.db "34 Life       ",0
+.db 2, 3,4
+.db 2, 3,4
+
+c.DayAndNight:
+.db "Day And Night",0
+.db 4, 3,6,7,8
+.db 5, 3,4,6,7,8
+
+c.Assimilation:
+.db "Assimilation ",0
+.db 3, 3,4,5
+.db 4, 4,5,6,7
+
+c.Coral:
+.db "Coral",0
+.db 1, 3
+.db 5, 4,5,6,7,8
+
+c.LongLife:
+.db "Long Life",0
+.db 3, 3,4,5
+.db 1, 5
+
+c.Diamoeba: 
+.db "Diamoeba",0
+.db 5, 3,5,6,7,8
+.db 4, 5,6,7,8
+
+c.Fredkin:
+.db "Fredkin",0
+.db 4, 1,3,5,7
+.db 5, 0,2,4,6,8
+
+c.LiveFreeOrDie:
+.db "Live Free Or Die",0
+.db 1, 2
+.db 1, 0
+
+c.Mazectric:
+.db "Mazectric",0
+.db 1, 3
+.db 4, 1,2,3,4
+
+c.DotLife:
+.db "DotLife",0
+.db 1, 3
+.db 3, 0,2,3
+
+c.DryLife:
+.db "DryLife",0
+.db 2, 3,7
+.db 2, 2,3
+
+c.Anneal:
+.db "Anneal",0
+.db 4, 4,6,7,8
+.db 5, 3,5,6,7,8
+
+c.Majority:
+.db "Majority",0
+.db 4, 5,6,7,8
+.db 5, 4,5,6,7,8
+
+
+imagesettable:
+.dw GosperGliderGunMeta
+.dw LWSSGenerator
+.dw Orthc2ship
+imagesettableend:
+;.dw nextimage
+
+
+GosperGliderGunMeta:
+;    1234567890123456
+.db "Gosper GliderGun",0
+;originally 2,18,5,9
+.db 0,0,5,9  ;offset by, number of: columns , rows
+GosperGliderGun: ;reformatted for vertical-alignedness
+.db $00,$00,$00,$00,$c0,$c0,$00,$00,$00
+.db $00,$00,$0c,$11,$20,$22,$20,$11,$0c
+.db $00,$02,$0c,$0c,$8c,$c2,$80,$00,$00
+.db $80,$80,$00,$00,$00,$80,$80,$00,$00
+.db $00,$00,$30,$30,$00,$00,$00,$00,$00
+
+LWSSGenerator:
+.db "LWSS Generator",0
+.db 4,31,8,33
+;Stuff is 8 bytes wide, 33 high
+.db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01,$01,$00,$07
+.db $04,$03,$00,$00,$00,$00,$CC,$D2,$0C,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$00,$08,$A2,$00,$C1,$3E,$80,$00,$00,$00,$60,$50,$08
+.db $48,$08,$50,$60,$00,$00,$00,$02,$04,$CD,$C4,$02,$00,$00,$00,$0C,$1E,$36,$18,$00
+.db $00,$00,$C0,$40,$80,$70,$90,$60,$00,$00,$0C,$14,$04,$00,$00,$00,$00,$00,$00,$C0
+.db $20,$10,$10,$10,$20,$C0,$05,$06,$02,$00,$00,$00,$00,$00,$00,$00,$1C,$04,$08,$00
+.db $00,$00,$00,$00,$00,$10,$28,$34,$36,$34,$28,$10,$00,$00,$00,$00,$03,$07,$03,$00
+.db $00,$00,$00,$00,$00,$70,$40,$20,$00,$00,$00,$00,$00,$00,$00,$04,$06,$C3,$C3,$C3
+.db $06,$04,$00,$00,$00,$00,$00,$60,$61,$03,$04,$02,$60,$60,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$00,$00,$60,$50,$40,$00,$00,$00,$80,$00,$00,$00,$00,$00,$00,$00,$00
+.db $00,$C0,$E0,$50,$30,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06
+.db $0E,$58,$48,$58,$0E,$06,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$03,$41,$20,$22,$08,$00
+.db $00,$00,$00,$00
+
+Orthc2ship: ;2w,12d
+.db "Orth c/2 HWSS",0
+.db 4,20,2,12
+.db $20,$70,$C8,$C8,$4E,$81,$88,$80,$80,$80,$80,$50
+.db $08,$1C,$26,$26,$E4,$02,$22,$02,$02,$02,$02,$14
+
+
+
+
+
+NUMRULESETS = (ruletableend-ruletable)/2               ;# of rules
+NUMINTERNALPICS = (imagesettableend-imagesettable)/2   ;# of internal images

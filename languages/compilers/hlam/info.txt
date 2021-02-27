@@ -1,0 +1,10 @@
+
+allow for recursive definitions.
+eg: a<<b = [twoX a] then a<<(b-1)
+    a<<0 = a
+      •for int or fix a
+
+    a<<b : float sign = a.sign, exp = a.exp + b, mant = a.mant
+      •for float a
+	   #exceptions should be handled by float type providing
+	   # math accurate fields

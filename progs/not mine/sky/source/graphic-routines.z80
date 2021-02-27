@@ -1,0 +1,73 @@
+.nolist
+;OR Sprite Routine
+;################################################
+;input
+;ix = Pointer to the Sprite
+;a  = X (0-11)
+;l  = Y (0-7)
+;output
+;ORs an aligned 8x8 sprite
+or_sprite:
+	ld      h,0
+	add     hl,hl	; x2
+	add     hl,hl	; x4
+	add     hl,hl	; x8
+	add     hl,hl	; x16
+	add     hl,hl	; x32
+	ld      b,h
+	ld      c,l
+	add     hl,hl	; x64
+	add     hl,bc	; x96
+	ld      c,a
+	ld      b,0
+	add     hl,bc
+	ld      bc,gbuf
+	add     hl,bc	; HL => Where to put the sprite
+	ld      b,8
+putASLoop:
+	ld      a,(ix)
+	ld      (hl),a
+	inc     ix
+	ld      de,12
+	add     hl,de
+	djnz    putASLoop
+	ret
+
+;=======================
+;     > fastcopy
+;=======================
+;Does:   Copy the gbuf to the screen (fast)
+;Input:  nothing
+;Output: graph buffer is copied to the screen
+;-----------------------
+fastcopy:
+ di
+ ld a,$80
+ out ($10),a
+ ld hl,gbuf-12-(-(12*64)+1)
+ ld a,$20
+ ld c,a
+ inc hl
+ dec hl
+fastCopyAgain:
+ ld b,64
+ inc c
+ ld de,-(12*64)+1
+ out ($10),a
+ add hl,de
+ ld de,10
+fastCopyLoop:
+ add hl,de
+ inc hl
+ inc hl
+ inc de
+ ld a,(hl)
+ out ($11),a
+ dec de
+ djnz fastCopyLoop
+ ld a,c
+ cp $2B+1
+ jr nz,fastCopyAgain
+ ret
+;
+.list

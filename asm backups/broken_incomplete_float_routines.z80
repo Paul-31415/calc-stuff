@@ -1,0 +1,451 @@
+
+FPlog2_hl: ;takes log base 2 of hl,
+	;https://hal.archives-ouvertes.fr/hal-01227877/document
+    call FPGetExpA_MantCDE_hl
+    
+    jp p,_FPlog2_hl_inDomain
+    ;it was negative, return nan
+     ld hl,LOGNEGATIVENUMBERNAN
+     ret
+LOGNEGATIVENUMBERNAN:
+.db 8,0,$80,$7f
+_FPlog2_hl_inDomain:
+	cp $ff
+    ret z ;infs and nans
+    or a
+    jr nz,_FPlog2_hl_Normal
+    
+_FPlog2_hl_Normal:
+	
+    
+    ;ok, b is ipart of log2(hl), Mant is mantissa of hl (with msbit 1)
+    ;log2(hl) = e*log2(2)+log2(m)
+    ;
+    ;ln(x+1) ~= x-(x^2)/2+(x^3)/3-...
+    ;taylor degree 		window for convergence	with different const/ln(2)
+    ;2				x < 0.005					0.0077			1.000015
+    ;3					0.02					0.027
+    ;4					0.04
+    ;5					0.08
+    ;6					0.117
+    ;7					0.157
+    ;8					0.196
+    
+    ;log2(hl) = e*log2(2)+log2(m)
+    ;log2(m) = log2(m*InvM)-log(InvM)
+    
+    ;table entries indexed with top k bits of m (excluding implicit bit)
+    ;m in [1,2)
+    ;m*InvM in [1,1+2^-k)
+    
+    ;with t tables each taking k bits, total benifit is t*k bits
+    ;total cost is t*2^k
+    ;so what if we just took up 1 bit each time?
+    ;m1 = 	1.0 or 1.1
+    ;invM1 = 1.00	0.11
+    ;m2 = 	1.00 or 1.01
+    ;invM2 = 1.000 	0.1101
+    ;m3 =   1.000 or 1.001
+    ;invM3 = 1 		0.111001
+    ;m4 = 			1.0001
+    ;im4=			0.11110001
+    ;m5				1.0000--
+    ;m6				1.00000--
+    ;m7				1.000000--
+    ;... heck, I could probably generate these and only need to hold a table of the logs of these values
+    ;imN = 0.(N x 1)(N-1 x 0)1
+    ;mN < 1.(N-1 x 0)1
+    ;N for 3rd degree series = 6
+    ;im6 = 0.1111 1100 0001  is 1.5 bytes
+    
+    ;total precision needed for m7 to perfect accuracy
+    ;each imN adds 2N bits (can be shortened to N bits since the top ones are known)
+    ;so, storing all the bits, we need 24 + 2+4+6+8+10+12 = 66 bits, ugh
+    ;storing just the ones needed,     24 + 1+2+3+4+5 +6 = 45 bits
+    
+    ;ok, how many bits of precision do we need for the taylor expansion
+    ;  x = m7-1
+    ;		ln(m7) ~= x-(x^2)/2+(x^3)/3 
+    ;		log2(m7) = ln(m7)/ln(2)		1/ln(2) = 1.4426950409 
+    ; 	so, for 24 bits of log2, we need 24.44 (25) bits of ln
+    ;	which means: we need 25 bits of x, 26 of x^2 and 27 of x^3
+    ;   so we need :		25 bits of x, 52 of x		81 of x
+    ;so basically we need at least the full 45 bits of m7
+    ;that'll end up being 6 registers
+    
+    
+    ;ok, so to test the bits, it's just the top bit each time
+    ;a is exp right now
+    sub 127
+    ld (FPlog2_hl_Ans+3),a ;store the ipart
+    ld hl,0
+    ld (FPlog2_hl_Ans),hl	;zero the fpart
+    ld (FPlog2_hl_Ans+1),hl
+    
+    ex de,hl
+    
+    	;shift up to make implicit bit actually implicit
+    add hl,hl
+    rl c
+    ;ok now hlc has m1
+    
+    
+   	
+    add hl,hl
+    rl c
+    ;ok first check		;chl is 22 bits now
+    jr nc,_FPlog2_hl_im1Pass
+     ;multiply by 0.11 = shift left 2 and sub origional
+     ld b,c	;store 4x copy in bde
+     ld d,h
+     ld e,l 
+     scf ;restore the one shifted out
+     rr c
+     rr h
+     rr l
+     scf ;restore the one shifted out
+     rr c
+     rr h
+     rr l
+     ;now we negate chl and add bde to it
+     ld a,l
+     cpl
+     ld l,a
+     ld a,h
+     cpl
+     ld h,a
+     ld a,c
+     cpl
+     ld c,a
+     inc hl
+     ld a,0
+     adc a,c ;carry to c
+     add hl,de
+     adc a,b ;adding to b
+     ld c,a ;k, done, chl is 23 bits now
+     ;put chl up against top again
+     add hl,hl    
+     rl c
+     ;ok, now add const to accumulator, since acc is 0, just load it
+     ld bc,$351f
+     ld (FPlog2_hl_Ans+1),bc
+     ld a,$f2
+     ld (FPlog2_hl_Ans),a
+_FPlog2_hl_im1Pass:    
+
+	;I wanna use the shadow registers
+	ld a, i  
+     jp pe,_FPlog2_hl_IntPE
+     ld a, i  ; test again, to fix potential "false negative" from interrupt occurring at first test
+_FPlog2_hl_IntPE:
+     push af  ; save flags
+     di       ; disable interrupts
+    
+    ld d,c	;change hlc to hldebc
+    ld e,0
+    ld b,e
+    ld c,e
+    exx
+    push hl	;save the shadow regs
+    push bc
+    push de
+    
+    
+    
+    
+    ld b,5 ;5 more; at this point, i'm just going to do this generally
+    ld hl,FPlog2_hl_InvMlogTable+3 ;table
+    ld c,1
+_FPlog2_hl_imNLoop:
+	inc c ;keep track of N
+    exx
+    ;check top bit of hldebc and shift it
+    sla c
+    rl b
+    rl e
+    rl d
+    adc hl,hl
+    exx
+    jr nc,_FPlog2_hl_imNPass
+     ;remember that imN = 1-(2^-n)+(2^-2n), that'll make multiplies easier (just a sub and add with a bunch of shifting)
+     ;ok, now we mul with imN , n = d
+     ld a,c
+     exx
+     push hl	;push hldebc
+     push de
+     push bc
+     
+     ;shift down a
+     scf ;first implicit bit
+_FPlog2_hl_hldebcShiftLoop1:
+ 	 rr h
+     rr l
+     rr d
+     rr e
+     rr b
+     rr c 
+     dec a
+     or a ;zcf
+     jr nz,_FPlog2_hl_hldebcShiftLoop1
+     
+    push hl	;push N shifted hldebc
+    push de
+    push bc
+    exx
+    ld a,c ;restore c in a
+    exx
+     
+_FPlog2_hl_hldebcShiftLoop2: 
+ 	 srl h ;shifting in zeros
+     rr l
+     rr d
+     rr e
+     rr b
+     rr c 
+     dec a
+     jr nz,_FPlog2_hl_hldebcShiftLoop2
+     set 7,h ;one's place implicit bit
+     
+     ;ok, now we sub with stack
+     ;stack is [bc][de][hl]... of N
+     ex (sp),hl
+     ;ok, now hl is the bc of the less shifted one  (bcN)
+     ;zcf
+     or a
+     sbc hl,bc		;bcN - bc2N
+     ld b,h
+     ld c,l
+     pop hl ;get hl2N back
+     
+     ex (sp),hl ;get deN
+     sbc hl,de  ;deN-de2N with carry
+     ex de,hl ;ld de,hl
+     pop hl ;get hl2N back
+     
+     ex de,hl ; store hl2N in de and deN-de2N in hl
+     ex (sp),hl ;get hlN
+     sbc hl,de	;hlN - hl2N
+     ex de,hl   ; sore ans in de
+     pop hl 	;get de's ans 
+     ex de,hl	;fix ex
+     
+     ;ok, now stack is [bc][de][hl]... of 1
+     ;and hldebc is N-2N
+     ;now we compute 1-(N-2N) = 1-N+2N
+     
+     ex (sp),hl
+     or a
+     sbc hl,bc
+     ld b,h
+     ld c,l
+     pop hl
+     
+     ex (sp),hl
+     sbc hl,de
+     ex de,hl
+     pop hl
+     
+     ex de,hl
+     ex (sp),hl
+     sbc hl,de
+     ex de,hl
+     pop hl
+     ex de,hl
+     
+     ;now we have ans in hldebc
+     
+     ;no need for shift because we did that before
+     
+     
+     exx
+     ;ok now we add the table to the accumulator
+     ;in use: bc, hl
+     ld e,(hl)
+     ld a,(FPlog2_hl_Ans)
+     add a,e
+     ld (FPlog2_hl_Ans),a  ;added lsb
+     
+     push hl ;save this so we can use it
+     inc hl
+     ld e,(hl)
+     inc hl
+     ld d,(hl)  ;ld de,(hl)
+     ld hl,(FPlog2_hl_Ans+1)
+     adc hl,de
+     ld (FPlog2_hl_Ans+1),hl  ;no need to carry to Ipart, it will never
+     pop hl
+    
+_FPlog2_hl_imNPass:
+	;shadow regs here
+    inc hl
+    inc hl
+    inc hl
+    djnz _FPlog2_hl_imNLoop
+    
+    
+    exx
+    ;ok hldebc has the mantissa that we need to taylorify
+    ;we only need to do 3 terms
+    ;hldebc is like this:  (implicit) (0.0000 00)hldebc
+    ;so we add the x term first
+    ;this is composed of h,l,d
+    push bc
+    push de		;save these for a bit
+    push hl
+    
+    ld a,0
+    sla d
+    adc hl,hl
+    rla
+    sla d
+    adc hl,hl
+    rla			;2 shifts to allign ahl with the thing
+    
+    
+    ;load it in to our taylor remainder term
+    ld (FPlog2_hl_TAns+2),a
+    ld (FPlog2_hl_TAns),hl
+    
+    
+    
+    pop de
+    push de
+    
+    ;ok, x^2/2 is (0.0000 00)(00 0000)----
+    ;so we need only the top 1 and 1/2 byte of x^2
+    
+    ;(a+b)^2 = a^2 + 2ab + b^2
+    ;(a+b2^-n) = a^2 + 2ab2^-n + b^2 2^-2n
+    ;
+    ; ok so if n is 16, the top 1.5 bytes of x^2 are basically a^2
+    ;so square hl
+    
+    ld a,16
+    ld b,d
+    ld c,e
+    ld hl,0
+    ;prod = dehl, bits = de, add = bc
+_FPlog2_hl_squareLoop:					;	1100 -> 1011 -> 1001 √
+    add hl,hl
+    ex de,hl
+    adc hl,hl
+    ex de,hl
+    jr nc,_FPlog2_hl_squareLoop_nc
+     add hl,bc
+     jr nc,_FPlog2_hl_squareLoop_nc
+      inc de
+_FPlog2_hl_squareLoop_nc:    
+    dec a
+    jr nz,_FPlog2_hl_squareLoop
+    ;ok de is x^2 now
+    push de
+    srl d
+    rr e
+    srl d
+    rr e
+    srl d
+    rr e
+    srl d
+    rr e
+    srl d ;1 more for the div by 2
+    rr e
+    
+    ld b,0
+    
+    ;now we add bde with the Taylor acc
+    ld a,(FPlog2_hl_TAns+2)
+    ld hl,(FPlog2_hl_TAns)
+    add hl,de
+    adc a,b
+    ld (FPlog2_hl_TAns+2),a
+    ld (FPlog2_hl_TAns),hl
+    ;ok now we do the cube/3
+    ;x^3 = (0.0000 00 00 0000 0000 00 0)-
+    ;basically no effect
+    
+    pop hl	;clear stack
+    pop de
+    pop bc
+    ;ok now we need to mul Tans by 1/ln(2)
+    
+    ;0xb8aa3b
+    ld b,$b8
+    ld hl,$aa3b
+ 	ld c,0
+    ld d,c
+    ld e,c
+    ;prod = bhlcde
+    ld a,24
+_FPlog2_hl_ConstMulLoop:
+    ex de,hl
+    add hl,hl
+    ex de,hl
+    rl c
+    adc hl,hl
+    rl b
+    jr c,_FPlog2_hl_ConstMulLoopNC
+     push af
+     push hl
+     ld a,(FPlog2_hl_TAns+2)
+     ld hl,(FPlog2_hl_TAns)
+     add hl,de
+     ex de,hl
+     adc a,c
+     ld c,a
+     pop hl
+     jr nc,_FPlog2_hl_ConstMulLoopNC2
+      inc h
+      jr nz,_FPlog2_hl_ConstMulLoopNC2
+      inc l
+      jr nz,_FPlog2_hl_ConstMulLoopNC2
+      inc b
+_FPlog2_hl_ConstMulLoopNC2:
+	pop af
+_FPlog2_hl_ConstMulLoopNC:
+    dec a
+    jr z,_FPlog2_hl_ConstMulLoop
+    
+    ;add bhl to our int
+    ex de,hl
+    ld hl,(FPlog2_hl_Ans)
+    ld a,(FPlog2_hl_Ans+2)
+    add hl,de
+    adc a,b
+    ld (FPlog2_hl_Ans),hl
+    ld (FPlog2_hl_Ans+2),a
+    
+    exx
+    
+    pop de	;restore shadow registers
+    pop bc
+    pop hl
+    exx
+    ;back to normal regs
+    pop af
+    jp po,_FPlog2_hl_IntwereOff   ; po = P/V reset so in this case it means interrupts were disabled
+     ei       ; re-enable interrupts
+_FPlog2_hl_IntwereOff:
+    
+    ;ok ans is fix8.24 in FPlog2_hl_Ans
+    ld hl,FPlog2_hl_Ans
+    ret
+    
+    
+
+FPlog2_hl_TAns:    
+.db 0,0,0
+    
+FPlog2_hl_Ans:	
+.db 0,0,0,0
+    
+;FPlog2_hl_Mant:
+;.db 0,0,0,0,0,0
+
+FPlog2_hl_InvMlogTable: ;only needed to precision of 24 bits
+;imN = 1-2^-n+2^-2n
+.db $f2,$1f,$35	;im1 = .75	-log2(im1)=	0x0.6a3fe5 = 0x351ff2 in our fixed point
+.db $fd,$57,$26 ;im2 = .8125 -> 0x2657fd 
+.db $dc,$63,$15
+.db $71,$26,$0b
+.db $43,$ad,$05
+.db $c4,$dc,$02

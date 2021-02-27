@@ -1,0 +1,302 @@
+#include    "ti83plus.inc"
+#define     progStart   $9D95
+#define 	saveSScreen 86ECh
+.org        progStart-2
+.db         $BB,$6D
+
+	bcall(_ansName)
+    rst 10h
+    ex de,hl
+    rst 20h
+    bcall(_convOp1)
+    
+    ex de,hl
+    add hl,hl
+    ex de,hl
+    ld hl,table
+	add hl,de
+    ld (loadhl+1),hl
+loadhl:
+	ld hl,(0000)
+    
+    ld (which+1),hl
+    
+    ld hl,100
+loop:
+	ld a,$05
+    out ($10),a    
+busyLoop1:
+	 in a,($10)
+     rla
+     jr c,busyLoop1
+    ld c,$20
+    ld d,12
+colLoop:
+busyLoop2:
+	 in a,($10)
+     rla
+     jr c,busyLoop2
+    ld a,c
+    out ($10),a
+    
+    ld b,64
+    
+core:
+busyLoop3:
+	 in a,($10)
+     rla
+     jr c,busyLoop3
+     
+which:
+    call rand2
+    
+    out ($11),a
+    
+	djnz core
+    
+    inc c
+    dec d
+    jr nz,colLoop
+    
+	in a,(4)
+    bit 3,a
+    ret z
+    dec hl
+    ld a,h
+    or l
+    jr nz,loop
+    
+	ret
+
+table:
+.dw rand0,rand1,rand1a,rand2,rand2_1,rand2a,lfsr8_8,lfsr16_8,lfsr32_8,lfsr7x8_8
+
+	
+
+
+
+lfsr32_8:
+	push bc
+    push hl
+    push de
+    ld b,8
+    call lfsr32
+    ld a,d
+    pop de
+    pop hl
+    pop bc
+    ret
+
+lfsr32:
+lfsr32stateLo:
+	ld hl,0001
+	ex de,hl
+lfsr32stateHi:
+	ld hl,0000
+lfsr32loop:
+	ex de,hl
+	add hl,hl
+    ex de,hl
+    adc hl,hl
+    jr nc,lfsr32nc
+	 ld a,h
+     xor $3a
+     ld h,a
+     ld a,l
+     xor $cb
+     ld l,a
+     ld a,d
+     xor $3d
+     ld d,a
+     ld a,e
+     xor $2d
+     ld e,a
+lfsr32nc:
+	djnz lfsr32loop
+	ld (lfsr32stateHi+1),hl
+    ex de,hl
+	ld (lfsr32stateLo+1),hl
+    ret
+	
+
+lfsr16_8: ;shifting left, not right
+	push hl
+    push bc
+    ld b,8
+    call lfsr16
+    pop bc
+    ld a,h
+    pop hl
+    ret
+    
+lfsr16:
+lfsr16state:
+	ld hl,0001
+lfsr16loop:
+	add hl,hl
+    jr nc,lfsr16nc
+     ld a,h
+lfsr16polylo:	;backwards
+     xor $a9
+     ld h,a
+  	 ld a,l
+lfsr16polyhi:
+     xor $4b
+     ld l,a
+lfsr16nc:
+	djnz lfsr16loop
+    ld (lfsr16state+1),hl
+    ret
+   
+   
+   
+lfsr8_8:
+	push bc
+    ld b,8
+    call lfsr8
+    pop bc
+    ret
+   
+    
+lfsr8:
+lfsr8state:
+	ld a,1
+lfsr8loop:
+    srl a
+    jr nc,lfsr8nc
+     xor $A6
+lfsr8nc:
+	djnz lfsr8loop
+    ld (lfsr8state+1),a
+	ret
+	
+    
+lfsr7x8_8:
+	push bc
+    ld b,8
+    call lfsr7x8
+    pop bc
+    ret
+    
+lfsr7x8:
+lfsr7x8state8:
+	ld a,1
+    push bc
+lfsr7x8loop8:
+    srl a
+    jr nc,lfsr7x8nc8
+     xor $A6
+lfsr7x8nc8:
+	djnz lfsr7x8loop8
+    ld (lfsr7x8state8+1),a
+	pop bc
+    ld c,a
+lfsr7x8state7:
+	ld a,1
+lfsr7x8loop7:
+    srl a
+    jr nc,lfsr7x8nc7
+     xor $69
+lfsr7x8nc7:
+	djnz lfsr7x8loop7
+    ld (lfsr7x8state7+1),a
+    xor c
+    ret
+    
+    
+    
+;time: 36
+rand0: ;destroys af,af'
+	ld a,r	 ;9
+    ex af,af';4
+    ld r,a	 ;9
+    rlca		 ;4
+    ret		 ;10
+
+
+;time: 43
+rand1: ;destroys af
+	ld a,r					;9
+    rra						;4
+rand1State1:
+	sbc a,0					;7
+    ld (rand1State1+1),a	;13
+    ret						;10
+    
+;time: 42/49
+rand1a:
+	ld a,r	;9
+    rlca ;4
+    jp p,rand1aj	;10
+rand1aState1:	
+     sub $72	;7	;36 is a good one also
+rand1aj:
+	ld r,a			;9
+    ret				;10    
+
+	
+
+
+
+;time: 70/82
+rand2:
+    ld a,r					;9
+rand2State2:
+    sbc a,0					;7
+    rra						;4
+    jr nc,rand2nc			;12/7
+     dec a					;4
+     ld (rand2State2+1),a	;13
+rand2nc:
+rand2State1:
+    xor 0					;7
+    rlca					;4
+	dec a					;4
+    ld (rand2State1+1),a	;13
+    ret						;10
+    
+    
+
+
+
+;time: 55/57
+rand2a:
+	ld a,r					;9
+rand2aState1:
+    sbc a,0					;7
+	rra						;4
+    jr nc,rand2anc			;12/7 (12/14)
+rand2aState2:
+     xor $A6				;7
+rand2anc:				
+	ld (rand2aState1+1),a	;13
+    ret						;10
+    
+rand2_1: 
+	push bc
+	ld a,r
+    ld b,a
+    rla
+rand2_1State2:
+    sbc a,0					
+	ld c,a
+rand2_1State1:
+    xor 0
+    ld b,a
+    ld a,(bc)
+    xor b
+    ld (rand2_1State1+1),a
+    xor c
+    ld (rand2_1State2+1),a
+    pop bc
+    ret
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

@@ -1,0 +1,7 @@
+class ast:
+    def __init__(self,op,*args):
+        self.op = op
+        self.n = args
+    def op(self,op,*others):
+        return ast(op,self,*others)
+

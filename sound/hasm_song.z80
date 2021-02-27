@@ -1,0 +1,441 @@
+#include "hasm.z80"
+;example hasm prog
+    
+
+	;make sine buffer in a screen ram area (saveSScreen)
+    ld bc,$86EC
+    ld hl,$1000
+    ld de,0
+    ld ix,402
+compute_sine_loop:
+    push hl
+    add hl,hl
+    add hl,hl
+    ld l,h
+    ld a,0
+    bit 7,h
+    jr z,$+2+1
+     cpl
+    ld h,a
+    
+    add hl,de
+    ex de,hl  ;add de,hl ;sin += cos
+    
+    pop hl
+    
+    ex de,hl
+    
+    push hl
+    add hl,hl
+    add hl,hl
+    ld l,h
+    ld a,0
+    bit 7,h
+    jr z,$+2+1
+     cpl
+    ld h,a
+    
+    or a
+    ex de,hl
+    sbc hl,de
+    ex de,hl  ;cos -= sin
+    
+    pop hl
+
+    ex de,hl
+    
+    ;store sine
+    ld a,d
+    ld (bc),a
+    inc bc
+    
+    dec ix
+    ld a,ixh
+    or ixl
+    jr nz,compute_sine_loop
+    
+    di
+    ;setup sound engine params
+    exx
+    ld hl,$86EC
+    ld d,h
+    ld e,l
+    exx
+    
+;hasm_start:
+	di
+    
+    ;find ans as list
+    
+    b_call(_AnsName)
+    rst 10h
+    ret c ;abort if not found
+    
+    and $1f ;only accepts string types as input
+    cp StrngObj
+    ret nz
+    
+    xor a
+    or b
+    ret nz ;in ram
+
+	inc de
+    inc de
+    push de ;save data term
+    
+    
+    
+	ld a,$ef
+    out (1),a
+    
+jitter_test_loop:
+    ld a,3
+    out (0),a
+    xor a
+    out (0),a
+    in a,(1)
+    cp $ff
+    ;jr z,jitter_test_loop
+    
+hasm_start:    
+    di
+    ;setup f-timer
+    ld a,$47 ;
+    out ($30),a
+    ld a,0
+    out ($31),a
+    ld a,8
+    out ($32),a
+    
+    ld a,$07
+    out ($10),a
+    
+    ld ix,$
+    ld d,%00010110
+    
+    ld hl,0
+    
+    ;start:
+    call setup_sound_engine
+    jp skip
+wait:
+	;test stuff
+    ;ld a,(sample+1)
+    ;inc a
+    ;ld (sample+1),a
+    
+    ;
+    
+    ;experimentally trim sample align
+    
+    ld a,$fe
+    out (1),a
+   
+    
+    ;count up and disp
+    inc hl
+    ld a,$20
+    out ($10),a
+    
+    
+    ld a,h
+    out ($11),a
+    
+    rlc (ix+0)
+    rrc (ix+0) ;some 23 t-state opcodes
+    
+    ld a,l
+    out ($11),a
+    
+    
+    
+    in a,(1)
+    ld c,a
+    cpl
+    and e
+    ld e,c
+    ld c,a
+    bit 0,c
+    
+    jr z,down_not_pressed
+    dec d
+    di
+    ld a,$24
+    out ($10),a
+    ;setup sample timer at 23.4khz
+    ld a,$90 ;/64
+    out ($36),a
+    ld a,3
+    out ($37),a
+    ld a,sample_delay ;2.5*256 = 20*32
+    out ($38),a
+    
+    ;setup alignment timer
+    ld a,$80 
+    out ($33),a
+    ld a,1 ; loop (and roll over)
+    out ($34),a
+    ld a,d
+    out ($35),a	;by now tim3 has gone 51 tstates
+    
+    out ($11),a
+    ei
+    
+down_not_pressed:
+	bit 1,e
+    jr nz,left_not_pressed
+    ld a,$26
+    out ($10),a
+    push hl
+    ld hl,sample+1
+    dec (hl)
+    ld a,(hl)
+    out ($11),a
+    pop hl
+left_not_pressed:
+	bit 2,e
+    jr nz,right_not_pressed
+    ld a,$26
+    out ($10),a
+    push hl
+    ld hl,sample+1
+    inc (hl)
+    ld a,(hl)
+    out ($11),a
+    pop hl
+right_not_pressed:
+	bit 3,c
+	jr z,up_not_pressed
+    
+    inc d
+    
+    di
+    
+    ld a,$24
+    out ($10),a
+    ;setup sample timer at 23.4khz
+    ld a,$90 ;/64
+    out ($36),a
+    ld a,3
+    out ($37),a
+    ld a,sample_delay ;2.5*256 = 20*32
+    out ($38),a
+    
+    ;setup alignment timer
+    ld a,$80 
+    out ($33),a
+    ld a,1 ; loop (and roll over)
+    out ($34),a
+    ld a,d
+    out ($35),a	;by now tim3 has gone 51 tstates
+    
+    out ($11),a
+    ei
+    
+    
+    
+up_not_pressed:
+
+    
+
+
+	ld a,0 ;make time odd to test all interrupt points
+    
+    in a,(4)
+    
+    bit 3,a
+    jp nz,wait	 ;total time: odd
+    
+skip:
+	
+    ld a,$80 
+    out ($33),a
+    ld a,1 ; loop (and roll over)
+    out ($34),a
+    ld a,d
+    out ($35),a	;by now tim3 has gone 51 tstates
+    
+    xor a
+    out (1),a
+    ;song test
+    
+    pop hl ;get song string in hl
+    ld a,$bf
+    out (1),a
+    
+    ld a,$47 ; 8 hz
+    out ($30),a
+
+    ;ld hl,song
+song_loop:
+    xor a
+    out ($31),a
+    ld a,(hl)
+    
+    inc hl
+    out ($32),a
+    
+note_loop:
+    
+    push hl
+    ;setup notes
+    ld a,(hl)
+    inc b
+    cp b
+    jr nc,$+2+2
+     ld b,0
+    srl a
+    cp b
+    inc hl
+    ld a,(hl)
+    inc hl
+    jr c,$+2+1
+     xor a
+    ld e,a ;voice 1
+    
+    ld a,(hl)
+    inc c
+    cp c
+    jr nc,$+2+2
+     ld c,0
+    srl a
+    cp c
+    inc hl
+    ld a,(hl)
+    inc hl
+    jr c,$+2+1
+     xor a
+    add a,e
+    ld e,a ;voice 2 
+    
+    ld a,(hl)
+    inc d
+    cp d
+    jr nc,$+2+2
+     ld d,0
+    srl a
+    cp d
+    inc hl
+    ld a,(hl)
+    pop hl
+    jr c,$+2+1
+     xor a
+    add a,e
+    ld (sample+1),a ;voice 3
+    out ($11),a
+sample_wait:
+    in a,($38)
+    cp 2
+    jr nc,sample_wait
+	
+    in a,(1)
+    inc a
+    jr nz,song_loop_exit
+    
+	in a,(4)
+    bit 5,a       
+    jr z,note_loop     
+    
+    
+    ld de,6
+    ld b,d
+    ld c,d
+    add hl,de
+    
+    in a,(1)
+    inc a
+    jr z,song_loop
+song_loop_exit:
+    
+    call cleanup_sound_engine
+    
+    ;
+    
+    
+    
+    
+    
+    
+    
+    
+    ret
+
+#define vol $18
+song:
+.db $02,  $60,vol ,$4c,vol ,$40,vol
+.db $02,0,0,0,0,0,0
+.db $02,  $60,vol ,$4c,vol ,$40,vol
+.db $02,0,0,0,0,0,0
+.db $02,  $60,vol ,$4c,vol ,$40,vol
+.db $02,0,0,0,0,0,0
+.db $02,  $60,vol ,$4c,vol ,$40,vol
+;.db $01,0,0,0,0,0,0
+
+.db $02,  $55,vol ,$44,vol ,$39,vol 
+.db $02,0,0,0,0,0,0
+.db $02,  $55,vol ,$44,vol ,$39,vol
+.db $02,0,0,0,0,0,0
+.db $01,  $55,vol ,$44,vol ,$39,vol
+.db $01,0,0,0,0,0,0
+.db $02,  $55,vol ,$44,vol ,$39,vol
+.db $02,0,0,0,0,0,0
+.db $02,  $55,vol ,$44,vol ,$39,vol
+.db $02,0,0,0,0,0,0
+
+.db $02,  $55,vol ,$40,vol ,$33,vol
+.db $02,0,0,0,0,0,0
+.db $02,  $55,vol ,$40,vol ,$33,vol
+.db $02,0,0,0,0,0,0
+.db $02,  $55,vol ,$40,vol ,$33,vol
+.db $02,0,0,0,0,0,0
+.db $02,  $55,vol ,$40,vol ,$33,vol
+;.db $01,0,0,0,0,0,0
+
+.db $02,  $4c,vol ,$40,vol ,$33,vol
+.db $02,0,0,0,0,0,0
+.db $02,  $4c,vol ,$40,vol ,$33,vol
+.db $02,0,0,0,0,0,0
+.db $01,  $4c,vol ,$40,vol ,$33,vol
+.db $01,0,0,0,0,0,0
+.db $02,  $4c,vol ,$40,vol ,$33,vol
+.db $02,0,0,0,0,0,0
+.db $02,  $4c,vol ,$40,vol ,$33,vol
+.db $02,0,0,0,0,0,0
+
+
+
+
+song_end:
+
+
+    ;call start_8
+	
+    
+    
+    
+    
+    
+    
+    
+    ;h_exit
+    ;ret
+
+
+;
+.db %00000000,%00000000
+.db %00000000,%00000000
+.db %00000000,%00000000
+.db %00000000,%00000000
+.db %00000000,%00000000
+.db %00000000,%00000000
+.db %00000000,%00000000
+.db %00000000,%00000000
+
+.db %00000000,%00000000
+.db %00000000,%00000000
+.db %00000000,%00000000
+.db %00000000,%00000000
+.db %00000000,%00000000
+.db %00000000,%00000000
+.db %00000000,%00000000
+.db %00000000,%00000000
